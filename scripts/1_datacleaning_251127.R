@@ -21,6 +21,16 @@ View(baria_clinical_data_raw)
 
 baria_v0 <- baria_clinical_data_raw |> 
   select(id = Subject_ID,
+
+    # visits
+    date_v0 = date,
+    date_v2 = V2_date,
+    date_v3 = V3_date,
+    date_v4 = V4_date,
+    date_v5 = V5_date,
+    date_v6 = V6_date,
+    date_v7 = V7_date,
+
     # Baseline (v0)
     age = Age,
     sex,
@@ -53,6 +63,8 @@ baria_v0 <- baria_clinical_data_raw |>
     crp_mgl_v0 = crp,
     tsh_miul_v0 = tsh,
     ft4_pmoll_v0 = ft4,
+    leptin_ngml_v0 = leptin,
+    adiponectin_pgml_v0 = adiponectin,
 
     # Follow-Up Data
     # v2 = 6 weeks
@@ -86,6 +98,8 @@ baria_v0 <- baria_clinical_data_raw |>
     hba1c_v4 = V4_hba1c,
     hba1c_mmolmol_v4 = V4_hba1c__IFCC_mmolmol,
     crp_mgl_v4 = V4_crp,
+    leptin_ngml_v4 = V4_leptin,
+    adiponectin_pgml_v4 = V4_adiponectin,
 
     # v5 = 2 years
     bmi_v5 = V5_bmi,
@@ -102,6 +116,8 @@ baria_v0 <- baria_clinical_data_raw |>
     hba1c_v5 = V5_hba1c,
     hba1c_mmolmol_v5 = V5_hba1c__IFCC_mmolmol,
     crp_mgl_v5 = V5_crp,
+    leptin_ngml_v5 = V5_leptin,
+    adiponectin_pgml_v5 = V5_adiponectin,
 
     # v6 = 5 years
     bmi_v6 = V6_bmi_1,
@@ -123,6 +139,15 @@ baria_v0 <- baria_clinical_data_raw |>
     hba1c_mmolmol_v7 = V7_hba1c_IFCC_mmolmol,
     crp_mgl_v7 = V7_CRP
   ) |>
+  mutate(
+    across(date_v0:date_v7, dmy),
+    v0_to_v2_weeks = difftime(date_v2, date_v0, units = "weeks"),
+    v0_to_v3_weeks = difftime(date_v3, date_v0, units = "weeks"),
+    v0_to_v4_weeks = difftime(date_v4, date_v0, units = "weeks"),
+    v0_to_v5_weeks = difftime(date_v5, date_v0, units = "weeks"),
+    v0_to_v6_weeks = difftime(date_v6, date_v0, units = "weeks"),
+    v0_to_v7_weeks = difftime(date_v7, date_v0, units = "weeks"),
+  ) |> # time diff from baseline visit
   mutate(
     sex = case_when(sex == "1" ~ "male", sex == "2" ~ "female"),
     t2d_v0 = case_when(t2d_v0 == "1" ~ "yes", t2d_v0 == "2" ~ "no"),
@@ -199,6 +224,10 @@ baria_v0 <- baria_clinical_data_raw |>
   relocate(c(ffmi_v4, fmi_v4), .after = ffm_percent_v4) |>
   relocate(c(ffmi_v5, fmi_v5), .after = ffm_percent_v5) |>
   relocate(c(ffmi_v6, fmi_v6), .after = ffm_percent_v6) |>
+  relocate(
+    c(v0_to_v2_weeks, v0_to_v3_weeks, v0_to_v4_weeks, v0_to_v5_weeks, v0_to_v6_weeks, v0_to_v7_weeks),
+    .after = date_v7
+  ) |>
   mutate(
     across(where(is.character), as.factor),
     across(
