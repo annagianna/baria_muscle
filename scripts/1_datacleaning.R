@@ -537,7 +537,6 @@ psychiatric_meds_any_pattern <- str_c("\\b(", str_c(unlist(psychiatric_meds), co
 ppi <- c("omeprazole", "pantoprazole", "esomeprazole")
 ppi_pattern <- str_c("\\b(", str_c(ppi, collapse = "|"), ")\\b")
 
-
 # Use regex patterns to create clean medication columns for all medication categories and subcategories
 
 baria_muscle_clinical_with_medication_clean <- baria_muscle_clinical_with_medication_notypos |> 
@@ -596,5 +595,5 @@ View(baria_muscle_clean)
 
 # then save as both RDS and csv files
 
-write.csv(baria_muscle_clean, "data/251127_BARIA_muscle_clinical.csv")
-saveRDS(baria_muscle_clean, "data/251127_BARIA_muscle_clinical.RDS")
+write.csv(baria_muscle_clean, "data/251205_BARIA_muscle_clinical.csv")
+saveRDS(baria_muscle_clean, "data/251205_BARIA_muscle_clinical.RDS")
