@@ -17,7 +17,7 @@ View(baria_clinical_data_raw)
 
 # Baseline Data
 # Need: clinical data, anthropometry, body composition, medication, basic lab and cardiometabolic risk factors, diabetes, diabetes medicatio
-
+?is.na
 baria_muscle_clinical <- baria_clinical_data_raw |>
   select(id = Subject_ID,
 
@@ -299,6 +299,12 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
       (0.244 * weight_kg_v7) + (7.8 * (height_cm/100)) + 6.6 - (0.098 * age_v7),
       (0.244 * weight_kg_v7) + (7.8 * (height_cm/100)) - (0.098 * age_v7)
      )
+  ) |> 
+  filter(
+    !is.na(age_v0),
+    !is.na(sex),
+    !is.na(bmi_v0),
+    !is.na(ffm_kg_v0)
   ) |> 
   relocate(c(hba1c_percent_v0, homa_ir_v0, homa_b_v0), .after = hba1c_mmolmol_v0) |> # Hba1c 
   relocate(hba1c_percent_v2, .after = hba1c_mmolmol_v2) |>
