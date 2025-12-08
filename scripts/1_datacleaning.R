@@ -149,8 +149,11 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
       ~ replace(.x, .x %in% c(-99, -98, -99), NA)), # these values are NA for different reasons in the Baria dataset
     across(
      .cols = starts_with("date"),
-      ~ na_if(., "01-01-2999"))
-  ) |> 
+      ~ na_if(., "01-01-2999")),
+    across(
+      .cols = starts_with("date"),
+      ~ na_if(., "01-01-2997"))
+    ) |> 
   mutate(
     across(date_v0:date_v7, dmy),
     v0_to_v2_weeks = difftime(date_v2, date_v0, units = "weeks"),
