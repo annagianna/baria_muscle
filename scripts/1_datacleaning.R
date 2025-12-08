@@ -153,7 +153,7 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
   ) |> 
   mutate(
     across(date_v0:date_v7, dmy),
-    v0_to_v2_weeks = difftime(date_v3, date_v0, units = "weeks"),
+    v0_to_v2_weeks = difftime(date_v2, date_v0, units = "weeks"),
     v0_to_v3_weeks = difftime(date_v3, date_v0, units = "weeks"),
     v0_to_v4_weeks = difftime(date_v4, date_v0, units = "weeks"),
     v0_to_v5_weeks = difftime(date_v5, date_v0, units = "weeks"),
@@ -601,5 +601,5 @@ View(baria_muscle_clean)
 
 # then save as both RDS and csv files
 
-write.csv(baria_muscle_clean, "data/251205_BARIA_muscle_clinical.csv")
-saveRDS(baria_muscle_clean, "data/251205_BARIA_muscle_clinical.RDS")
+write.csv(baria_muscle_clean, "data/251208_BARIA_muscle_clinical.csv")
+saveRDS(baria_muscle_clean, "data/251208_BARIA_muscle_clinical.RDS")
