@@ -365,12 +365,8 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
   relocate(asm_kg_v7, .after = upperleg_cm_v7) |>
   relocate(ffm_kg_v0_quintile:smm_by_weight_v0_quintile, .after = smm_kg_v0) |> 
   relocate(low_ffm_v0:low_smm_by_weight_v0, .after = smm_by_weight_v0_quintile) |> 
-  mutate(across(where(is.character), as.factor)) |> 
-  arrange(id) |> 
+  mutate(across(where(is.character), as.factor)) |>
   print()
-
-View(baria_muscle_clinical)
-colnames(baria_muscle_clinical)
 
 # to explore the range of hba1c in the population (solve mixed variable containing different units)
 ggplot(baria_clinical_data_raw, aes(hba1c)) +
@@ -580,7 +576,7 @@ ppi_pattern <- str_c("\\b(", str_c(ppi, collapse = "|"), ")\\b")
 
 # Use regex patterns to create clean medication columns for all medication categories and subcategories
 
-baria_muscle_clinical_with_medication_clean <- baria_muscle_clinical_with_medication_notypos |> 
+baria_muscle_clean <- baria_muscle_clinical_with_medication_notypos |> 
   mutate(
     # Diabetes medication classes
     metformin_v0 = if_else(str_detect(medication_list_v0, dm_meds_patterns$metformin), "yes", "no"),
@@ -628,9 +624,8 @@ baria_muscle_clinical_with_medication_clean <- baria_muscle_clinical_with_medica
     ppi_v0 = if_else(str_detect(medication_list_v0, ppi_pattern), "yes", "no")
   ) |> 
   select(-medication_list_v0) |> 
+  arrange(date_v0) |> 
   print()
-
-baria_muscle_clean <- baria_muscle_clinical_with_medication_clean
 
 View(baria_muscle_clean)
 
