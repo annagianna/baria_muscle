@@ -272,10 +272,15 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
   filter( # filtering for device's (Maltron BioScan 920) resolution range excluding high and low outliers
     # check validity of baseline BIA results
     bia_resistance_50khz_v0 >= 100,
-    bia_resistance_50khz_v0 <= 1100,
+    bia_resistance_50khz_v0 <= 1000,
     !is.na(ffm_percent_v0),
     !is.na(fm_percent_v0),
-    abs(ffm_percent_v0 + fm_percent_v0 - 100) < 0.5
+    abs(ffm_percent_v0 + fm_percent_v0 - 100) < 0.5,
+
+    # also for v4, v5, v6 if not NA
+    (is.na(bia_resistance_50khz_v4)) | (bia_resistance_50khz_v4 >= 100 & bia_resistance_50khz_v4 <= 1000),
+    (is.na(bia_resistance_50khz_v5)) | (bia_resistance_50khz_v5 >= 100 & bia_resistance_50khz_v5 <= 1000),
+    (is.na(bia_resistance_50khz_v6)) | (bia_resistance_50khz_v6 >= 100 & bia_resistance_50khz_v6 <= 1000),
   )|> 
   mutate(
     # ffm and fm indices v0, v4, v5, v6
@@ -401,6 +406,7 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
   mutate(across(where(is.character), as.factor)) |>
   print()
 
+nrow(baria_muscle_clinical)
 View(baria_muscle_clinical)
 
 # to explore the range of hba1c in the population (solve mixed variable containing different units)
