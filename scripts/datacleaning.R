@@ -667,5 +667,5 @@ View(baria_muscle_clean)
 nrow(baria_muscle_clean)
 
 # then save as both RDS and csv files
-write.csv(baria_muscle_clean, "data/251209_BARIA_muscle_clinical.csv")
-saveRDS(baria_muscle_clean, "data/251209_BARIA_muscle_clinical.RDS")
+write.csv(baria_muscle_clean, "data/251210_BARIA_muscle_clinical.csv")
+saveRDS(baria_muscle_clean, "data/251210_BARIA_muscle_clinical.RDS")
