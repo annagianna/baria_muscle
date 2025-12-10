@@ -16,7 +16,6 @@ View(baria_clinical_data_raw)
 
 # Baseline Data
 # Need: clinical data, anthropometry, body composition, medication, basic lab and cardiometabolic risk factors, diabetes, medication
-
 baria_muscle_clinical <- baria_clinical_data_raw |>
   select(id = Subject_ID,
 
@@ -26,7 +25,7 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     date_v3 = V3_date,
     date_v4 = V4_date,
     date_v5 = V5_date,
-    date_v6 = V6_date,
+    date_v6 = V6_date_1,
     date_v7 = V7_date,
 
     # Baseline (v0)
