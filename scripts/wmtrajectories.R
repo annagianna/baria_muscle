@@ -4,7 +4,7 @@
 # Packages
 library(dplyr)
 library(tidyverse)
-library(lubridate)
+library(stringr)
 library(ggpubr)
 library(scales)
 library(MetBrewer)
@@ -12,11 +12,12 @@ library(wesanderson)
 library(patchwork)
 
 # Data
-baria_muscle <- read_rds("data/251209_BARIA_muscle_clinical.RDS")
+baria_muscle <- read_rds("data/251210_BARIA_muscle_clinical.RDS")
 View(baria_muscle)
 
 # Trajectories
-# convert data to long format for plots, starting with body weight
+
+# convert anthropometric data to long format, starting with body weight
 weight_long <- baria_muscle |> 
   pivot_longer(
     contains("weight_kg_v"),
@@ -35,10 +36,11 @@ ffm_long <- baria_muscle |>
     values_to = "ffm_kg"
   ) |> 
   mutate(visit = as.integer(parse_number(visit)))
+View(ffm_long)
 
 # pivot longer fm
 fm_long <- baria_muscle |> 
-  select(id, contains("fm_kg_v")) |> 
+  select(id, starts_with("fm_kg_v")) |> 
   pivot_longer(
     -id,
     names_to = "visit",
@@ -58,7 +60,7 @@ asm_long <- baria_muscle |>
 
 # pivot longer smm
 smm_long <- baria_muscle |> 
-  select(id, contains("smm_kg_v"), -smm_by_weight_v0_quintile, -low_smm_v0) |> 
+  select(id, contains("smm_kg_v"), -smm_kg_v0_quintile) |> 
   pivot_longer(
     -id,
     names_to = "visit",
@@ -114,7 +116,7 @@ hba1c_mmolmol_long <- baria_muscle |>
     names_to = "visit",
     values_to = "hba1c_mmolmol"
   ) |> 
-  mutate(visit = as.integer(parse_number(visit)))
+  mutate(visit = as.integer(stringr::str_extract(visit, "\\d+$"))) # parse_number() extracts the "1" in hba1c
 
 hba1c_percent_long <- baria_muscle |> 
   select(id, contains("hba1c_percent_v")) |> 
@@ -123,7 +125,7 @@ hba1c_percent_long <- baria_muscle |>
     names_to = "visit",
     values_to = "hba1c_percent"
   ) |> 
-  mutate(visit = as.integer(parse_number(visit)))
+  mutate(visit = as.integer(stringr::str_extract(visit, "\\d+$"))) # same here
 
 # pivot longer crp
 crp_long <- baria_muscle |> 
