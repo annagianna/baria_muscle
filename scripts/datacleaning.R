@@ -669,7 +669,6 @@ baria_muscle_clean <- baria_muscle_clinical_with_medication_notypos |>
   print()
 
 View(baria_muscle_clean)
-nrow(baria_muscle_clean)
 
 # then save as both RDS and csv files
 write.csv(baria_muscle_clean, "data/251210_BARIA_muscle_clinical.csv")
