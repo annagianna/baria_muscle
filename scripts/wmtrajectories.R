@@ -421,11 +421,11 @@ body_comp_gt_means_tbl <- body_comp_wide_means_p |>
   
   # rename subcolumns to low and high mm
   cols_label(
-    weight_low_yes = "Low MM", weight_low_no = "High MM",
-    ffm_low_yes = "Low MM", ffm_low_no = "High MM", 
-    fm_low_yes = "Low MM", fm_low_no = "High MM",
-    smm_low_yes = "Low MM", smm_low_no = "High MM",
-    asm_low_yes = "Low MM", asm_low_no = "High MM",
+    weight_low_yes = "Low SMM/W", weight_low_no = "High SMM/W",
+    ffm_low_yes = "Low SMM/W", ffm_low_no = "High SMM/W", 
+    fm_low_yes = "Low SMM/W", fm_low_no = "High SMM/W",
+    smm_low_yes = "Low SMM/W", smm_low_no = "High SMM/W",
+    asm_low_yes = "Low SMM/W", asm_low_no = "High SMM/W",
     p_weight = "p", p_ffm = "p", p_fm = "p", p_asm = "p", p_smm = "p",
   ) |> 
 
@@ -442,7 +442,7 @@ body_comp_gt_means_tbl <- body_comp_wide_means_p |>
     columns = c(p_weight, p_ffm, p_fm, p_smm, p_asm),
     decimals = 3
   )
-colnames(body_comp_wide_delta_p)
+
 # create gt table for deltas
 body_comp_gt_delta_tbl <- body_comp_wide_delta_p |>
   filter((visit != "Baseline")) |> 
@@ -468,11 +468,11 @@ body_comp_gt_delta_tbl <- body_comp_wide_delta_p |>
   
   # rename subcolumns to low and high mm
   cols_label(
-    delta_weight_low_yes = "Low MM", delta_weight_low_no = "High MM",
-    delta_ffm_low_yes = "Low MM", delta_ffm_low_no = "High MM", 
-    delta_fm_low_yes = "Low MM", delta_fm_low_no = "High MM",
-    delta_smm_low_yes = "Low MM", delta_smm_low_no = "High MM",
-    delta_asm_low_yes = "Low MM", delta_asm_low_no = "High MM",
+    delta_weight_low_yes = "Low SMM/W", delta_weight_low_no = "High SMM/W",
+    delta_ffm_low_yes = "Low SMM/W", delta_ffm_low_no = "High SMM/W", 
+    delta_fm_low_yes = "Low SMM/W", delta_fm_low_no = "High SMM/W",
+    delta_smm_low_yes = "Low SMM/W", delta_smm_low_no = "High SMM/W",
+    delta_asm_low_yes = "Low SMM/W", delta_asm_low_no = "High SMM/W",
     p_delta_weight = "p", p_delta_ffm = "p", p_delta_fm = "p", p_delta_smm = "p", p_delta_asm = "p"
   ) |> 
 
