@@ -222,33 +222,6 @@ baria_muscle_trajectories <- add_time |>
   ) |> 
   print()
 
-# Themes
-gb1_colors <- scale_color_manual(values = wes_palette("GrandBudapest1"))
-gb2_colors <- scale_color_manual(values = wes_palette("GrandBudapest2"))
-mr3_colors <- scale_color_manual(values = wes_palette("Moonrise3"))
-isle1_colors <- scale_color_manual(values = wes_palette("IsleofDogs1"))
-
-# trajectories EDA
-weight <- ggplot(baria_muscle_trajectories, aes(x = time_y, y = weight_kg, color = low_smm_by_weight_v0)) +
-  geom_smooth(se = FALSE, show.legend = FALSE) +
-  labs(title = "Body weight", color = "Low SMM/W", x = "Time (years)", y = "Weight (kg)")
-
-ffm <- ggplot(baria_muscle_trajectories, aes(x = time_y, y = ffm_kg, color = low_smm_by_weight_v0)) +
-  geom_smooth(se = FALSE) +
-  coord_cartesian(xlim = c(0, 5)) +
-  labs(title = "Fat-free mass", color = "Low SMM/W", x = "Time (y)", y = "FFM (kg)")
-
-fm <- ggplot(baria_muscle_trajectories, aes(x = time_y, y = fm_kg, color = low_smm_by_weight_v0)) +
-  geom_smooth(se = FALSE) +
-  labs(title = "Fat mass", color = "Low SMM/W", x = "Time (y)", y = "FM (kg)")
-
-weight / (ffm | fm ) +
-  plot_layout(
-    guides = "collect"
-  ) &
-  isle1_colors &
-  theme(legend.position = "bottom")
-
 # summarize body composition parameters (means + SD) per visit & changes from baseline 
 body_comp_summary <- baria_muscle_trajectories |> 
   filter(visit %in% c("Baseline", "1y", "2y", "5y")) |> # visits with available bia measurement
@@ -409,7 +382,7 @@ p_delta_smm <- baria_muscle_trajectories |>
   filter(visit %in% c("1y", "2y", "5y")) |> 
   group_by(visit) |> 
   summarise(
-    p_value = t.test(smm_kg ~ low_smm_by_weight_v0)$p.value,
+    p_delta_smm = t.test(smm_kg ~ low_smm_by_weight_v0)$p.value,
     .groups = "drop"
   )
 
@@ -473,6 +446,11 @@ colnames(body_comp_wide_delta_p)
 # create gt table for deltas
 body_comp_gt_delta_tbl <- body_comp_wide_delta_p |>
   filter((visit != "Baseline")) |> 
+  relocate(delta_weight_low_yes, .before = delta_weight_low_no) |> 
+  relocate(delta_ffm_low_yes, .before = delta_ffm_low_no) |> 
+  relocate(delta_fm_low_yes, .before = delta_fm_low_no) |>
+  relocate(delta_smm_low_yes, .before = delta_smm_low_no) |>
+  relocate(delta_asm_low_yes, .before = delta_asm_low_no) |>
   relocate(p_delta_weight, .after = delta_weight_low_no) |> 
   relocate(p_delta_ffm, .after = delta_ffm_low_no) |> 
   relocate(p_delta_fm, .after = delta_fm_low_no) |> 
@@ -513,18 +491,32 @@ body_comp_gt_delta_tbl <- body_comp_wide_delta_p |>
   )
 body_comp_gt_delta_tbl
 
-# Plot mean + SD trajectory
-#### continue from here #############################
+# Plot trajectories
+# Themes
+gb1_colors <- scale_color_manual(values = wes_palette("GrandBudapest1"))
+gb2_colors <- scale_color_manual(values = wes_palette("GrandBudapest2"))
+mr3_colors <- scale_color_manual(values = wes_palette("Moonrise3"))
+isle1_colors <- scale_color_manual(values = wes_palette("IsleofDogs1"))
 
-## why x axis as visit and not as time_y???
-ggplot(, aes(x = visit, y = mean_delta_weight, color = low_smm_by_weight_v0)) +
-  geom_line(size = 1) +
-  geom_ribbon(aes(ymin = mean_delta_weight - sd_delta_weight,
-                  ymax = mean_delta_weight + sd_delta_weight,
-                  fill = low_smm_by_weight_v0), alpha = 0.2, color = NA) +
-  labs(title = "Weight change from baseline", x = "Visit", y = "Δ Weight (kg)") +
-  theme_minimal() +
-  isle1_colors
+# Weight trajectories EDA
+weight <- ggplot(baria_muscle_trajectories, aes(x = time_y, y = weight_kg, color = low_smm_by_weight_v0)) +
+  geom_smooth(se = FALSE, show.legend = FALSE) +
+  labs(title = "Body weight", color = "Low SMM/W", x = "Time (years)", y = "Weight (kg)")
 
-?geom_ribbon
-# new combined trajectory plot
+ffm <- ggplot(baria_muscle_trajectories, aes(x = time_y, y = ffm_kg, color = low_smm_by_weight_v0)) +
+  geom_smooth(se = FALSE) +
+  coord_cartesian(xlim = c(0, 5)) +
+  labs(title = "Fat-free mass", color = "Low SMM/W", x = "Time (y)", y = "FFM (kg)")
+
+fm <- ggplot(baria_muscle_trajectories, aes(x = time_y, y = fm_kg, color = low_smm_by_weight_v0)) +
+  geom_smooth(se = FALSE) +
+  labs(title = "Fat mass", color = "Low SMM/W", x = "Time (y)", y = "FM (kg)")
+
+weight / (ffm | fm ) +
+  plot_layout(
+    guides = "collect"
+  ) &
+  isle1_colors &
+  theme(legend.position = "bottom")
+
+## better weight loss graphs (check the tirzepatide paper for reference)
