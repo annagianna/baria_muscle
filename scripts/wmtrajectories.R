@@ -23,7 +23,6 @@ weight_long <- baria_muscle |>
   ) |> 
   relocate(visit, weight_kg, .after = id) |> 
   mutate(visit = as.integer(parse_number(visit)))
-range(baria_muscle$bia_resistance_50khz_v0, na.rm = TRUE)
 
 # pivot longer ffm 
 ffm_long <- baria_muscle |> 
