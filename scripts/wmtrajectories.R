@@ -12,7 +12,7 @@ library(patchwork)
 library(gt)
 
 # Data
-baria_muscle <- read_rds("data/251210_BARIA_muscle_clinical.RDS")
+baria_muscle <- read_rds("data/251214_BARIA_muscle_clinical.RDS")
 
 # convert anthropometric data to long format, starting with body weight
 weight_long <- baria_muscle |> 
