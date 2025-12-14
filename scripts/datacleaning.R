@@ -14,6 +14,17 @@ library(purrr)
 baria_clinical_data_raw <- readRDS("./data/BARIA.clinical.2024-12-09.723.2043.RDS")
 View(baria_clinical_data_raw)
 
+# roughly check for incorrect data entries of BIA data (repeat for v0, v4-v6)
+baria_clinical_data_raw |> 
+  select(Subject_ID, tbf, ffm, weight) |> 
+  filter(!is.na(tbf)) |> 
+  mutate(
+    sum = tbf + ffm,
+    nomatch = if_else((abs((tbf + ffm) - weight) > 1), "nomatch", "match")
+  ) |> 
+  filter(nomatch == "nomatch") |> 
+  View()
+
 # Baseline Data
 # Need: clinical data, anthropometry, body composition, medication, basic lab and cardiometabolic risk factors, diabetes, medication
 baria_muscle_clinical <- baria_clinical_data_raw |>
@@ -269,18 +280,38 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     homa_b_v5 = (20 * (fasting_insulin_pmoll_mmt_v5 / 6.945)) / (fasting_glucose_mmoll_mmt_v5 - 3.5)
   ) |> 
   # body composition
+  # fix incorrect data entries for bia data
+  mutate(
+    id = as.character(id),
+    fm_kg_v0 = if_else(id == "212", fm_kg_v0/100, fm_kg_v0),
+    fm_kg_v0 = if_else(id == "600", fm_kg_v0*10, fm_kg_v0),
+    ffm_kg_v0 = if_else(id == "238", ffm_kg_v0*10, ffm_kg_v0),
+    fm_kg_v4 = if_else(id == "30004", fm_kg_v4/100, fm_kg_v4),
+    fm_kg_v4 = if_else(id == "335", fm_kg_v4*10, fm_kg_v4),
+    ffm_kg_v5 = if_else(id == "50", 79.16, ffm_kg_v5)
+  ) |> 
   filter( # filtering for device's (Maltron BioScan 920) resolution range excluding high and low outliers
-    # check validity of baseline BIA results
+    # qc baseline BIA results
     bia_resistance_50khz_v0 >= 110,
     bia_resistance_50khz_v0 <= 1000,
-    !is.na(ffm_percent_v0),
-    !is.na(fm_percent_v0),
-    abs(ffm_percent_v0 + fm_percent_v0 - 100) < 0.5,
+    !is.na(ffm_percent_v0), !is.na(fm_percent_v0), # baseline bia is needed
 
-    # also for v4, v5, v6 if not NA
-    (is.na(bia_resistance_50khz_v4)) | (bia_resistance_50khz_v4 >= 110 & bia_resistance_50khz_v4 <= 1000),
-    (is.na(bia_resistance_50khz_v5)) | (bia_resistance_50khz_v5 >= 110 & bia_resistance_50khz_v5 <= 1000),
-    (is.na(bia_resistance_50khz_v6)) | (bia_resistance_50khz_v6 >= 110 & bia_resistance_50khz_v6 <= 1000),
+    # check if percentages add up
+    # baseline
+    abs(ffm_percent_v0 + fm_percent_v0 - 100) < 0.1,
+    # follow-up: keep if follow-up bia is missing
+    # if follow-up bia available, both ffm and fm must be available and add up to 100
+    (is.na(ffm_percent_v4) & is.na(fm_percent_v4)) |
+    (!is.na(ffm_percent_v4) & !is.na(fm_percent_v4) & abs(ffm_percent_v4 + fm_percent_v4 - 100) < 0.1),
+    (is.na(ffm_percent_v5) & is.na(fm_percent_v5)) |
+    (!is.na(ffm_percent_v5) & !is.na(fm_percent_v5) & abs(ffm_percent_v5 + fm_percent_v5 - 100) < 0.1),
+    (is.na(ffm_percent_v6) & is.na(fm_percent_v6)) |
+    (!is.na(ffm_percent_v6) & !is.na(fm_percent_v6) & abs(ffm_percent_v6 + fm_percent_v6 - 100) < 0.1),
+
+    # qc for v4, v5, v6 if not NA (50 khz is used in smm calculation later on)
+    is.na(bia_resistance_50khz_v4) | (bia_resistance_50khz_v4 >= 110 & bia_resistance_50khz_v4 <= 1000),
+    is.na(bia_resistance_50khz_v5)| (bia_resistance_50khz_v5 >= 110 & bia_resistance_50khz_v5 <= 1000),
+    is.na(bia_resistance_50khz_v6) | (bia_resistance_50khz_v6 >= 110 & bia_resistance_50khz_v6 <= 1000)
   )|> 
   mutate(
     # ffm and fm indices v0, v4, v5, v6
