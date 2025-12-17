@@ -179,9 +179,10 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     v0_to_v4_numeric_y = as.numeric(v0_to_v4_weeks)/(365.25 / 7),
     v0_to_v5_numeric_y = as.numeric(v0_to_v5_weeks)/(365.25 / 7),
     v0_to_v6_numeric_y = as.numeric(v0_to_v6_weeks)/(365.25 / 7),
-    v0_to_v7_numeric_y = as.numeric(v0_to_v7_weeks)/(365.25 / 7),
-
-    # calculate the age at every visit
+    v0_to_v7_numeric_y = as.numeric(v0_to_v7_weeks)/(365.25 / 7)
+  ) |>
+  filter(!is.na(age_v0)) |> 
+  mutate(# calculate the age at every visit
     age_v2 = age_v0 + v0_to_v2_numeric_y,
     age_v3 = age_v0 + v0_to_v3_numeric_y,
     age_v4 = age_v0 + v0_to_v4_numeric_y,
@@ -329,22 +330,22 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     smm_kg_v0 = if_else(
       sex == 1, # male
       0.401 * ((height_cm^2) / bia_resistance_50khz_v0) + (1 * 3.825) + (age_v0 * -0.071) + 5.102,
-      0.401 * ((height_cm^2) / bia_resistance_50khz_v0) + (0 * 3.825) + (age_v0 * -0.071) + 5.102
+      0.401 * ((height_cm^2) / bia_resistance_50khz_v0) + (age_v0 * -0.071) + 5.102
     ),
     smm_kg_v4 = if_else(
       sex == 1,
       0.401 * ((height_cm^2) / bia_resistance_50khz_v4) + (1 * 3.825) + (age_v4 * -0.071) + 5.102,
-      0.401 * ((height_cm^2) / bia_resistance_50khz_v4) + (0 * 3.825) + (age_v4 * -0.071) + 5.102
+      0.401 * ((height_cm^2) / bia_resistance_50khz_v4) + (age_v4 * -0.071) + 5.102
     ),
     smm_kg_v5 = if_else(
       sex == 1,
       0.401 * ((height_cm^2) / bia_resistance_50khz_v5) + (1 * 3.825) + (age_v5 * -0.071) + 5.102,
-      0.401 * ((height_cm^2) / bia_resistance_50khz_v5) + (0 * 3.825) + (age_v5 * -0.071) + 5.102
+      0.401 * ((height_cm^2) / bia_resistance_50khz_v5) + (age_v5 * -0.071) + 5.102
     ),
     smm_kg_v6 = if_else(
       sex == 1,
       0.401 * ((height_cm^2) / bia_resistance_50khz_v6) + (1 * 3.825) + (age_v6 * -0.071) + 5.102,
-      0.401 * ((height_cm^2) / bia_resistance_50khz_v6) + (0 * 3.825) + (age_v6 * -0.071) + 5.102
+      0.401 * ((height_cm^2) / bia_resistance_50khz_v6) + (age_v6 * -0.071) + 5.102
     ),
 
      # ASM: ASM = (0.244 × weight [kg]) + (7.8 × height [m]) + (6.6 × sex) – (0.098 × age [years]) (for Caucasians)
@@ -700,7 +701,8 @@ baria_muscle_clean <- baria_muscle_clinical_with_medication_notypos |>
   print()
 
 View(baria_muscle_clean)
+nrow(baria_muscle_clean)
 
 # then save as both RDS and csv files
-write.csv(baria_muscle_clean, "data/251210_BARIA_muscle_clinical.csv")
-saveRDS(baria_muscle_clean, "data/251210_BARIA_muscle_clinical.RDS")
+write.csv(baria_muscle_clean, "data/251217_BARIA_muscle_clinical.csv")
+saveRDS(baria_muscle_clean, "data/251217_BARIA_muscle_clinical.RDS")
