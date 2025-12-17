@@ -196,21 +196,8 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     t2d_v0 = case_when(t2d_v0 == "1" ~ "yes", t2d_v0 == "2" ~ "no"),
     aht = case_when(aht == "1" ~ "yes", aht == "2" ~ "no"),
     medication_binary_v0 = case_when(medication_binary_v0 == "1" ~ "yes", medication_binary_v0 == "2" ~ "no"),
-    sport_v0 = case_when(sport_v0 == "1" ~ "yes", sport_v0 == "2" ~ "no"),
-    race = case_when(# race in a format to be used for Janssen formula (White/Hispanic vs. Black vs. Asian)
-      `race#Kaukasisch` == "1" ~ "white/hispanic",
-      `race#Mediterraans` == "1" ~ "white/hispanic",
-      `race#Midden-Aziatisch` == "1" ~ "asian",
-      `race#Negroïde` == "1" ~ "black",
-      `race#Noord-Afrikaans` == "1" ~ "white/hispanic", # for the purposes of the jannsen formula
-      `race#Oost-Aziatisch` == "1" ~ "asian",
-      `race#Overig` == "1" ~ "white/hispanic", # to be able to use the formula
-      `race#Slavisch` == "1" ~ "white/hispanic",
-      `race#West-Aziatisch` == "1" ~ "asian",
-      `race#Zuid-Amerikaans` == "1" ~ "white/hispanic"
-    )
+    sport_v0 = case_when(sport_v0 == "1" ~ "yes", sport_v0 == "2" ~ "no")
   ) |> 
-  select(-contains("race#")) |> 
   mutate(
     # fix Hba1c units
     hba1c_percent_v0 = if_else(
@@ -360,45 +347,64 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
       sex == 1,
       0.401 * ((height_cm^2) / bia_resistance_50khz_v6) + (1 * 3.825) + (age_v6 * -0.071) + 5.102,
       0.401 * ((height_cm^2) / bia_resistance_50khz_v6) + (age_v6 * -0.071) + 5.102
+    )
+  ) |> 
+  mutate(
+    # (sex: women = 0, men = 1; race: White or Hispanic = 0, Black = 1.9, Asian = −1.6) 
+    # race in a format to be used for Janssen formula (White/Hispanic vs. Black vs. Asian)
+    race = case_when(
+      `race#Kaukasisch` == "1" ~ "white/hispanic",
+      `race#Mediterraans` == "1" ~ "white/hispanic",
+      `race#Midden-Aziatisch` == "1" ~ "asian",
+      `race#Negroïde` == "1" ~ "black",
+      `race#Noord-Afrikaans` == "1" ~ "white/hispanic", # for the purposes of the jannsen formula
+      `race#Oost-Aziatisch` == "1" ~ "asian",
+      `race#Overig` == "1" ~ "white/hispanic", # to be able to use the formula
+      `race#Slavisch` == "1" ~ "white/hispanic",
+      `race#West-Aziatisch` == "1" ~ "asian",
+      `race#Zuid-Amerikaans` == "1" ~ "white/hispanic"
     ),
-
-     # ASM: ASM = (0.244 × weight [kg]) + (7.8 × height [m]) + (6.6 × sex) – (0.098 × age [years]) + (race – 3.3)
-     # (sex: women = 0, men = 1; race: White or Hispanic = 0, Black = 1.9, Asian = −1.6) 
+    # Janssen formula: ASM = (0.244 × weight [kg]) + (7.8 × height [m]) + (6.6 × sex) – (0.098 × age [years]) + (race – 3.3); 
+    # (sex: women = 0, men = 1; race: White or Hispanic = 0, Black = 1.9, Asian = −1.6)
+    race_num = as.numeric(case_when(race == "white/hispanic" ~ "0", race == "black" ~ "1.9", race == "asian" ~ "-1.6"))
+  ) |> 
+  select(-contains("race#")) |>
+  mutate(
      asm_kg_v0 = if_else(
       sex == 1, # male
-      (0.244 * weight_kg_v0) + (7.8 * (height_cm/100)) + 6.6 - (0.098 * age_v0), # height must be in m not cm
-      (0.244 * weight_kg_v0) + (7.8 * (height_cm/100)) - (0.098 * age_v0)
+      (0.244 * weight_kg_v0) + (7.8 * (height_cm/100)) + 6.6 - (0.098 * age_v0) + (race_num - 3.3), # height must be in m not cm
+      (0.244 * weight_kg_v0) + (7.8 * (height_cm/100)) - (0.098 * age_v0) + (race_num - 3.3)
      ),
      asm_kg_v2 = if_else(
       sex == 1,
-      (0.244 * weight_kg_v2) + (7.8 * (height_cm/100)) + 6.6 - (0.098 * age_v2),
-      (0.244 * weight_kg_v2) + (7.8 * (height_cm/100)) - (0.098 * age_v2)
+      (0.244 * weight_kg_v2) + (7.8 * (height_cm/100)) + 6.6 - (0.098 * age_v2) + (race_num - 3.3),
+      (0.244 * weight_kg_v2) + (7.8 * (height_cm/100)) - (0.098 * age_v2) + (race_num - 3.3)
      ),
      asm_kg_v3 = if_else(
       sex == 1,
-      (0.244 * weight_kg_v3) + (7.8 * (height_cm/100)) + 6.6 - (0.098 * age_v3),
-      (0.244 * weight_kg_v3) + (7.8 * (height_cm/100)) - (0.098 * age_v3)
+      (0.244 * weight_kg_v3) + (7.8 * (height_cm/100)) + 6.6 - (0.098 * age_v3) + (race_num - 3.3),
+      (0.244 * weight_kg_v3) + (7.8 * (height_cm/100)) - (0.098 * age_v3) + (race_num - 3.3)
      ),
      asm_kg_v4 = if_else(
       sex == 1,
-      (0.244 * weight_kg_v4) + (7.8 * (height_cm/100)) + 6.6 - (0.098 * age_v4),
-      (0.244 * weight_kg_v4) + (7.8 * (height_cm/100)) - (0.098 * age_v4)
+      (0.244 * weight_kg_v4) + (7.8 * (height_cm/100)) + 6.6 - (0.098 * age_v4) + (race_num - 3.3),
+      (0.244 * weight_kg_v4) + (7.8 * (height_cm/100)) - (0.098 * age_v4) + (race_num - 3.3)
      ),
      asm_kg_v5 = if_else(
       sex == 1,
-      (0.244 * weight_kg_v5) + (7.8 * (height_cm/100)) + 6.6 - (0.098 * age_v5),
-      (0.244 * weight_kg_v5) + (7.8 * (height_cm/100)) - (0.098 * age_v5)
+      (0.244 * weight_kg_v5) + (7.8 * (height_cm/100)) + 6.6 - (0.098 * age_v5) + (race_num - 3.3),
+      (0.244 * weight_kg_v5) + (7.8 * (height_cm/100)) - (0.098 * age_v5) + (race_num - 3.3)
      ),
      asm_kg_v6 = if_else(
       sex == 1,
-      (0.244 * weight_kg_v6) + (7.8 * (height_cm/100)) + 6.6 - (0.098 * age_v6),
-      (0.244 * weight_kg_v6) + (7.8 * (height_cm/100)) - (0.098 * age_v6)
+      (0.244 * weight_kg_v6) + (7.8 * (height_cm/100)) + 6.6 - (0.098 * age_v6) + (race_num - 3.3),
+      (0.244 * weight_kg_v6) + (7.8 * (height_cm/100)) - (0.098 * age_v6) + (race_num - 3.3)
      ),
      asm_kg_v7 = if_else(
       sex == 1,
-      (0.244 * weight_kg_v7) + (7.8 * (height_cm/100)) + 6.6 - (0.098 * age_v7),
-      (0.244 * weight_kg_v7) + (7.8 * (height_cm/100)) - (0.098 * age_v7)),
-    
+      (0.244 * weight_kg_v7) + (7.8 * (height_cm/100)) + 6.6 - (0.098 * age_v7) + (race_num - 3.3),
+      (0.244 * weight_kg_v7) + (7.8 * (height_cm/100)) - (0.098 * age_v7) + (race_num - 3.3)
+    ) ,
     # smm/weight (recommended for BIA by ESPEN/EASO consensus statement)
     smm_by_weight_v0 = smm_kg_v0 / weight_kg_v0,
     smm_by_weight_v4 = smm_kg_v4 / weight_kg_v4,
