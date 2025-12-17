@@ -25,7 +25,7 @@ baria_clinical_data_raw |>
   filter(nomatch == "nomatch") |> 
   View()
 
-# Baseline Data
+# clinical data
 # Need: clinical data, anthropometry, body composition, medication, basic lab and cardiometabolic risk factors, diabetes, medication
 baria_muscle_clinical <- baria_clinical_data_raw |>
   select(id = Subject_ID,
@@ -42,6 +42,7 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     # Baseline (v0)
     age_v0 = Age,
     sex,
+    contains("race"),
     t2d_v0 = dm,
     bmi_v0 = bmi,
     weight_kg_v0 = weight,
@@ -195,8 +196,21 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     t2d_v0 = case_when(t2d_v0 == "1" ~ "yes", t2d_v0 == "2" ~ "no"),
     aht = case_when(aht == "1" ~ "yes", aht == "2" ~ "no"),
     medication_binary_v0 = case_when(medication_binary_v0 == "1" ~ "yes", medication_binary_v0 == "2" ~ "no"),
-    sport_v0 = case_when(sport_v0 == "1" ~ "yes", sport_v0 == "2" ~ "no")
+    sport_v0 = case_when(sport_v0 == "1" ~ "yes", sport_v0 == "2" ~ "no"),
+    race = case_when(# race in a format to be used for Janssen formula (White/Hispanic vs. Black vs. Asian)
+      `race#Kaukasisch` == "1" ~ "white/hispanic",
+      `race#Mediterraans` == "1" ~ "white/hispanic",
+      `race#Midden-Aziatisch` == "1" ~ "asian",
+      `race#Negroïde` == "1" ~ "black",
+      `race#Noord-Afrikaans` == "1" ~ "white/hispanic", # for the purposes of the jannsen formula
+      `race#Oost-Aziatisch` == "1" ~ "asian",
+      `race#Overig` == "1" ~ "white/hispanic", # to be able to use the formula
+      `race#Slavisch` == "1" ~ "white/hispanic",
+      `race#West-Aziatisch` == "1" ~ "asian",
+      `race#Zuid-Amerikaans` == "1" ~ "white/hispanic"
+    )
   ) |> 
+  select(-contains("race#")) |> 
   mutate(
     # fix Hba1c units
     hba1c_percent_v0 = if_else(
@@ -348,7 +362,8 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
       0.401 * ((height_cm^2) / bia_resistance_50khz_v6) + (age_v6 * -0.071) + 5.102
     ),
 
-     # ASM: ASM = (0.244 × weight [kg]) + (7.8 × height [m]) + (6.6 × sex) – (0.098 × age [years]) (for Caucasians)
+     # ASM: ASM = (0.244 × weight [kg]) + (7.8 × height [m]) + (6.6 × sex) – (0.098 × age [years]) + (race – 3.3)
+     # (sex: women = 0, men = 1; race: White or Hispanic = 0, Black = 1.9, Asian = −1.6) 
      asm_kg_v0 = if_else(
       sex == 1, # male
       (0.244 * weight_kg_v0) + (7.8 * (height_cm/100)) + 6.6 - (0.098 * age_v0), # height must be in m not cm
@@ -435,6 +450,7 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     low_smm_by_weight_v6 = case_when(low_smm_by_weight_v6 == 1 ~ "yes", low_smm_by_weight_v6 == 0 ~ "no")
   ) |> 
   ungroup() |> 
+  relocate(race, .after = sex) |> 
   relocate(c(hba1c_percent_v0, hba1c_mmolmol_v0, homa_ir_v0, homa_b_v0), .after = hba1c_mmolmol_v0) |> # Hba1c 
   relocate(hba1c_percent_v2, hba1c_mmolmol_v2, .after = hba1c_mmolmol_v2) |>
   relocate(hba1c_percent_v3, hba1c_mmolmol_v3, .after = hba1c_mmolmol_v3) |>
