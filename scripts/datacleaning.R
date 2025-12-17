@@ -407,6 +407,32 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     low_smm_v0 = case_when(low_smm_v0 == 1 ~ "yes", low_smm_v0 == 0 ~ "no"),
     low_asm_v0 = case_when(low_asm_v0 == 1 ~ "yes", low_asm_v0 == 0 ~ "no"), 
     low_smm_by_weight_v0 = case_when(low_smm_by_weight_v0 == 1 ~ "yes", low_smm_by_weight_v0 == 0 ~ "no"),
+
+    # 2 year follow-up (v5) only asm, smm and smm/weight
+    smm_kg_v5_quintile = quantile(smm_kg_v5, probs = 0.20, na.rm = TRUE), 
+    asm_kg_v5_quintile = quantile(asm_kg_v5, probs = 0.20, na.rm = TRUE),
+    smm_by_weight_v5_quintile = quantile(smm_by_weight_v5, probs = 0.20, na.rm = TRUE),
+
+    low_smm_v5 = if_else(smm_kg_v5 <= smm_kg_v5_quintile, 1, 0),
+    low_asm_v5 = if_else(asm_kg_v5 <= asm_kg_v5_quintile, 1, 0),
+    low_smm_by_weight_v5 = if_else(smm_by_weight_v5 <= smm_by_weight_v5_quintile, 1, 0),
+
+    low_smm_v5 = case_when(low_smm_v5 == 1 ~ "yes", low_smm_v5 == 0 ~ "no"),
+    low_asm_v5 = case_when(low_asm_v5 == 1 ~ "yes", low_asm_v5 == 0 ~ "no"), 
+    low_smm_by_weight_v5 = case_when(low_smm_by_weight_v5 == 1 ~ "yes", low_smm_by_weight_v5 == 0 ~ "no"),
+
+    # 5 year follow-up (v6) only asm, smm and smm/weight
+    smm_kg_v6_quintile = quantile(smm_kg_v6, probs = 0.20, na.rm = TRUE), 
+    asm_kg_v6_quintile = quantile(asm_kg_v6, probs = 0.20, na.rm = TRUE),
+    smm_by_weight_v6_quintile = quantile(smm_by_weight_v6, probs = 0.20, na.rm = TRUE),
+
+    low_smm_v6 = if_else(smm_kg_v6 <= smm_kg_v6_quintile, 1, 0),
+    low_asm_v6 = if_else(asm_kg_v6 <= asm_kg_v6_quintile, 1, 0),
+    low_smm_by_weight_v6 = if_else(smm_by_weight_v6 <= smm_by_weight_v6_quintile, 1, 0),
+
+    low_smm_v6 = case_when(low_smm_v6 == 1 ~ "yes", low_smm_v6 == 0 ~ "no"),
+    low_asm_v6 = case_when(low_asm_v6 == 1 ~ "yes", low_asm_v6 == 0 ~ "no"), 
+    low_smm_by_weight_v6 = case_when(low_smm_by_weight_v6 == 1 ~ "yes", low_smm_by_weight_v6 == 0 ~ "no")
   ) |> 
   ungroup() |> 
   relocate(c(hba1c_percent_v0, hba1c_mmolmol_v0, homa_ir_v0, homa_b_v0), .after = hba1c_mmolmol_v0) |> # Hba1c 
@@ -705,4 +731,4 @@ nrow(baria_muscle_clean)
 
 # then save as both RDS and csv files
 write.csv(baria_muscle_clean, "data/251217_BARIA_muscle_clinical.csv")
-saveRDS(baria_muscle_clean, "data/251217_BARIA_muscle_clinic
+saveRDS(baria_muscle_clean, "data/251217_BARIA_muscle_clinical.RDS")
