@@ -705,4 +705,4 @@ nrow(baria_muscle_clean)
 
 # then save as both RDS and csv files
 write.csv(baria_muscle_clean, "data/251217_BARIA_muscle_clinical.csv")
-saveRDS(baria_muscle_clean, "data/251217_BARIA_muscle_clinical.RDS")
+saveRDS(baria_muscle_clean, "data/251217_BARIA_muscle_clinic
