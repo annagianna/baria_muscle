@@ -191,9 +191,9 @@ levels <- levels(baria_mb_low_smm_by_weight_v0$Species2)
 
 # Composition plots
 set.seed(13)
-species_comp_low_smm_by_weight <- baria_mb_low_smm_by_weight_v0 |> 
-  mutate(low_asm_v0 = fct_relevel(low_smm_by_weight_v0, "yes", after = 0L)) |> # low asm first
-  ggplot(aes(x = low_asm_v0, y = Abundance, fill = Species2)) +
+species_comp_low_smm_by_weight_v0 <- baria_mb_low_smm_by_weight_v0 |> 
+  mutate(low_smm_by_weight_v0 = fct_relevel(low_smm_by_weight_v0, "yes", after = 0L)) |> # low asm first
+  ggplot(aes(x = low_smm_by_weight_v0, y = Abundance, fill = Species2)) +
   geom_bar(stat = "identity", color = "black") +
   scale_fill_manual(values = rev(c(sample(manet), "grey90")), labels = lev) +
   guides(fill = guide_legend(ncol = 1)) +
