@@ -22,6 +22,7 @@ baria_clinical_data_raw |>
   ) |> 
   filter(nomatch == "nomatch") |> 
   View()
+View(baria_clinical_data_raw)
 
 # clinical data
 # Need: clinical data, anthropometry, body composition, medication, basic lab and cardiometabolic risk factors, diabetes, medication
@@ -326,89 +327,47 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
 
     # calculate muscle mass indices
     # SMM by Janssen: SMM [kg] = (height^2 [cm] / BIA-resistance [Ohms] X 0.401) + (gender x 3.825) + (age [years] x - 0.071)] + 5.102 (men = 1; women = 0)
-    smm_kg_v0 = if_else(
-      sex == 1, # male
-      0.401 * ((height_cm^2) / bia_resistance_50khz_v0) + (1 * 3.825) + (age_v0 * -0.071) + 5.102,
-      0.401 * ((height_cm^2) / bia_resistance_50khz_v0) + (age_v0 * -0.071) + 5.102
-    ),
-    smm_kg_v4 = if_else(
-      sex == 1,
-      0.401 * ((height_cm^2) / bia_resistance_50khz_v4) + (1 * 3.825) + (age_v4 * -0.071) + 5.102,
-      0.401 * ((height_cm^2) / bia_resistance_50khz_v4) + (age_v4 * -0.071) + 5.102
-    ),
-    smm_kg_v5 = if_else(
-      sex == 1,
-      0.401 * ((height_cm^2) / bia_resistance_50khz_v5) + (1 * 3.825) + (age_v5 * -0.071) + 5.102,
-      0.401 * ((height_cm^2) / bia_resistance_50khz_v5) + (age_v5 * -0.071) + 5.102
-    ),
-    smm_kg_v6 = if_else(
-      sex == 1,
-      0.401 * ((height_cm^2) / bia_resistance_50khz_v6) + (1 * 3.825) + (age_v6 * -0.071) + 5.102,
-      0.401 * ((height_cm^2) / bia_resistance_50khz_v6) + (age_v6 * -0.071) + 5.102
-    )
+    smm_kg_v0 = ((height_cm^2) / bia_resistance_50khz_v0 * 0.401) + (age_v0 * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0),
+    smm_kg_v4 = ((height_cm^2) / bia_resistance_50khz_v4 * 0.401) + (age_v4 * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0),
+    smm_kg_v5 = ((height_cm^2) / bia_resistance_50khz_v5 * 0.401) + (age_v5 * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0),
+    smm_kg_v6 = ((height_cm^2) / bia_resistance_50khz_v6 * 0.401) + (age_v6 * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0)
   ) |> 
   mutate(
     # (sex: women = 0, men = 1; race: White or Hispanic = 0, Black = 1.9, Asian = −1.6) 
-    # race in a format to be used for Janssen formula (White/Hispanic vs. Black vs. Asian)
+    # race in a format to be used for ASM formula (White/Hispanic vs. Black vs. Asian)
     race = case_when(
       `race#Kaukasisch` == "1" ~ "white/hispanic",
       `race#Mediterraans` == "1" ~ "white/hispanic",
       `race#Midden-Aziatisch` == "1" ~ "asian",
       `race#Negroïde` == "1" ~ "black",
-      `race#Noord-Afrikaans` == "1" ~ "white/hispanic", # for the purposes of the jannsen formula
+      `race#Noord-Afrikaans` == "1" ~ "white/hispanic", # for the asm calculation
       `race#Oost-Aziatisch` == "1" ~ "asian",
       `race#Overig` == "1" ~ "white/hispanic", # to be able to use the formula
       `race#Slavisch` == "1" ~ "white/hispanic",
       `race#West-Aziatisch` == "1" ~ "asian",
       `race#Zuid-Amerikaans` == "1" ~ "white/hispanic"
     ),
-    # Janssen formula: ASM = (0.244 × weight [kg]) + (7.8 × height [m]) + (6.6 × sex) – (0.098 × age [years]) + (race – 3.3); 
+    # ASM = (0.244 × weight [kg]) + (7.8 × height [m]) + (6.6 × sex) – (0.098 × age [years]) + (race – 3.3); 
     # (sex: women = 0, men = 1; race: White or Hispanic = 0, Black = 1.9, Asian = −1.6)
-    race_num = as.numeric(case_when(race == "white/hispanic" ~ "0", race == "black" ~ "1.9", race == "asian" ~ "-1.6"))
+    race_num = case_when(race == "white/hispanic" ~ 0, race == "black" ~ 1.9, race == "asian" ~ -1.6)
   ) |> 
   select(-contains("race#")) |>
   mutate(
-     asm_kg_v0 = if_else(
-      sex == 1, # male
-      (0.244 * weight_kg_v0) + (7.8 * (height_cm/100)) + 6.6 - (0.098 * age_v0) + (race_num - 3.3), # height must be in m not cm
-      (0.244 * weight_kg_v0) + (7.8 * (height_cm/100)) - (0.098 * age_v0) + (race_num - 3.3)
-     ),
-     asm_kg_v2 = if_else(
-      sex == 1,
-      (0.244 * weight_kg_v2) + (7.8 * (height_cm/100)) + 6.6 - (0.098 * age_v2) + (race_num - 3.3),
-      (0.244 * weight_kg_v2) + (7.8 * (height_cm/100)) - (0.098 * age_v2) + (race_num - 3.3)
-     ),
-     asm_kg_v3 = if_else(
-      sex == 1,
-      (0.244 * weight_kg_v3) + (7.8 * (height_cm/100)) + 6.6 - (0.098 * age_v3) + (race_num - 3.3),
-      (0.244 * weight_kg_v3) + (7.8 * (height_cm/100)) - (0.098 * age_v3) + (race_num - 3.3)
-     ),
-     asm_kg_v4 = if_else(
-      sex == 1,
-      (0.244 * weight_kg_v4) + (7.8 * (height_cm/100)) + 6.6 - (0.098 * age_v4) + (race_num - 3.3),
-      (0.244 * weight_kg_v4) + (7.8 * (height_cm/100)) - (0.098 * age_v4) + (race_num - 3.3)
-     ),
-     asm_kg_v5 = if_else(
-      sex == 1,
-      (0.244 * weight_kg_v5) + (7.8 * (height_cm/100)) + 6.6 - (0.098 * age_v5) + (race_num - 3.3),
-      (0.244 * weight_kg_v5) + (7.8 * (height_cm/100)) - (0.098 * age_v5) + (race_num - 3.3)
-     ),
-     asm_kg_v6 = if_else(
-      sex == 1,
-      (0.244 * weight_kg_v6) + (7.8 * (height_cm/100)) + 6.6 - (0.098 * age_v6) + (race_num - 3.3),
-      (0.244 * weight_kg_v6) + (7.8 * (height_cm/100)) - (0.098 * age_v6) + (race_num - 3.3)
-     ),
-     asm_kg_v7 = if_else(
-      sex == 1,
-      (0.244 * weight_kg_v7) + (7.8 * (height_cm/100)) + 6.6 - (0.098 * age_v7) + (race_num - 3.3),
-      (0.244 * weight_kg_v7) + (7.8 * (height_cm/100)) - (0.098 * age_v7) + (race_num - 3.3)
-    ) ,
+    asm_kg_v0 = (0.244 * weight_kg_v0) + (7.8 * (height_cm / 100)) + if_else(sex == "male", 6.6, 0) - (0.098 * age_v0) + (race_num - 3.3),
+    asm_kg_v2 = (0.244 * weight_kg_v2) + (7.8 * (height_cm / 100)) + if_else(sex == "male", 6.6, 0) - (0.098 * age_v2) + (race_num - 3.3),
+    asm_kg_v3 = (0.244 * weight_kg_v3) + (7.8 * (height_cm / 100)) + if_else(sex == "male", 6.6, 0) - (0.098 * age_v3) + (race_num - 3.3),
+    asm_kg_v4 = (0.244 * weight_kg_v4) + (7.8 * (height_cm / 100)) + if_else(sex == "male", 6.6, 0) - (0.098 * age_v4) + (race_num - 3.3),
+    asm_kg_v5 = (0.244 * weight_kg_v5) + (7.8 * (height_cm / 100)) + if_else(sex == "male", 6.6, 0) - (0.098 * age_v5) + (race_num - 3.3),
+    asm_kg_v6 = (0.244 * weight_kg_v6) + (7.8 * (height_cm / 100)) + if_else(sex == "male", 6.6, 0) - (0.098 * age_v6) + (race_num - 3.3),
+    asm_kg_v7 = (0.244 * weight_kg_v7) + (7.8 * (height_cm / 100)) + if_else(sex == "male", 6.6, 0) - (0.098 * age_v7) + (race_num - 3.3),
+
     # smm/weight (recommended for BIA by ESPEN/EASO consensus statement)
     smm_by_weight_v0 = smm_kg_v0 / weight_kg_v0,
     smm_by_weight_v4 = smm_kg_v4 / weight_kg_v4,
     smm_by_weight_v5 = smm_kg_v5 / weight_kg_v5,
     smm_by_weight_v6 = smm_kg_v6 / weight_kg_v6,
   ) |> 
+  select(-race_num) |> # only used for asm calculation
   group_by(sex) |> # calculate cut-offs for female and male participants
   mutate(
     # Calculate the quintiles
@@ -747,4 +706,24 @@ baria_muscle_clean <- baria_muscle_clinical_with_medication_notypos |>
     ssris_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_pattern$ssris), "yes", "no"),
     tcas_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_pattern$tcas), "yes", "no"),
     snris_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_pattern$snris), "yes", "no"),
-    ndris_v0 = if_else(str_detect(medicatio
+    ndris_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_pattern$ndris), "yes", "no"),
+    antipsychotics_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_pattern$antipsychotics), "yes", "no"),
+    moods_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_pattern$moods), "yes", "no"),
+    adhd_meds = if_else(str_detect(medication_list_v0, psychiatric_meds_pattern$adhd_meds), "yes", "no"),
+    hypnotics_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_pattern$hypnotics), "yes", "no"),
+
+    psychiatric_meds_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_any_pattern), "yes", "no"),
+
+    # PPIs
+    ppi_v0 = if_else(str_detect(medication_list_v0, ppi_pattern), "yes", "no")
+  ) |> 
+  select(-medication_list_v0) |> 
+  arrange(date_v0) |> 
+  print()
+
+View(baria_muscle_clean)
+nrow(baria_muscle_clean)
+
+# then save as both RDS and csv files
+write.csv(baria_muscle_clean, "data/251221_BARIA_muscle_clinical.csv")
+saveRDS(baria_muscle_clean, "data/251221_BARIA_muscle_clinical.RDS")
