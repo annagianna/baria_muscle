@@ -117,6 +117,11 @@ top20_species <- baria_mb_df |>
   head(20) |> 
   print()
 
+# assign fixed color to each one of the top20 species an
+top20_species_vector <- top20_species$Species # top 20 species names as vector
+set.seed(13)
+top20_species_colours <- sample(manet)
+
 # low ASM
 # per group (low ASM at baseline)
 baria_mb_low_asm_v0 <- baria_mb_df |> 
@@ -136,27 +141,25 @@ baria_mb_low_asm_v0 <- baria_mb_df |>
   ungroup() |> 
   mutate(
     Species2 = fct_reorder(Species2, Abundance),
-    Species2 = fct_relevel(Species2, "Other species", after = 0L) # move other spevies to the front
+    Species2 = fct_relevel(Species2, "Other species", after = 0L) # move other species to the front
   )
+
+levels_asm_v0 <- levels(baria_mb_low_asm_v0$Species2)
 
 baria_mb_low_asm_v0 |> # check
   group_by(low_asm_v0) |> 
   summarise(sum_Abundance = sum(Abundance)) # adds up to 100
 
-levels_asm_v0 <- levels(baria_mb_low_asm_v0$Species2)
-
-# Composition plots
-set.seed(13)
+# Composition plot (low ASM)
 species_comp_low_asm_v0 <- baria_mb_low_asm_v0 |> 
   mutate(low_asm_v0 = fct_relevel(low_asm_v0, "yes", after = 0L)) |> # low asm first
   ggplot(aes(x = low_asm_v0, y = Abundance, fill = Species2)) +
   geom_bar(stat = "identity", color = "black") +
-  scale_fill_manual(values = rev(c(sample(manet), "grey90")), labels = levels_asm_v0) +
+  scale_fill_manual(values = c("grey90", top20_species_colours), labels = levels_asm_v0) +
   guides(fill = guide_legend(ncol = 1)) +
-  labs(y="Composition (relative abundances)", x = "Low baseline ASM", title = "Microbiota composition", fill = "") +
+  labs(y = "Composition (relative abundances)", x = "Low baseline ASM", title = "Microbiota composition", fill = "") +
   scale_y_continuous(expand = c(0, 0)) +
   theme_composition()
-
 ggsave("graphs/species_comp_low_asm_v0.pdf", width = 12, height = 10)
 
 # low SMM/W
@@ -188,16 +191,14 @@ baria_mb_low_smm_by_weight_v0 |> # check
 
 levels_smm_by_weight_v0 <- levels(baria_mb_low_smm_by_weight_v0$Species2)
 
-# Composition plots
-set.seed(13)
+# Composition plot (low SMM/W)
 species_comp_low_smm_by_weight_v0 <- baria_mb_low_smm_by_weight_v0 |> 
   mutate(low_smm_by_weight_v0 = fct_relevel(low_smm_by_weight_v0, "yes", after = 0L)) |>
   ggplot(aes(x = low_smm_by_weight_v0, y = Abundance, fill = Species2)) +
   geom_bar(stat = "identity", color = "black") +
-  scale_fill_manual(values = rev(c(sample(manet), "grey90")), labels = levels_smm_by_weight_v0) +
+  scale_fill_manual(values = c("grey90", top20_species_colours), labels = levels_smm_by_weight_v0) +
   guides(fill = guide_legend(ncol = 1)) +
   labs(y="Composition (relative abundances)", x = "Low baseline SMM/Weight", title = "Microbiota composition", fill = "") +
   scale_y_continuous(expand = c(0, 0)) +
   theme_composition()
-
 ggsave("graphs/species_comp_low_smm_by_weight_v0.pdf", width = 12, height = 10)
