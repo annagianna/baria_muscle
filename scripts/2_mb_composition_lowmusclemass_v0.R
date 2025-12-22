@@ -69,7 +69,7 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 } 
 
 # Data
-baria_muscle <- read_rds("data/251221_BARIA_muscle_clinical.RDS") # metadata/clinical data
+baria_muscle <- read_rds("data/251222_BARIA_muscle_clinical.RDS") # metadata/clinical data CHECK FOR MOST RECENT VERSION
 baria_mb <- read_rds("data/ps.BARIA.metaphlan.706.2548.RDS")
 sample_sums(baria_mb) # adds up to 100
 
@@ -105,7 +105,7 @@ baria_mb_df |> # check
   summarise(sum_abundance = sum(Abundance)) # adds up to 100
 
 # Compositional plots at species level
-# Summarize per group and identify top 20 species (baseline = V1)
+# Summarize per group and identify top 20 species (baseline = V1) 
 top20_species <- baria_mb_df |> 
   # filter(visit == 1) |> # not filtered for longitudinal approach
   group_by(Sample, Species) |> 
@@ -137,8 +137,7 @@ baria_mb_low_asm_v0 <- baria_mb_df |>
   mutate(
     Species2 = fct_reorder(Species2, Abundance),
     Species2 = fct_relevel(Species2, "Other species", after = 0L) # move other spevies to the front
-  ) |> 
-  print()
+  )
 
 baria_mb_low_asm_v0 |> # check
   group_by(low_asm_v0) |> 
@@ -152,7 +151,7 @@ species_comp_low_asm_v0 <- baria_mb_low_asm_v0 |>
   mutate(low_asm_v0 = fct_relevel(low_asm_v0, "yes", after = 0L)) |> # low asm first
   ggplot(aes(x = low_asm_v0, y = Abundance, fill = Species2)) +
   geom_bar(stat = "identity", color = "black") +
-  scale_fill_manual(values = rev(c(sample(manet), "grey90")), labels = lev) +
+  scale_fill_manual(values = rev(c(sample(manet), "grey90")), labels = levels_asm_v0) +
   guides(fill = guide_legend(ncol = 1)) +
   labs(y="Composition (relative abundances)", x = "Low baseline ASM", title = "Microbiota composition", fill = "") +
   scale_y_continuous(expand = c(0, 0)) +
@@ -192,7 +191,7 @@ levels_smm_by_weight_v0 <- levels(baria_mb_low_smm_by_weight_v0$Species2)
 # Composition plots
 set.seed(13)
 species_comp_low_smm_by_weight_v0 <- baria_mb_low_smm_by_weight_v0 |> 
-  mutate(low_smm_by_weight_v0 = fct_relevel(low_smm_by_weight_v0, "yes", after = 0L)) |> # low asm first
+  mutate(low_smm_by_weight_v0 = fct_relevel(low_smm_by_weight_v0, "yes", after = 0L)) |>
   ggplot(aes(x = low_smm_by_weight_v0, y = Abundance, fill = Species2)) +
   geom_bar(stat = "identity", color = "black") +
   scale_fill_manual(values = rev(c(sample(manet), "grey90")), labels = levels_smm_by_weight_v0) +
