@@ -75,7 +75,12 @@ sample_sums(baria_mb) # adds up to 100
 
 # convert sample_data of baria_mb to a data frame to merge with selected cols from baria_muscle
 meta_baria_mb <- meta(baria_mb) |> 
-  tibble::rownames_to_column(var = "rownames")
+  tibble::rownames_to_column(var = "rownames") |> 
+  mutate(
+    visit = as.integer(parse_number(Time_Point)),
+    visit = if_else(visit == -1, 0, visit),
+    Extra_data = na_if(Extra_data, "NA")
+  )
 class(meta_baria_mb) # is df
 
 # Add low muscle variables to sample_data() of phyloseq object
@@ -83,17 +88,12 @@ new_sample_data <- baria_muscle |>
   select(id, sex, contains("low_")) |> # to be used for group comparisons (low muscle mass)
   mutate(id = as.character(id)) |> 
   inner_join(meta_baria_mb, join_by(id == Subject_ID)) |> # only keep ids with BIA and microbiome data
-  #!!!! CHANGE THIS NEEDS TO BE BY ID AND VISIT !!!!
-  mutate(
-    visit = as.integer(str_extract(Time_Point, "\\d+")),
-    Extra_data = na_if(Extra_data, "NA")
-  ) |> 
   select(-(Study:Time_Point)) |> 
-  group_by(id, visit) |> 
+  group_by(id, visit) |>
   slice(1) |> # keeps first occurence per group (some ids had second runs)
   relocate(rownames, .before = id) |> 
-  relocate(visit, .before = id) |> 
-  relocate(Extra_data, .after = id) |> 
+  relocate(visit, .after = id) |> 
+  relocate(Extra_data, .after = visit) |> 
   tibble::column_to_rownames(var = "rownames")
 
 # update sample_data() within baria_mb
@@ -107,7 +107,7 @@ baria_mb_df |> # check
 
 # Summarize per group and identify top 20 species (baseline = V1) 
 top20_species <- baria_mb_df |> 
-  # filter(visit == 1) |> # not filtered for longitudinal approach
+  # filter(visit == 0) |> # not filtered for longitudinal approach
   group_by(Sample, Species) |> 
   summarize(Abundance = sum(Abundance), .groups = "drop") |> 
   group_by(Species) |> 
@@ -127,7 +127,7 @@ top20_species_colours <- c(
 
 # low ASM at baseline
 baria_mb_low_asm_v0 <- baria_mb_df |> 
-  filter(visit == 1) |> # baseline composition (in clinical data v0 for shotgun data v1!)
+  filter(visit == 0) |> # baseline composition (in clinical data v0 for shotgun data v1!)
   mutate(
     Species2 = if_else(
         Species %in% top20_species$Species,
@@ -164,7 +164,7 @@ ggsave("graphs/species_comp_low_asm_v0.pdf", width = 12, height = 10)
 
 # low SMM/W at baseline
 baria_mb_low_smm_by_weight_v0 <- baria_mb_df |> 
-  filter(visit == 1) |> # baseline composition (in clinical data v0 for shotgun data v1!)
+  filter(visit == 0) |> # baseline composition (in clinical data v0 for shotgun data v1!)
   mutate(
     Species2 = if_else(
         Species %in% top20_species$Species,
@@ -200,12 +200,12 @@ species_comp_low_smm_by_weight_v0 <- baria_mb_low_smm_by_weight_v0 |>
   theme_composition()
 ggsave("graphs/species_comp_low_smm_by_weight_v0.pdf", width = 12, height = 10)
 
-#### Baseline gut microbiota & low muscle mass at 2y follow-up #### 
+#### Baseline gut microbiota & low muscle mass at 1y follow-up (v4) #### 
 # ASM
-# Baseline gut microbiota -> low ASM at 2y follow-up
-baria_mb_low_asm_2y_baselinemb <- baria_mb_df |>
-  filter(!is.na(low_asm_v5)) |> 
-  filter(visit == 1) |> # baseline composition
+# Baseline gut microbiota -> low ASM at 1y follow-up
+baria_mb_low_asm_1y_baselinemb <- baria_mb_df |>
+  filter(!is.na(low_asm_v4)) |> 
+  filter(visit == 0) |> # baseline composition
   mutate(
     Species2 = if_else(
         Species %in% top20_species$Species,
@@ -214,9 +214,9 @@ baria_mb_low_asm_2y_baselinemb <- baria_mb_df |>
         ),
     Species2 = as.factor(Species2)
   ) |> 
-  group_by(Species2, Sample, low_asm_v5) |> # species abundance per sample
+  group_by(Species2, Sample, low_asm_v4) |> # species abundance per sample
   summarize(Abundance = sum(Abundance)) |> 
-  group_by(Species2, low_asm_v5) |> # species per muscle mass group
+  group_by(Species2, low_asm_v4) |> # species per muscle mass group
   summarize(Abundance = mean(Abundance)) |> # avg abundance per species per muscle group
   ungroup() |> 
   mutate(
@@ -224,27 +224,27 @@ baria_mb_low_asm_2y_baselinemb <- baria_mb_df |>
     Species2 = fct_relevel(Species2, "Other species", after = 0L) # move other species to the front
   )
 
-baria_mb_low_asm_2y_baselinemb |> # check
-  group_by(low_asm_v5) |> 
+baria_mb_low_asm_1y_baselinemb |> # check
+  group_by(low_asm_v4) |> 
   summarise(sum_Abundance = sum(Abundance)) # adds up to 100
 
-# Baseline composition plot (low ASM at 2y)
-species_baselinecomp_low_asm_2y <- baria_mb_low_asm_2y_baselinemb |> 
-  mutate(low_asm_v5 = fct_relevel(low_asm_v5, "yes", after = 0L)) |> # low asm first
-  ggplot(aes(x = low_asm_v5, y = Abundance, fill = Species2)) +
+# Baseline composition plot (low ASM at 1y)
+species_baselinecomp_low_asm_1y <- baria_mb_low_asm_1y_baselinemb |> 
+  mutate(low_asm_v4 = fct_relevel(low_asm_v4, "yes", after = 0L)) |> # low asm first
+  ggplot(aes(x = low_asm_v4, y = Abundance, fill = Species2)) +
   geom_bar(stat = "identity", color = "black") +
   scale_fill_manual(values = top20_species_colours) +
   guides(fill = guide_legend(ncol = 1)) +
-  labs(y = "Composition (relative abundances)", x = "Low ASM at 2 years post-surgery", title = "Baseline microbiota composition by low ASM at 2 years", fill = "") +
+  labs(y = "Composition (relative abundances)", x = "Low ASM at 1 year post-surgery", title = "Baseline microbiota composition", fill = "") +
   scale_y_continuous(expand = c(0, 0)) +
   theme_composition()
-ggsave("graphs/species_baselinecomp_low_asm_2y.pdf", width = 12, height = 10)
+ggsave("graphs/species_baselinecomp_low_asm_1y.pdf", width = 12, height = 10)
 
 # SMM/W
-# Baseline gut microbiota -> low ASM at 2y follow-up
-baria_mb_low_smm_by_weight_2y_baselinemb <- baria_mb_df |>
-  filter(!is.na(low_smm_by_weight_v5)) |> 
-  filter(visit == 1) |> # baseline composition
+# Baseline gut microbiota -> low ASM at 1y follow-up
+baria_mb_low_smm_by_weight_1y_baselinemb <- baria_mb_df |>
+  filter(!is.na(low_smm_by_weight_v4)) |> 
+  filter(visit == 0) |> # baseline composition
   mutate(
     Species2 = if_else(
         Species %in% top20_species$Species,
@@ -253,9 +253,9 @@ baria_mb_low_smm_by_weight_2y_baselinemb <- baria_mb_df |>
         ),
     Species2 = as.factor(Species2)
   ) |> 
-  group_by(Species2, Sample, low_smm_by_weight_v5) |> # species abundance per sample
+  group_by(Species2, Sample, low_smm_by_weight_v4) |> # species abundance per sample
   summarize(Abundance = sum(Abundance)) |> 
-  group_by(Species2, low_smm_by_weight_v5) |> # species per muscle mass group
+  group_by(Species2, low_smm_by_weight_v4) |> # species per muscle mass group
   summarize(Abundance = mean(Abundance)) |> # avg abundance per species per muscle group
   ungroup() |> 
   mutate(
@@ -263,28 +263,28 @@ baria_mb_low_smm_by_weight_2y_baselinemb <- baria_mb_df |>
     Species2 = fct_relevel(Species2, "Other species", after = 0L) # move other species to the front
   )
 
-baria_mb_low_smm_by_weight_2y_baselinemb |> # check
-  group_by(low_smm_by_weight_v5) |> 
+baria_mb_low_smm_by_weight_1y_baselinemb |> # check
+  group_by(low_smm_by_weight_v4) |> 
   summarise(sum_Abundance = sum(Abundance)) # adds up to 100
 
-# Baseline composition plot (low SMM/W at 2y)
-species_baselinecomp_low_smm_by_weight_2y <- baria_mb_low_smm_by_weight_2y_baselinemb |> 
-  mutate(low_smm_by_weight_v5 = fct_relevel(low_smm_by_weight_v5, "yes", after = 0L)) |> # low smm/w first
-  ggplot(aes(x = low_smm_by_weight_v5, y = Abundance, fill = Species2)) +
+# Baseline composition plot (low SMM/W at 1y)
+species_baselinecomp_low_smm_by_weight_1y <- baria_mb_low_smm_by_weight_1y_baselinemb |> 
+  mutate(low_smm_by_weight_v4 = fct_relevel(low_smm_by_weight_v4, "yes", after = 0L)) |> # low smm/w first
+  ggplot(aes(x = low_smm_by_weight_v4, y = Abundance, fill = Species2)) +
   geom_bar(stat = "identity", color = "black") +
   scale_fill_manual(values = top20_species_colours) +
   guides(fill = guide_legend(ncol = 1)) +
-  labs(y = "Composition (relative abundances)", x = "Low SMM/Weight at 2 years post-surgery", title = "Baseline microbiota composition by low SMM/W at 2 years", fill = "") +
+  labs(y = "Composition (relative abundances)", x = "Low SMM/Weight at 1 year post-surgery", title = "Baseline microbiota composition", fill = "") +
   scale_y_continuous(expand = c(0, 0)) +
   theme_composition()
-ggsave("graphs/species_baselinecomp_low_smm_by_weight_2y.pdf", width = 12, height = 10)
+ggsave("graphs/species_baselinecomp_low_smm_by_weight_1y.pdf", width = 12, height = 10)
 
 #### Microbiota composition & low muscle mass at 2y follow-up #### 
 # ASM
 # Baseline gut microbiota -> low ASM at 2y follow-up
 baria_mb_low_asm_2y_baselinemb <- baria_mb_df |>
   filter(!is.na(low_asm_v5)) |> 
-  filter(visit == 1) |> # baseline composition
+  filter(visit == 0) |> # baseline composition
   mutate(
     Species2 = if_else(
         Species %in% top20_species$Species,
@@ -314,7 +314,7 @@ species_baselinecomp_low_asm_2y <- baria_mb_low_asm_2y_baselinemb |>
   geom_bar(stat = "identity", color = "black") +
   scale_fill_manual(values = top20_species_colours) +
   guides(fill = guide_legend(ncol = 1)) +
-  labs(y = "Composition (relative abundances)", x = "Low ASM at 2 years post-surgery", title = "Baseline microbiota composition by low ASM at 2 years", fill = "") +
+  labs(y = "Composition (relative abundances)", x = "Low ASM at 2 years post-surgery", title = "Baseline microbiota composition", fill = "") +
   scale_y_continuous(expand = c(0, 0)) +
   theme_composition()
 ggsave("graphs/species_baselinecomp_low_asm_2y.pdf", width = 12, height = 10)
@@ -323,7 +323,7 @@ ggsave("graphs/species_baselinecomp_low_asm_2y.pdf", width = 12, height = 10)
 # Baseline gut microbiota -> low ASM at 2y follow-up
 baria_mb_low_smm_by_weight_2y_baselinemb <- baria_mb_df |>
   filter(!is.na(low_smm_by_weight_v5)) |> 
-  filter(visit == 1) |> # baseline composition
+  filter(visit == 0) |> # baseline composition
   mutate(
     Species2 = if_else(
         Species %in% top20_species$Species,
@@ -353,18 +353,18 @@ species_baselinecomp_low_smm_by_weight_2y <- baria_mb_low_smm_by_weight_2y_basel
   geom_bar(stat = "identity", color = "black") +
   scale_fill_manual(values = top20_species_colours) +
   guides(fill = guide_legend(ncol = 1)) +
-  labs(y = "Composition (relative abundances)", x = "Low SMM/Weight at 2 years post-surgery", title = "Baseline microbiota composition by low SMM/W at 2 years", fill = "") +
+  labs(y = "Composition (relative abundances)", x = "Low SMM/Weight at 2 years post-surgery", title = "Baseline microbiota composition", fill = "") +
   scale_y_continuous(expand = c(0, 0)) +
   theme_composition()
 ggsave("graphs/species_baselinecomp_low_smm_by_weight_2y.pdf", width = 12, height = 10)
 
 
-#### Baseline gut microbiota & low muscle mass at 5y follow-up #### 
+#### Microbiota composition associated with low muscle mass at follow-up #### 
+#### Microbiota composition at 1y associated with low muscle mass ####
 # ASM
-# Baseline gut microbiota -> low ASM at 5y follow-up
-baria_mb_low_asm_5y_baselinemb <- baria_mb_df |>
-  filter(!is.na(low_asm_v6)) |> 
-  filter(visit == 1) |> # baseline composition
+baria_mb_low_asm_1y_followupmb <- baria_mb_df |>
+  filter(!is.na(low_asm_v4)) |> 
+  filter(visit == 4) |> # composition at 1y
   mutate(
     Species2 = if_else(
         Species %in% top20_species$Species,
@@ -373,9 +373,9 @@ baria_mb_low_asm_5y_baselinemb <- baria_mb_df |>
         ),
     Species2 = as.factor(Species2)
   ) |> 
-  group_by(Species2, Sample, low_asm_v6) |> # species abundance per sample
+  group_by(Species2, Sample, low_asm_v4) |> # species abundance per sample
   summarize(Abundance = sum(Abundance)) |> 
-  group_by(Species2, low_asm_v6) |> # species per muscle mass group
+  group_by(Species2, low_asm_v4) |> # species per muscle mass group
   summarize(Abundance = mean(Abundance)) |> # avg abundance per species per muscle group
   ungroup() |> 
   mutate(
@@ -383,27 +383,26 @@ baria_mb_low_asm_5y_baselinemb <- baria_mb_df |>
     Species2 = fct_relevel(Species2, "Other species", after = 0L) # move other species to the front
   )
 
-baria_mb_low_asm_5y_baselinemb |> # check
-  group_by(low_asm_v6) |> 
+baria_mb_low_asm_1y_followupmb |> # check
+  group_by(low_asm_v4) |> 
   summarise(sum_Abundance = sum(Abundance)) # adds up to 100
 
-# Baseline composition plot (low ASM at 5y)
-species_baselinecomp_low_asm_5y <- baria_mb_low_asm_5y_baselinemb |> 
-  mutate(low_asm_v6 = fct_relevel(low_asm_v6, "yes", after = 0L)) |> # low asm first
-  ggplot(aes(x = low_asm_v6, y = Abundance, fill = Species2)) +
+# Composition plot (low ASM at 1y)
+species_followupcomp_low_asm_1y <- baria_mb_low_asm_1y_followupmb |> 
+  mutate(low_asm_v4 = fct_relevel(low_asm_v4, "yes", after = 0L)) |> # low asm first
+  ggplot(aes(x = low_asm_v4, y = Abundance, fill = Species2)) +
   geom_bar(stat = "identity", color = "black") +
   scale_fill_manual(values = top20_species_colours) +
   guides(fill = guide_legend(ncol = 1)) +
-  labs(y = "Composition (relative abundances)", x = "Low ASM at 5 years post-surgery", title = "Baseline microbiota composition by low ASM at 5 years", fill = "") +
+  labs(y = "Composition (relative abundances)", x = "Low ASM at 1 year post-surgery", title = "Microbiota composition", fill = "") +
   scale_y_continuous(expand = c(0, 0)) +
   theme_composition()
-ggsave("graphs/species_baselinecomp_low_asm_5y.pdf", width = 12, height = 10)
+ggsave("graphs/species_followupcomp_low_asm_1y.pdf", width = 12, height = 10)
 
 # SMM/W
-# Baseline gut microbiota -> low ASM at 5y follow-up
-baria_mb_low_smm_by_weight_5y_baselinemb <- baria_mb_df |>
-  filter(!is.na(low_smm_by_weight_v6)) |> 
-  filter(visit == 1) |> # baseline composition
+baria_mb_low_smm_by_weight_1y_followupmb <- baria_mb_df |>
+  filter(!is.na(low_smm_by_weight_v4)) |> 
+  filter(visit == 4) |> # composition at 1 year follow-up
   mutate(
     Species2 = if_else(
         Species %in% top20_species$Species,
@@ -412,9 +411,9 @@ baria_mb_low_smm_by_weight_5y_baselinemb <- baria_mb_df |>
         ),
     Species2 = as.factor(Species2)
   ) |> 
-  group_by(Species2, Sample, low_smm_by_weight_v6) |> # species abundance per sample
+  group_by(Species2, Sample, low_smm_by_weight_v4) |> # species abundance per sample
   summarize(Abundance = sum(Abundance)) |> 
-  group_by(Species2, low_smm_by_weight_v6) |> # species per muscle mass group
+  group_by(Species2, low_smm_by_weight_v4) |> # species per muscle mass group
   summarize(Abundance = mean(Abundance)) |> # avg abundance per species per muscle group
   ungroup() |> 
   mutate(
@@ -422,20 +421,22 @@ baria_mb_low_smm_by_weight_5y_baselinemb <- baria_mb_df |>
     Species2 = fct_relevel(Species2, "Other species", after = 0L) # move other species to the front
   )
 
-baria_mb_low_smm_by_weight_5y_baselinemb |> # check
-  group_by(low_smm_by_weight_v6) |> 
+baria_mb_low_smm_by_weight_1y_baselinemb |> # check
+  group_by(low_smm_by_weight_v4) |> 
   summarise(sum_Abundance = sum(Abundance)) # adds up to 100
 
-# Baseline composition plot (low SMM/W at 5y)
-species_baselinecomp_low_smm_by_weight_5y <- baria_mb_low_smm_by_weight_5y_baselinemb |> 
-  mutate(low_smm_by_weight_v6 = fct_relevel(low_smm_by_weight_v6, "yes", after = 0L)) |> # low smm/w first
-  ggplot(aes(x = low_smm_by_weight_v6, y = Abundance, fill = Species2)) +
+# Baseline composition plot (low SMM/W at 1y)
+species_baselinecomp_low_smm_by_weight_1y <- baria_mb_low_smm_by_weight_1y_baselinemb |> 
+  mutate(low_smm_by_weight_v4 = fct_relevel(low_smm_by_weight_v4, "yes", after = 0L)) |> # low smm/w first
+  ggplot(aes(x = low_smm_by_weight_v4, y = Abundance, fill = Species2)) +
   geom_bar(stat = "identity", color = "black") +
   scale_fill_manual(values = top20_species_colours) +
   guides(fill = guide_legend(ncol = 1)) +
-  labs(y = "Composition (relative abundances)", x = "Low SMM/Weight at 5 years post-surgery", title = "Baseline microbiota composition by low SMM/W at 5 years", fill = "") +
+  labs(y = "Composition (relative abundances)", x = "Low SMM/Weight at 1 year post-surgery", title = "Baseline microbiota composition", fill = "") +
   scale_y_continuous(expand = c(0, 0)) +
   theme_composition()
-ggsave("graphs/species_baselinecomp_low_smm_by_weight_5y.pdf", width = 12, height = 10)
+ggsave("graphs/species_baselinecomp_low_smm_by_weight_1y.pdf", width = 12, height = 10)
+
+
 
 
