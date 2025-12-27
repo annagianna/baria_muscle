@@ -127,7 +127,7 @@ baria_mb_shannon$shannon
 
 # Shannon plots
 # ASM
-shannon_v0 <- baria_mb_shannon |> 
+shannon_asm_v0 <- baria_mb_shannon |> 
   filter(visit == 0) |> 
   mutate(low_asm_v0 = fct_relevel(low_asm_v0, "yes", after = 0L)) |> 
   ggplot(aes(x = low_asm_v0, y = shannon, fill = low_asm_v0)) +
@@ -136,9 +136,43 @@ shannon_v0 <- baria_mb_shannon |>
   stat_compare_means(method = "wilcox.test", label = "p.signif", hide.ns = TRUE) +
   labs(title = "Shannon index", y = "Shannon index", x = "Low baseline ASM") +
   scale_fill_manual(values = low_cols) +
+  labs(fill = "Low ASM") + 
   theme_Publication()
+ggsave(shannon_asm_v0, filename = "graphs/alphadiversity/shannon_asm_v0.pdf", width = 7, height = 5)
 
 # SMM/W
-
+shannon_smm_by_weight_v0 <- baria_mb_shannon |> 
+  filter(visit == 0) |> 
+  mutate(low_asm_v0 = fct_relevel(low_smm_by_weight_v0, "yes", after = 0L)) |> 
+  ggplot(aes(x = low_smm_by_weight_v0, y = shannon, fill = low_smm_by_weight_v0)) +
+  geom_boxplot() +
+  #geom_jitter(position = position_dodge(0.75)) +
+  stat_compare_means(method = "wilcox.test", label = "p.signif", hide.ns = TRUE) +
+  labs(title = "Shannon index", y = "Shannon index", x = "Low baseline SMM/W") +
+  scale_fill_manual(values = low_cols) +
+  labs(fill = "Low SMM/W") + 
+  theme_Publication()
+ggsave(shannon_asm_v0, filename = "graphs/alphadiversity/shannon_smm_by_weight_v0.pdf", width = 7, height = 5)
 
 # Shannon violin Plots
+# ASM
+shannon_asm_v0_violin <- baria_mb_shannon |> 
+  filter(visit == 0) |> 
+  mutate(low_asm_v0 = fct_relevel(low_smm_by_weight_v0, "yes", after = 0L)) |> 
+  ggplot(aes(x = low_asm_v0, y = shannon)) +
+  geom_violin(aes(fill = low_asm_v0)) +
+  geom_boxplot(fill = "white", width = 0.1) +
+  labs(x = "", y = "Shannon index", title = "Shannon index") +
+  stat_compare_means( 
+    tip.length = 0, 
+    hide.ns = TRUE, 
+    label.x = 1.5,
+    method = "wilcox.test",
+    label = "p.signif"
+  ) +
+  scale_fill_manual(values = low_cols) +
+  scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
+  theme_Publication()
+ggsave(shannon_asm_v0_violin, "graphs/alphadiversity/shannon_asm_v0_violin.pdf", width = 6, height = 5)
+
+# SMM/W
