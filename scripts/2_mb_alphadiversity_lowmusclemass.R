@@ -152,7 +152,7 @@ shannon_smm_by_weight_v0 <- baria_mb_shannon |>
   scale_fill_manual(values = low_cols) +
   labs(fill = "Low SMM/W") + 
   theme_Publication()
-ggsave(shannon_asm_v0, filename = "graphs/alphadiversity/shannon_smm_by_weight_v0.pdf", width = 7, height = 5)
+ggsave(shannon_smm_by_weight_v0, filename = "graphs/alphadiversity/shannon_smm_by_weight_v0.pdf", width = 7, height = 5)
 
 # Shannon violin Plots
 # ASM
@@ -162,7 +162,7 @@ shannon_asm_v0_violin <- baria_mb_shannon |>
   ggplot(aes(x = low_asm_v0, y = shannon)) +
   geom_violin(aes(fill = low_asm_v0)) +
   geom_boxplot(fill = "white", width = 0.1) +
-  labs(x = "", y = "Shannon index", title = "Shannon index") +
+  labs(x = "", y = "Shannon index", title = "Shannon index", fill = "Low ASM") +
   stat_compare_means( 
     tip.length = 0, 
     hide.ns = TRUE, 
@@ -173,6 +173,6 @@ shannon_asm_v0_violin <- baria_mb_shannon |>
   scale_fill_manual(values = low_cols) +
   scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
   theme_Publication()
-ggsave(shannon_asm_v0_violin, "graphs/alphadiversity/shannon_asm_v0_violin.pdf", width = 6, height = 5)
+ggsave("graphs/alphadiversity/shannon_asm_v0_violin.pdf", width = 6, height = 5)
 
 # SMM/W
