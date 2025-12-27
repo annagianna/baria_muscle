@@ -140,16 +140,16 @@ baria_mb_low_asm_v0 <- baria_mb_df |>
   summarize(Abundance = sum(Abundance)) |> 
   group_by(Species2, low_asm_v0) |> # species per muscle mass group
   summarize(Abundance = mean(Abundance)) |> # avg abundance per species per muscle group
-  ungroup() |> 
+  ungroup() |>
   mutate(
     Species2 = fct_reorder(Species2, Abundance),
     Species2 = fct_relevel(Species2, "Other species", after = 0L) # move other species to the front
-  )
+  ) 
 
 baria_mb_low_asm_v0 |> # check
   group_by(low_asm_v0) |> 
   summarise(sum_Abundance = sum(Abundance)) # adds up to 100
-
+?arrange
 # Composition plot (low ASM at baseline)
 species_comp_low_asm_v0 <- baria_mb_low_asm_v0 |> 
   mutate(low_asm_v0 = fct_relevel(low_asm_v0, "yes", after = 0L)) |> # low asm first
@@ -513,6 +513,4 @@ species_followupcomp_low_smm_by_weight_2y <- baria_mb_low_smm_by_weight_2y_follo
   scale_y_continuous(expand = c(0, 0)) +
   theme_composition()
 ggsave("graphs/species_followupcomp_low_smm_by_weight_2y.pdf", width = 12, height = 10)
-
-
 
