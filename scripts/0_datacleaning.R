@@ -24,6 +24,10 @@ baria_clinical_data_raw |>
   View()
 View(baria_clinical_data_raw)
 
+# to explore the range of hba1c in the population (solve mixed variable containing different units)
+ggplot(baria_clinical_data_raw, aes(hba1c)) +
+  geom_histogram(binwidth = 1.2) # no values between ~15-25
+
 # clinical data
 # Need: clinical data, anthropometry, body composition, medication, basic lab and cardiometabolic risk factors, diabetes, medication
 baria_muscle_clinical <- baria_clinical_data_raw |>
@@ -162,7 +166,7 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     across(
       .cols = starts_with("date"),
       ~ na_if(., "01-01-2997"))
-    ) |> 
+  ) |> 
   mutate( # time diff from baseline visit in weeks
     across(date_v0:date_v7, dmy),
     v0_to_v2_weeks = difftime(date_v2, date_v0, units = "weeks"),
@@ -170,9 +174,9 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     v0_to_v4_weeks = difftime(date_v4, date_v0, units = "weeks"),
     v0_to_v5_weeks = difftime(date_v5, date_v0, units = "weeks"),
     v0_to_v6_weeks = difftime(date_v6, date_v0, units = "weeks"),
-    v0_to_v7_weeks = difftime(date_v7, date_v0, units = "weeks")
-  ) |> 
-  mutate( # calculate age at each visit to be used in the SMM and ASM formulas
+    v0_to_v7_weeks = difftime(date_v7, date_v0, units = "weeks"),
+
+    # calculate age at each visit to be used in the SMM and ASM formulas
     # first convert difftime in weeks to numeric in years
     v0_to_v2_numeric_y = as.numeric(v0_to_v2_weeks)/(365.25 / 7),
     v0_to_v3_numeric_y = as.numeric(v0_to_v3_weeks)/(365.25 / 7),
@@ -188,9 +192,8 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     age_v4 = age_v0 + v0_to_v4_numeric_y,
     age_v5 = age_v0 + v0_to_v5_numeric_y,
     age_v6 = age_v0 + v0_to_v6_numeric_y,
-    age_v7 = age_v0 + v0_to_v7_numeric_y
-  ) |> 
-  mutate(
+    age_v7 = age_v0 + v0_to_v7_numeric_y,
+
     sex = case_when(sex == "1" ~ "male", sex == "2" ~ "female"),
     t2d_v0 = case_when(t2d_v0 == "1" ~ "yes", t2d_v0 == "2" ~ "no"),
     aht = case_when(aht == "1" ~ "yes", aht == "2" ~ "no"),
@@ -199,77 +202,22 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
   ) |> 
   mutate(
     # fix Hba1c units
-    hba1c_percent_v0 = if_else(
-      hba1c_v0 < 15,
-      hba1c_v0,
-      hba1c_v0 * 0.0915 + 2.15
-    ),
-    hba1c_percent_v2 = if_else(
-      hba1c_v2 < 15,
-      hba1c_v2,
-      hba1c_v2 * 0.0915 + 2.15
-    ),
-    hba1c_percent_v3 = if_else(
-      hba1c_v3 < 15,
-      hba1c_v3,
-      hba1c_v3 * 0.0915 + 2.15
-    ),
-    hba1c_percent_v4 = if_else(
-      hba1c_v4 < 15,
-      hba1c_v4,
-      hba1c_v4 * 0.0915 + 2.15
-    ),
-    hba1c_percent_v5 = if_else(
-      hba1c_v5 < 15,
-      hba1c_v5,
-      hba1c_v5 * 0.0915 + 2.15
-    ),
-    hba1c_percent_v6 = if_else(
-      hba1c_v6 < 15,
-      hba1c_v6,
-      hba1c_v6 * 0.0915 + 2.15
-    ),
-    hba1c_percent_v7 = if_else(
-      hba1c_v7 < 15,
-      hba1c_v7,
-      hba1c_v7 * 0.0915 + 2.15
-    ),
+    hba1c_percent_v0 = if_else(hba1c_v0 < 15, hba1c_v0, hba1c_v0 * 0.0915 + 2.15),
+    hba1c_percent_v2 = if_else(hba1c_v2 < 15, hba1c_v2, hba1c_v2 * 0.0915 + 2.15),
+    hba1c_percent_v3 = if_else(hba1c_v3 < 15, hba1c_v3, hba1c_v3 * 0.0915 + 2.15),
+    hba1c_percent_v4 = if_else(hba1c_v4 < 15, hba1c_v4, hba1c_v4 * 0.0915 + 2.15),
+    hba1c_percent_v5 = if_else(hba1c_v5 < 15, hba1c_v5, hba1c_v5 * 0.0915 + 2.15),
+    hba1c_percent_v6 = if_else(hba1c_v6 < 15, hba1c_v6, hba1c_v6 * 0.0915 + 2.15),
+    hba1c_percent_v7 = if_else(hba1c_v7 < 15, hba1c_v7, hba1c_v7 * 0.0915 + 2.15),
+
     # hba1c in mmol/l
-    hba1c_mmolmol_v0 = if_else(
-      is.na(hba1c_mmolmol_v0) == FALSE,
-      hba1c_mmolmol_v0,
-      10.93 * hba1c_percent_v0 - 23,5
-    ),
-    hba1c_mmolmol_v2 = if_else(
-      is.na(hba1c_mmolmol_v2) == FALSE,
-      hba1c_mmolmol_v2,
-      10.93 * hba1c_percent_v2 - 23,5
-    ),
-    hba1c_mmolmol_v3 = if_else(
-      is.na(hba1c_mmolmol_v3) == FALSE,
-      hba1c_mmolmol_v3,
-      10.93 * hba1c_percent_v3 - 23,5
-    ),
-    hba1c_mmolmol_v4 = if_else(
-      is.na(hba1c_mmolmol_v4) == FALSE,
-      hba1c_mmolmol_v4,
-      10.93 * hba1c_percent_v4 - 23,5
-    ),
-    hba1c_mmolmol_v5 = if_else(
-      is.na(hba1c_mmolmol_v5) == FALSE,
-      hba1c_mmolmol_v5,
-      10.93 * hba1c_percent_v5 - 23,5
-    ),
-    hba1c_mmolmol_v6 = if_else(
-      is.na(hba1c_mmolmol_v6) == FALSE,
-      hba1c_mmolmol_v6,
-      10.93 * hba1c_percent_v6 - 23,5
-    ),
-    hba1c_mmolmol_v7 = if_else(
-      is.na(hba1c_mmolmol_v7) == FALSE,
-      hba1c_mmolmol_v7,
-      10.93 * hba1c_percent_v7 - 23,5
-    ),
+    hba1c_mmolmol_v0 = if_else(is.na(hba1c_mmolmol_v0) == FALSE, hba1c_mmolmol_v0, 10.93 * hba1c_percent_v0 - 23,5),
+    hba1c_mmolmol_v2 = if_else(is.na(hba1c_mmolmol_v2) == FALSE, hba1c_mmolmol_v2, 10.93 * hba1c_percent_v2 - 23,5),
+    hba1c_mmolmol_v3 = if_else(is.na(hba1c_mmolmol_v3) == FALSE, hba1c_mmolmol_v3, 10.93 * hba1c_percent_v3 - 23,5),
+    hba1c_mmolmol_v4 = if_else(is.na(hba1c_mmolmol_v4) == FALSE, hba1c_mmolmol_v4, 10.93 * hba1c_percent_v4 - 23,5),
+    hba1c_mmolmol_v5 = if_else(is.na(hba1c_mmolmol_v5) == FALSE, hba1c_mmolmol_v5, 10.93 * hba1c_percent_v5 - 23,5),
+    hba1c_mmolmol_v6 = if_else(is.na(hba1c_mmolmol_v6) == FALSE, hba1c_mmolmol_v6, 10.93 * hba1c_percent_v6 - 23,5),
+    hba1c_mmolmol_v7 = if_else(is.na(hba1c_mmolmol_v7) == FALSE, hba1c_mmolmol_v7, 10.93 * hba1c_percent_v7 - 23,5),
 
     # HOMA-IR & HOMA-2B (only v0, v4-v6)
     # insulin unit conversion from pmol/l to uU/ml
@@ -280,6 +228,7 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     homa_ir_v5 = (fasting_insulin_pmoll_mmt_v5 / 6.945) * fasting_glucose_mmoll_mmt_v5 / 22.5,
     homa_b_v5 = (20 * (fasting_insulin_pmoll_mmt_v5 / 6.945)) / (fasting_glucose_mmoll_mmt_v5 - 3.5)
   ) |> 
+  select(-starts_with("hba1c_v")) |> 
   # body composition
   # fix incorrect data entries for bia data
   mutate(
@@ -326,13 +275,6 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     fmi_v6 = fm_kg_v6 / ((height_cm / 100)^2),
 
     # calculate muscle mass indices
-    # SMM by Janssen: SMM [kg] = (height^2 [cm] / BIA-resistance [Ohms] X 0.401) + (gender x 3.825) + (age [years] x - 0.071)] + 5.102 (men = 1; women = 0)
-    smm_kg_v0 = ((height_cm^2) / bia_resistance_50khz_v0 * 0.401) + (age_v0 * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0),
-    smm_kg_v4 = ((height_cm^2) / bia_resistance_50khz_v4 * 0.401) + (age_v4 * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0),
-    smm_kg_v5 = ((height_cm^2) / bia_resistance_50khz_v5 * 0.401) + (age_v5 * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0),
-    smm_kg_v6 = ((height_cm^2) / bia_resistance_50khz_v6 * 0.401) + (age_v6 * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0)
-  ) |> 
-  mutate(
     # (sex: women = 0, men = 1; race: White or Hispanic = 0, Black = 1.9, Asian = −1.6) 
     # race in a format to be used for ASM formula (White/Hispanic vs. Black vs. Asian)
     race = case_when(
@@ -347,12 +289,11 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
       `race#West-Aziatisch` == "1" ~ "asian",
       `race#Zuid-Amerikaans` == "1" ~ "white/hispanic"
     ),
+    # Appendicular skeletal mass (ASM)
     # ASM = (0.244 × weight [kg]) + (7.8 × height [m]) + (6.6 × sex) – (0.098 × age [years]) + (race – 3.3); 
     # (sex: women = 0, men = 1; race: White or Hispanic = 0, Black = 1.9, Asian = −1.6)
-    race_num = case_when(race == "white/hispanic" ~ 0, race == "black" ~ 1.9, race == "asian" ~ -1.6)
-  ) |> 
-  select(-contains("race#")) |>
-  mutate(
+    race_num = case_when(race == "white/hispanic" ~ 0, race == "black" ~ 1.9, race == "asian" ~ -1.6),
+
     asm_kg_v0 = (0.244 * weight_kg_v0) + (7.8 * (height_cm / 100)) + if_else(sex == "male", 6.6, 0) - (0.098 * age_v0) + (race_num - 3.3),
     asm_kg_v2 = (0.244 * weight_kg_v2) + (7.8 * (height_cm / 100)) + if_else(sex == "male", 6.6, 0) - (0.098 * age_v2) + (race_num - 3.3),
     asm_kg_v3 = (0.244 * weight_kg_v3) + (7.8 * (height_cm / 100)) + if_else(sex == "male", 6.6, 0) - (0.098 * age_v3) + (race_num - 3.3),
@@ -361,65 +302,59 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     asm_kg_v6 = (0.244 * weight_kg_v6) + (7.8 * (height_cm / 100)) + if_else(sex == "male", 6.6, 0) - (0.098 * age_v6) + (race_num - 3.3),
     asm_kg_v7 = (0.244 * weight_kg_v7) + (7.8 * (height_cm / 100)) + if_else(sex == "male", 6.6, 0) - (0.098 * age_v7) + (race_num - 3.3),
 
+    # Skeletal muscle mass (SMM)
+    # SMM by Janssen: SMM [kg] = (height^2 [cm] / BIA-resistance [Ohms] X 0.401) + (gender x 3.825) + (age [years] x - 0.071)] + 5.102 (men = 1; women = 0)
+    smm_kg_v0 = ((height_cm^2) / bia_resistance_50khz_v0 * 0.401) + (age_v0 * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0),
+    smm_kg_v4 = ((height_cm^2) / bia_resistance_50khz_v4 * 0.401) + (age_v4 * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0),
+    smm_kg_v5 = ((height_cm^2) / bia_resistance_50khz_v5 * 0.401) + (age_v5 * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0),
+    smm_kg_v6 = ((height_cm^2) / bia_resistance_50khz_v6 * 0.401) + (age_v6 * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0),
+
     # smm/weight (recommended for BIA by ESPEN/EASO consensus statement)
     smm_by_weight_v0 = smm_kg_v0 / weight_kg_v0,
     smm_by_weight_v4 = smm_kg_v4 / weight_kg_v4,
     smm_by_weight_v5 = smm_kg_v5 / weight_kg_v5,
-    smm_by_weight_v6 = smm_kg_v6 / weight_kg_v6,
+    smm_by_weight_v6 = smm_kg_v6 / weight_kg_v6
   ) |> 
+  select(-contains("race#")) |>
   select(-race_num) |> # only used for asm calculation
   group_by(sex) |> # calculate cut-offs for female and male participants
   mutate(
-    # Calculate the quintiles
-    ffm_kg_v0_quintile = quantile(ffm_kg_v0, probs = 0.20, na.rm = TRUE), 
-    smm_kg_v0_quintile = quantile(smm_kg_v0, probs = 0.20, na.rm = TRUE), 
-    asm_kg_v0_quintile = quantile(asm_kg_v0, probs = 0.20, na.rm = TRUE),
-    smm_by_weight_v0_quintile = quantile(smm_by_weight_v0, probs = 0.20, na.rm = TRUE),
+    # Calculate tertiles 
+    asm_kg_v0_tertile = quantile(asm_kg_v0, probs = 1/3, na.rm = TRUE),
+    smm_kg_v0_tertile = quantile(smm_kg_v0, probs = 1/3, na.rm = TRUE),
+    smm_by_weight_v0_tertile = quantile(smm_by_weight_v0, probs = 1/3, na.rm = TRUE),
 
-    low_ffm_v0 = if_else(ffm_kg_v0 <= ffm_kg_v0_quintile, 1, 0),
-    low_smm_v0 = if_else(smm_kg_v0 <= smm_kg_v0_quintile, 1, 0),
-    low_asm_v0 = if_else(asm_kg_v0 <= asm_kg_v0_quintile, 1, 0),
-    low_smm_by_weight_v0 = if_else(smm_by_weight_v0 <= smm_by_weight_v0_quintile, 1, 0),
+    low_smm_v0 = if_else(smm_kg_v0 <= smm_kg_v0_tertile, 1, 0),
+    low_asm_v0 = if_else(asm_kg_v0 <= asm_kg_v0_tertile, 1, 0),
+    low_smm_by_weight_v0 = if_else(smm_by_weight_v0 <= smm_by_weight_v0_tertile, 1, 0),
 
-    low_ffm_v0 = case_when(low_ffm_v0 == 1 ~ "yes", low_ffm_v0 == 0 ~ "no"),
     low_smm_v0 = case_when(low_smm_v0 == 1 ~ "yes", low_smm_v0 == 0 ~ "no"),
     low_asm_v0 = case_when(low_asm_v0 == 1 ~ "yes", low_asm_v0 == 0 ~ "no"), 
     low_smm_by_weight_v0 = case_when(low_smm_by_weight_v0 == 1 ~ "yes", low_smm_by_weight_v0 == 0 ~ "no"),
 
-    # 1 year follow-up (v4) only asm, smm and smm/weight
-    smm_kg_v4_quintile = quantile(smm_kg_v4, probs = 0.20, na.rm = TRUE), 
-    asm_kg_v4_quintile = quantile(asm_kg_v4, probs = 0.20, na.rm = TRUE),
-    smm_by_weight_v4_quintile = quantile(smm_by_weight_v4, probs = 0.20, na.rm = TRUE),
-
-    low_smm_v4 = if_else(smm_kg_v4 <= smm_kg_v4_quintile, 1, 0),
-    low_asm_v4 = if_else(asm_kg_v4 <= asm_kg_v4_quintile, 1, 0),
-    low_smm_by_weight_v4 = if_else(smm_by_weight_v4 <= smm_by_weight_v4_quintile, 1, 0),
+    # 1 year follow-up (v4)
+    # using the cut-off values established at baseline
+    low_smm_v4 = if_else(smm_kg_v4 <= smm_kg_v0_tertile, 1, 0),
+    low_asm_v4 = if_else(asm_kg_v4 <= asm_kg_v0_tertile, 1, 0),
+    low_smm_by_weight_v4 = if_else(smm_by_weight_v4 <= smm_by_weight_v0_tertile, 1, 0),
 
     low_smm_v4 = case_when(low_smm_v4 == 1 ~ "yes", low_smm_v4 == 0 ~ "no"),
     low_asm_v4 = case_when(low_asm_v4 == 1 ~ "yes", low_asm_v4 == 0 ~ "no"), 
     low_smm_by_weight_v4 = case_when(low_smm_by_weight_v4 == 1 ~ "yes", low_smm_by_weight_v4 == 0 ~ "no"),
 
-    # 2 year follow-up (v5) only asm, smm and smm/weight
-    smm_kg_v5_quintile = quantile(smm_kg_v5, probs = 0.20, na.rm = TRUE), 
-    asm_kg_v5_quintile = quantile(asm_kg_v5, probs = 0.20, na.rm = TRUE),
-    smm_by_weight_v5_quintile = quantile(smm_by_weight_v5, probs = 0.20, na.rm = TRUE),
-
-    low_smm_v5 = if_else(smm_kg_v5 <= smm_kg_v5_quintile, 1, 0),
-    low_asm_v5 = if_else(asm_kg_v5 <= asm_kg_v5_quintile, 1, 0),
-    low_smm_by_weight_v5 = if_else(smm_by_weight_v5 <= smm_by_weight_v5_quintile, 1, 0),
+    # 2 year follow-up (v5)
+    low_smm_v5 = if_else(smm_kg_v5 <= smm_kg_v0_tertile, 1, 0),
+    low_asm_v5 = if_else(asm_kg_v5 <= asm_kg_v0_tertile, 1, 0),
+    low_smm_by_weight_v5 = if_else(smm_by_weight_v5 <= smm_by_weight_v0_tertile, 1, 0),
 
     low_smm_v5 = case_when(low_smm_v5 == 1 ~ "yes", low_smm_v5 == 0 ~ "no"),
     low_asm_v5 = case_when(low_asm_v5 == 1 ~ "yes", low_asm_v5 == 0 ~ "no"), 
     low_smm_by_weight_v5 = case_when(low_smm_by_weight_v5 == 1 ~ "yes", low_smm_by_weight_v5 == 0 ~ "no"),
 
-    # 5 year follow-up (v6) only asm, smm and smm/weight
-    smm_kg_v6_quintile = quantile(smm_kg_v6, probs = 0.20, na.rm = TRUE), 
-    asm_kg_v6_quintile = quantile(asm_kg_v6, probs = 0.20, na.rm = TRUE),
-    smm_by_weight_v6_quintile = quantile(smm_by_weight_v6, probs = 0.20, na.rm = TRUE),
-
-    low_smm_v6 = if_else(smm_kg_v6 <= smm_kg_v6_quintile, 1, 0),
-    low_asm_v6 = if_else(asm_kg_v6 <= asm_kg_v6_quintile, 1, 0),
-    low_smm_by_weight_v6 = if_else(smm_by_weight_v6 <= smm_by_weight_v6_quintile, 1, 0),
+    # 5 year follow-up (v6)
+    low_smm_v6 = if_else(smm_kg_v6 <= smm_kg_v0_tertile, 1, 0),
+    low_asm_v6 = if_else(asm_kg_v6 <= asm_kg_v0_tertile, 1, 0),
+    low_smm_by_weight_v6 = if_else(smm_by_weight_v6 <= smm_by_weight_v0_tertile, 1, 0),
 
     low_smm_v6 = case_when(low_smm_v6 == 1 ~ "yes", low_smm_v6 == 0 ~ "no"),
     low_asm_v6 = case_when(low_asm_v6 == 1 ~ "yes", low_asm_v6 == 0 ~ "no"), 
@@ -427,44 +362,33 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
   ) |> 
   ungroup() |> 
   relocate(race, .after = sex) |> 
-  relocate(c(hba1c_percent_v0, hba1c_mmolmol_v0, homa_ir_v0, homa_b_v0), .after = hba1c_mmolmol_v0) |> # Hba1c 
-  relocate(hba1c_percent_v2, hba1c_mmolmol_v2, .after = hba1c_mmolmol_v2) |>
-  relocate(hba1c_percent_v3, hba1c_mmolmol_v3, .after = hba1c_mmolmol_v3) |>
-  relocate(c(hba1c_percent_v4, hba1c_mmolmol_v4, homa_ir_v4, homa_b_v4), .after = hba1c_mmolmol_v4) |>
-  relocate(c(hba1c_percent_v5, hba1c_mmolmol_v5, homa_ir_v5, homa_b_v5), .after = hba1c_mmolmol_v5) |>
-  relocate(hba1c_percent_v6, hba1c_mmolmol_v6, .after = hba1c_mmolmol_v6) |>
-  relocate(hba1c_percent_v7, hba1c_mmolmol_v7, .after = hba1c_mmolmol_v7) |>
+  relocate(age_v2:age_v7, .after = age_v0) |>
+  relocate(v0_to_v2_weeks:v0_to_v7_numeric_y, .after = age_v7) |> 
+  relocate(c(hba1c_percent_v0, homa_ir_v0, homa_b_v0), .after = hba1c_mmolmol_v0) |> # Hba1c 
+  relocate(hba1c_percent_v2, .after = hba1c_mmolmol_v2) |>
+  relocate(hba1c_percent_v3, .after = hba1c_mmolmol_v3) |>
+  relocate(c(hba1c_percent_v4, homa_ir_v4, homa_b_v4), .after = hba1c_mmolmol_v4) |>
+  relocate(c(hba1c_percent_v5, homa_ir_v5, homa_b_v5), .after = hba1c_mmolmol_v5) |>
+  relocate(hba1c_percent_v6, .after = hba1c_mmolmol_v6) |>
+  relocate(hba1c_percent_v7, .after = hba1c_mmolmol_v7) |>
   relocate(c(ffmi_v0, fmi_v0), .after = ffm_percent_v0) |> # FFMI & FMI
   relocate(c(ffmi_v4, fmi_v4), .after = ffm_percent_v4) |>
   relocate(c(ffmi_v5, fmi_v5), .after = ffm_percent_v5) |>
   relocate(c(ffmi_v6, fmi_v6), .after = ffm_percent_v6) |>
-  relocate(
-    c(v0_to_v2_weeks, v0_to_v3_weeks, v0_to_v4_weeks, v0_to_v5_weeks, v0_to_v6_weeks, v0_to_v7_weeks),
-    .after = date_v7
-  ) |>
-  relocate(age_v2:age_v7, .after = age_v0) |>
-  relocate(v0_to_v2_numeric_y:v0_to_v7_numeric_y, .after = v0_to_v7_weeks) |> 
-  relocate(c(smm_kg_v0, asm_kg_v0, smm_by_weight_v0), .after = upperleg_cm_v0) |> # BIA
-  relocate(asm_kg_v2, .after = upperleg_cm_v2) |> 
-  relocate(asm_kg_v3, .after = upperleg_cm_v3) |> 
-  relocate(c(smm_kg_v4, asm_kg_v4, smm_by_weight_v4), .after = upperleg_cm_v4) |> # BIA
-  relocate(c(smm_kg_v5, asm_kg_v5, smm_by_weight_v5), .after = upperleg_cm_v5) |> # BIA
-  relocate(c(smm_kg_v6, asm_kg_v6, smm_by_weight_v6), .after = upperleg_cm_v6) |> # BIA
+  relocate(asm_kg_v0_tertile:smm_by_weight_v0_tertile, .after = upperleg_cm_v0) |> # cut-offs
+  relocate(c(asm_kg_v0, smm_kg_v0, smm_by_weight_v0, low_asm_v0, low_smm_v0, low_smm_by_weight_v0), .after = upperleg_cm_v0) |> # muscle mass
+  relocate(asm_kg_v2, .after = upperleg_cm_v2) |>
+  relocate(asm_kg_v3, .after = upperleg_cm_v3) |>
+  relocate(c(asm_kg_v4, smm_kg_v4, smm_by_weight_v4, low_asm_v4, low_smm_v4, low_smm_by_weight_v4), .after = upperleg_cm_v4) |>
+  relocate(c(asm_kg_v5, smm_kg_v5, smm_by_weight_v5, low_asm_v5, low_smm_v5, low_smm_by_weight_v5), .after = upperleg_cm_v5) |>
+  relocate(c(asm_kg_v6, smm_kg_v6, smm_by_weight_v6, low_asm_v6, low_smm_v6, low_smm_by_weight_v6), .after = upperleg_cm_v6) |>
   relocate(asm_kg_v7, .after = upperleg_cm_v7) |>
-  relocate(ffm_kg_v0_quintile:smm_by_weight_v0_quintile, .after = smm_kg_v0) |> 
-  relocate(low_ffm_v0:low_smm_by_weight_v0, .after = smm_by_weight_v0_quintile) |> 
-  relocate(smm_kg_v4_quintile:low_smm_by_weight_v4, .after = smm_by_weight_v4) |> 
-  relocate(smm_kg_v5_quintile:low_smm_by_weight_v5, .after = smm_by_weight_v5) |> 
-  relocate(smm_kg_v6_quintile:low_smm_by_weight_v6, .after = smm_by_weight_v6) |> 
   mutate(across(where(is.character), as.factor)) |>
   print()
 
 colnames(baria_muscle_clinical)
 nrow(baria_muscle_clinical)
-
-# to explore the range of hba1c in the population (solve mixed variable containing different units)
-ggplot(baria_clinical_data_raw, aes(hba1c)) +
-  geom_histogram(binwidth = 1.2) # no values between ~15-25
+View(baria_muscle_clinical)
 
 ## Formulas used:
 # Hba1c(%) = (0,0915 * HbA1c (mmol/mol) + 2,15 (from diabetesfonds.nl)
@@ -725,5 +649,5 @@ View(baria_muscle_clean)
 nrow(baria_muscle_clean)
 
 # then save as both RDS and csv files
-write.csv(baria_muscle_clean, "data/251222_BARIA_muscle_clinical.csv")
-saveRDS(baria_muscle_clean, "data/251222_BARIA_muscle_clinical.RDS")
+write.csv(baria_muscle_clean, "data/260106_BARIA_muscle_clinical.csv")
+saveRDS(baria_muscle_clean, "data/260106_BARIA_muscle_clinical.RDS")
