@@ -352,7 +352,7 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     low_smm_by_weight_v4 = if_else(smm_by_weight_v4 <= smm_by_weight_v0_tertile, 1, 0),
 
     low_asm_v4 = case_when(low_asm_v4 == 1 ~ "yes", low_asm_v4 == 0 ~ "no"),
-    
+    low_asm_height2_v4 = case_when(low_asm_height2_v4 == 1 ~ "yes", low_asm_height2_v4 == 0 ~ "no"),
     low_smm_v4 = case_when(low_smm_v4 == 1 ~ "yes", low_smm_v4 == 0 ~ "no"),
     low_smm_by_weight_v4 = case_when(low_smm_by_weight_v4 == 1 ~ "yes", low_smm_by_weight_v4 == 0 ~ "no"),
 
