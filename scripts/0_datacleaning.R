@@ -20,9 +20,7 @@ baria_clinical_data_raw |>
     sum = tbf + ffm,
     nomatch = if_else((abs((tbf + ffm) - weight) > 1), "nomatch", "match")
   ) |> 
-  filter(nomatch == "nomatch") |> 
-  View()
-View(baria_clinical_data_raw)
+  filter(nomatch == "nomatch")
 
 # to explore the range of hba1c in the population (solve mixed variable containing different units)
 ggplot(baria_clinical_data_raw, aes(hba1c)) +
@@ -342,41 +340,7 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     low_asm_v0 = case_when(low_asm_v0 == 1 ~ "yes", low_asm_v0 == 0 ~ "no"),
     low_asm_height2_v0 = case_when(low_asm_height2_v0 == 1 ~ "yes", low_asm_height2_v0 == 0 ~ "no"),
     low_smm_v0 = case_when(low_smm_v0 == 1 ~ "yes", low_smm_v0 == 0 ~ "no"),
-    low_smm_by_weight_v0 = case_when(low_smm_by_weight_v0 == 1 ~ "yes", low_smm_by_weight_v0 == 0 ~ "no"),
-
-    # 1 year follow-up (v4)
-    # using the cut-off values established at baseline
-    low_asm_v4 = if_else(asm_kg_v4 <= asm_kg_v0_tertile, 1, 0),
-    low_asm_height2_v4 = if_else(asm_height2_v4 <= asm_height2_v0_tertile, 1, 0),
-    low_smm_v4 = if_else(smm_kg_v4 <= smm_kg_v0_tertile, 1, 0),
-    low_smm_by_weight_v4 = if_else(smm_by_weight_v4 <= smm_by_weight_v0_tertile, 1, 0),
-
-    low_asm_v4 = case_when(low_asm_v4 == 1 ~ "yes", low_asm_v4 == 0 ~ "no"),
-    low_asm_height2_v4 = case_when(low_asm_height2_v4 == 1 ~ "yes", low_asm_height2_v4 == 0 ~ "no"),
-    low_smm_v4 = case_when(low_smm_v4 == 1 ~ "yes", low_smm_v4 == 0 ~ "no"),
-    low_smm_by_weight_v4 = case_when(low_smm_by_weight_v4 == 1 ~ "yes", low_smm_by_weight_v4 == 0 ~ "no"),
-
-    # 2 year follow-up (v5)
-    low_asm_v5 = if_else(asm_kg_v5 <= asm_kg_v0_tertile, 1, 0),
-    low_asm_height2_v5 = if_else(asm_height2_v5 <= asm_height2_v0_tertile, 1, 0),
-    low_smm_v5 = if_else(smm_kg_v5 <= smm_kg_v0_tertile, 1, 0),
-    low_smm_by_weight_v5 = if_else(smm_by_weight_v5 <= smm_by_weight_v0_tertile, 1, 0),
-
-    low_asm_v5 = case_when(low_asm_v5 == 1 ~ "yes", low_asm_v5 == 0 ~ "no"),
-    low_asm_height2_v5 = case_when(low_asm_height2_v5 == 1 ~ "yes", low_asm_height2_v5 == 0 ~ "no"),
-    low_smm_v5 = case_when(low_smm_v5 == 1 ~ "yes", low_smm_v5 == 0 ~ "no"),
-    low_smm_by_weight_v5 = case_when(low_smm_by_weight_v5 == 1 ~ "yes", low_smm_by_weight_v5 == 0 ~ "no"),
-
-    # 5 year follow-up (v6)
-    low_asm_v6 = if_else(asm_kg_v6 <= asm_kg_v0_tertile, 1, 0),
-    low_asm_height2_v6 = if_else(asm_height2_v6 <= asm_height2_v0_tertile, 1, 0),
-    low_smm_v6 = if_else(smm_kg_v6 <= smm_kg_v0_tertile, 1, 0),
-    low_smm_by_weight_v6 = if_else(smm_by_weight_v6 <= smm_by_weight_v0_tertile, 1, 0),
-    
-    low_asm_v6 = case_when(low_asm_v6 == 1 ~ "yes", low_asm_v6 == 0 ~ "no"),
-    low_asm_height2_v6 = case_when(low_asm_height2_v6 == 1 ~ "yes", low_asm_height2_v6 == 0 ~ "no"),
-    low_smm_v6 = case_when(low_smm_v6 == 1 ~ "yes", low_smm_v6 == 0 ~ "no"),
-    low_smm_by_weight_v6 = case_when(low_smm_by_weight_v6 == 1 ~ "yes", low_smm_by_weight_v6 == 0 ~ "no")
+    low_smm_by_weight_v0 = case_when(low_smm_by_weight_v0 == 1 ~ "yes", low_smm_by_weight_v0 == 0 ~ "no")
   ) |> 
   ungroup() |> 
   relocate(race, .after = sex) |> 
@@ -397,9 +361,9 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
   relocate(c(asm_kg_v0, asm_height2_v0, smm_kg_v0, smm_by_weight_v0, low_asm_v0, low_asm_height2_v0, low_smm_v0, low_smm_by_weight_v0), .after = upperleg_cm_v0) |> # muscle mass
   relocate(asm_kg_v2, asm_height2_v2, .after = upperleg_cm_v2) |>
   relocate(asm_kg_v3, asm_height2_v3, .after = upperleg_cm_v3) |>
-  relocate(c(asm_kg_v4, asm_height2_v4, smm_kg_v4, smm_by_weight_v4, low_asm_v4, low_asm_height2_v4, low_smm_v4, low_smm_by_weight_v4), .after = upperleg_cm_v4) |>
-  relocate(c(asm_kg_v5, asm_height2_v5, smm_kg_v5, smm_by_weight_v5, low_asm_v5, low_asm_height2_v5, low_smm_v5, low_smm_by_weight_v5), .after = upperleg_cm_v5) |>
-  relocate(c(asm_kg_v6, asm_height2_v6, smm_kg_v6, smm_by_weight_v6, low_asm_v6, low_asm_height2_v6, low_smm_v6, low_smm_by_weight_v6), .after = upperleg_cm_v6) |>
+  relocate(c(asm_kg_v4, asm_height2_v4, smm_kg_v4, smm_by_weight_v4), .after = upperleg_cm_v4) |>
+  relocate(c(asm_kg_v5, asm_height2_v5, smm_kg_v5, smm_by_weight_v5), .after = upperleg_cm_v5) |>
+  relocate(c(asm_kg_v6, asm_height2_v6, smm_kg_v6, smm_by_weight_v6), .after = upperleg_cm_v6) |>
   relocate(asm_kg_v7, asm_height2_v7, .after = upperleg_cm_v7) |>
   mutate(across(where(is.character), as.factor)) |>
   print()
