@@ -302,6 +302,15 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     asm_kg_v6 = (0.244 * weight_kg_v6) + (7.8 * (height_cm / 100)) + if_else(sex == "male", 6.6, 0) - (0.098 * age_v6) + (race_num - 3.3),
     asm_kg_v7 = (0.244 * weight_kg_v7) + (7.8 * (height_cm / 100)) + if_else(sex == "male", 6.6, 0) - (0.098 * age_v7) + (race_num - 3.3),
 
+    # ASM/height(m)^2 (EWGSOP2 recommendation)
+    asm_height2_v0 = asm_kg_v0/((height_cm / 100)^2),
+    asm_height2_v2 = asm_kg_v2/((height_cm / 100)^2),
+    asm_height2_v3 = asm_kg_v3/((height_cm / 100)^2),
+    asm_height2_v4 = asm_kg_v4/((height_cm / 100)^2),
+    asm_height2_v5 = asm_kg_v5/((height_cm / 100)^2),
+    asm_height2_v6 = asm_kg_v6/((height_cm / 100)^2),
+    asm_height2_v7 = asm_kg_v7/((height_cm / 100)^2),
+
     # Skeletal muscle mass (SMM)
     # SMM by Janssen: SMM [kg] = (height^2 [cm] / BIA-resistance [Ohms] X 0.401) + (gender x 3.825) + (age [years] x - 0.071)] + 5.102 (men = 1; women = 0)
     smm_kg_v0 = ((height_cm^2) / bia_resistance_50khz_v0 * 0.401) + (age_v0 * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0),
@@ -321,43 +330,52 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
   mutate(
     # Calculate tertiles 
     asm_kg_v0_tertile = quantile(asm_kg_v0, probs = 1/3, na.rm = TRUE),
+    asm_height2_v0_tertile = quantile(asm_height2_v0, probs = 1/3, na.rm = TRUE),
     smm_kg_v0_tertile = quantile(smm_kg_v0, probs = 1/3, na.rm = TRUE),
     smm_by_weight_v0_tertile = quantile(smm_by_weight_v0, probs = 1/3, na.rm = TRUE),
 
-    low_smm_v0 = if_else(smm_kg_v0 <= smm_kg_v0_tertile, 1, 0),
     low_asm_v0 = if_else(asm_kg_v0 <= asm_kg_v0_tertile, 1, 0),
+    low_asm_height2_v0 = if_else(asm_height2_v0 <= asm_height2_v0_tertile, 1, 0),
+    low_smm_v0 = if_else(smm_kg_v0 <= smm_kg_v0_tertile, 1, 0),
     low_smm_by_weight_v0 = if_else(smm_by_weight_v0 <= smm_by_weight_v0_tertile, 1, 0),
 
+    low_asm_v0 = case_when(low_asm_v0 == 1 ~ "yes", low_asm_v0 == 0 ~ "no"),
+    low_asm_height2_v0 = case_when(low_asm_height2_v0 == 1 ~ "yes", low_asm_height2_v0 == 0 ~ "no"),
     low_smm_v0 = case_when(low_smm_v0 == 1 ~ "yes", low_smm_v0 == 0 ~ "no"),
-    low_asm_v0 = case_when(low_asm_v0 == 1 ~ "yes", low_asm_v0 == 0 ~ "no"), 
     low_smm_by_weight_v0 = case_when(low_smm_by_weight_v0 == 1 ~ "yes", low_smm_by_weight_v0 == 0 ~ "no"),
 
     # 1 year follow-up (v4)
     # using the cut-off values established at baseline
-    low_smm_v4 = if_else(smm_kg_v4 <= smm_kg_v0_tertile, 1, 0),
     low_asm_v4 = if_else(asm_kg_v4 <= asm_kg_v0_tertile, 1, 0),
+    low_asm_height2_v4 = if_else(asm_height2_v4 <= asm_height2_v0_tertile, 1, 0),
+    low_smm_v4 = if_else(smm_kg_v4 <= smm_kg_v0_tertile, 1, 0),
     low_smm_by_weight_v4 = if_else(smm_by_weight_v4 <= smm_by_weight_v0_tertile, 1, 0),
 
+    low_asm_v4 = case_when(low_asm_v4 == 1 ~ "yes", low_asm_v4 == 0 ~ "no"),
+    
     low_smm_v4 = case_when(low_smm_v4 == 1 ~ "yes", low_smm_v4 == 0 ~ "no"),
-    low_asm_v4 = case_when(low_asm_v4 == 1 ~ "yes", low_asm_v4 == 0 ~ "no"), 
     low_smm_by_weight_v4 = case_when(low_smm_by_weight_v4 == 1 ~ "yes", low_smm_by_weight_v4 == 0 ~ "no"),
 
     # 2 year follow-up (v5)
-    low_smm_v5 = if_else(smm_kg_v5 <= smm_kg_v0_tertile, 1, 0),
     low_asm_v5 = if_else(asm_kg_v5 <= asm_kg_v0_tertile, 1, 0),
+    low_asm_height2_v5 = if_else(asm_height2_v5 <= asm_height2_v0_tertile, 1, 0),
+    low_smm_v5 = if_else(smm_kg_v5 <= smm_kg_v0_tertile, 1, 0),
     low_smm_by_weight_v5 = if_else(smm_by_weight_v5 <= smm_by_weight_v0_tertile, 1, 0),
 
+    low_asm_v5 = case_when(low_asm_v5 == 1 ~ "yes", low_asm_v5 == 0 ~ "no"),
+    low_asm_height2_v5 = case_when(low_asm_height2_v5 == 1 ~ "yes", low_asm_height2_v5 == 0 ~ "no"),
     low_smm_v5 = case_when(low_smm_v5 == 1 ~ "yes", low_smm_v5 == 0 ~ "no"),
-    low_asm_v5 = case_when(low_asm_v5 == 1 ~ "yes", low_asm_v5 == 0 ~ "no"), 
     low_smm_by_weight_v5 = case_when(low_smm_by_weight_v5 == 1 ~ "yes", low_smm_by_weight_v5 == 0 ~ "no"),
 
     # 5 year follow-up (v6)
-    low_smm_v6 = if_else(smm_kg_v6 <= smm_kg_v0_tertile, 1, 0),
     low_asm_v6 = if_else(asm_kg_v6 <= asm_kg_v0_tertile, 1, 0),
+    low_asm_height2_v6 = if_else(asm_height2_v6 <= asm_height2_v0_tertile, 1, 0),
+    low_smm_v6 = if_else(smm_kg_v6 <= smm_kg_v0_tertile, 1, 0),
     low_smm_by_weight_v6 = if_else(smm_by_weight_v6 <= smm_by_weight_v0_tertile, 1, 0),
-
+    
+    low_asm_v6 = case_when(low_asm_v6 == 1 ~ "yes", low_asm_v6 == 0 ~ "no"),
+    low_asm_height2_v6 = case_when(low_asm_height2_v6 == 1 ~ "yes", low_asm_height2_v6 == 0 ~ "no"),
     low_smm_v6 = case_when(low_smm_v6 == 1 ~ "yes", low_smm_v6 == 0 ~ "no"),
-    low_asm_v6 = case_when(low_asm_v6 == 1 ~ "yes", low_asm_v6 == 0 ~ "no"), 
     low_smm_by_weight_v6 = case_when(low_smm_by_weight_v6 == 1 ~ "yes", low_smm_by_weight_v6 == 0 ~ "no")
   ) |> 
   ungroup() |> 
@@ -376,13 +394,13 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
   relocate(c(ffmi_v5, fmi_v5), .after = ffm_percent_v5) |>
   relocate(c(ffmi_v6, fmi_v6), .after = ffm_percent_v6) |>
   relocate(asm_kg_v0_tertile:smm_by_weight_v0_tertile, .after = upperleg_cm_v0) |> # cut-offs
-  relocate(c(asm_kg_v0, smm_kg_v0, smm_by_weight_v0, low_asm_v0, low_smm_v0, low_smm_by_weight_v0), .after = upperleg_cm_v0) |> # muscle mass
-  relocate(asm_kg_v2, .after = upperleg_cm_v2) |>
-  relocate(asm_kg_v3, .after = upperleg_cm_v3) |>
-  relocate(c(asm_kg_v4, smm_kg_v4, smm_by_weight_v4, low_asm_v4, low_smm_v4, low_smm_by_weight_v4), .after = upperleg_cm_v4) |>
-  relocate(c(asm_kg_v5, smm_kg_v5, smm_by_weight_v5, low_asm_v5, low_smm_v5, low_smm_by_weight_v5), .after = upperleg_cm_v5) |>
-  relocate(c(asm_kg_v6, smm_kg_v6, smm_by_weight_v6, low_asm_v6, low_smm_v6, low_smm_by_weight_v6), .after = upperleg_cm_v6) |>
-  relocate(asm_kg_v7, .after = upperleg_cm_v7) |>
+  relocate(c(asm_kg_v0, asm_height2_v0, smm_kg_v0, smm_by_weight_v0, low_asm_v0, low_asm_height2_v0, low_smm_v0, low_smm_by_weight_v0), .after = upperleg_cm_v0) |> # muscle mass
+  relocate(asm_kg_v2, asm_height2_v2, .after = upperleg_cm_v2) |>
+  relocate(asm_kg_v3, asm_height2_v3, .after = upperleg_cm_v3) |>
+  relocate(c(asm_kg_v4, asm_height2_v4, smm_kg_v4, smm_by_weight_v4, low_asm_v4, low_asm_height2_v4, low_smm_v4, low_smm_by_weight_v4), .after = upperleg_cm_v4) |>
+  relocate(c(asm_kg_v5, asm_height2_v5, smm_kg_v5, smm_by_weight_v5, low_asm_v5, low_asm_height2_v5, low_smm_v5, low_smm_by_weight_v5), .after = upperleg_cm_v5) |>
+  relocate(c(asm_kg_v6, asm_height2_v6, smm_kg_v6, smm_by_weight_v6, low_asm_v6, low_asm_height2_v6, low_smm_v6, low_smm_by_weight_v6), .after = upperleg_cm_v6) |>
+  relocate(asm_kg_v7, asm_height2_v7, .after = upperleg_cm_v7) |>
   mutate(across(where(is.character), as.factor)) |>
   print()
 
@@ -649,5 +667,5 @@ View(baria_muscle_clean)
 nrow(baria_muscle_clean)
 
 # then save as both RDS and csv files
-write.csv(baria_muscle_clean, "data/260106_BARIA_muscle_clinical.csv")
-saveRDS(baria_muscle_clean, "data/260106_BARIA_muscle_clinical.RDS")
+write.csv(baria_muscle_clean, "data/260107_BARIA_muscle_clinical.csv")
+saveRDS(baria_muscle_clean, "data/260107_BARIA_muscle_clinical.RDS")
