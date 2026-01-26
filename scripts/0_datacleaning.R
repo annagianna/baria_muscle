@@ -75,6 +75,14 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     crp_mgl_v0 = crp,
     tsh_miul_v0 = tsh,
     ft4_pmoll_v0 = ft4,
+    nexfin_hr_v0 = nexfin_hr_v0, # Nexfin
+    nexfin_dpdt_v0 = nexfin_dpdt_v0,
+    nexfin_sv_v0 = nexfin_sv_v0,
+    nexfin_svi_v0 = nexfin_svi_v0,
+    nexfin_co_n0 = nexfin_CO_v0,
+    nexfin_ci_v0 = nexfin_CI_v0,
+    nexfin_svr_v0 = nexfin_svr_v0,
+    nexfin_svri_v0 = nexfin_svri_v0,
 
     # Follow-Up Data
     # v2 = 6 weeks
@@ -112,6 +120,14 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     hba1c_v4 = V4_hba1c,
     hba1c_mmolmol_v4 = V4_hba1c__IFCC_mmolmol,
     crp_mgl_v4 = V4_crp,
+    nexfin_hr_v4 = nexfin_hr_v4, # Nexfin
+    nexfin_dpdt_v4 = nexfin_dpdt_v4,
+    nexfin_sv_v4 = nexfin_sv_v4,
+    nexfin_svi_v4 = nexfin_svi_v4,
+    nexfin_co_n4 = nexfin_co_v4,
+    nexfin_ci_v4 = nexfin_ci_v4,
+    nexfin_svr_v4 = nexfin_svr_v4,
+    nexfin_svri_v4 = nexfin_svri_v4,
 
     # v5 = 2 years
     bmi_v5 = V5_bmi,
@@ -130,6 +146,14 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     hba1c_v5 = V5_hba1c,
     hba1c_mmolmol_v5 = V5_hba1c__IFCC_mmolmol,
     crp_mgl_v5 = V5_crp,
+    nexfin_hr_v5 = nexfin_hr_v5, # Nexfin
+    nexfin_dpdt_v5 = nexfin_dpdt_v5,
+    nexfin_sv_v5 = nexfin_sv_v5,
+    nexfin_svi_v5 = nexfin_svi_v5,
+    nexfin_co_n5 = nexfin_co_v5,
+    nexfin_ci_v5 = nexfin_ci_v5,
+    nexfin_svr_v5 = nexfin_svr_v5,
+    nexfin_svri_v5 = nexfin_svri_v5,
 
     # v6 = 5 years
     bmi_v6 = V6_bmi_1,
@@ -144,6 +168,14 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     hba1c_v6 = V6_hba1c_1,
     hba1c_mmolmol_v6 = V6_hba1c_IFCC_mmolmol,
     crp_mgl_v6 = V6_crp_1,
+    nexfin_hr_v6 = nexfin_hr_v6_1, # Nexfin
+    nexfin_dpdt_v6 = nexfin_dpdt_v6_1,
+    nexfin_sv_v6 = nexfin_sv_v6_1,
+    nexfin_svi_v6 = nexfin_svi_v6_1,
+    nexfin_co_n6 = nexfin_co_v6_1,
+    nexfin_ci_v6 = nexfin_ci_v6_1,
+    nexfin_svr_v6 = nexfin_svr_v6_1,
+    nexfin_svri_v6 = nexfin_svri_v6_1,
 
     # v7 = 10 years
     bmi_v7 = V7_BMI,
@@ -224,7 +256,67 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     homa_ir_v4 = (fasting_insulin_pmoll_mmt_v4 / 6.945) * fasting_glucose_mmoll_mmt_v4 / 22.5,
     homa_b_v4 = (20 * (fasting_insulin_pmoll_mmt_v4 / 6.945)) / (fasting_glucose_mmoll_mmt_v4 - 3.5),
     homa_ir_v5 = (fasting_insulin_pmoll_mmt_v5 / 6.945) * fasting_glucose_mmoll_mmt_v5 / 22.5,
-    homa_b_v5 = (20 * (fasting_insulin_pmoll_mmt_v5 / 6.945)) / (fasting_glucose_mmoll_mmt_v5 - 3.5)
+    homa_b_v5 = (20 * (fasting_insulin_pmoll_mmt_v5 / 6.945)) / (fasting_glucose_mmoll_mmt_v5 - 3.5),
+
+    # T2D prevalence at follow-up
+    # A1C ≥ 6.5% (≥ 48 mmol/mol) OR
+    # FPG ≥ 126 mg/dL (≥ 7.0 mmol/L) (2h OGTT or random plasma glucose not measured)
+    t2d_v4 = case_when(
+      is.na(hba1c_percent_v4) & is.na(fasting_glucose_mmoll_mmt_v4) ~ NA_character_,
+      hba1c_percent_v4 >= 6.5 | fasting_glucose_mmoll_mmt_v4 >= 7.0 ~ "yes",
+      TRUE ~ "no"
+    ),
+    t2d_v5 = case_when(
+      is.na(hba1c_percent_v5) & is.na(fasting_glucose_mmoll_mmt_v5) ~ NA_character_,
+      hba1c_percent_v5 >= 6.5 | fasting_glucose_mmoll_mmt_v5 >= 7.0 ~ "yes",
+      TRUE ~ "no"
+    ),
+
+    # Prediabetes (baseline and follow-up) based on ADA SOC 2026
+    # A1C 5.7–6.4% (39–47 mmol/mol) OR 
+    # FPG 100 mg/dL (5.6 mmol/L) to 125 mg/dL (6.9 mmol/L) (IFG) OR 2h gluc (not available, no OGTT)
+    prediab_v0 = case_when(
+      t2d_v0 == "yes" ~ "no",
+      is.na(hba1c_percent_v0) & is.na(fasting_glucose_mmoll_mmt_v0) ~ NA_character_,
+      (hba1c_percent_v0 >= 5.7 & hba1c_percent_v0 <= 6.4) | (fasting_glucose_mmoll_mmt_v0 >= 5.6 & fasting_glucose_mmoll_mmt_v0 <= 6.9) ~ "yes",
+      TRUE ~ "no"
+    ),
+    prediab_v4 = case_when(
+      t2d_v4 == "yes" ~ "no",
+      is.na(hba1c_percent_v4) & is.na(fasting_glucose_mmoll_mmt_v4) ~ NA_character_,
+      (hba1c_percent_v4 >= 5.7 & hba1c_percent_v4 <= 6.4) | (fasting_glucose_mmoll_mmt_v4 >= 5.6 & fasting_glucose_mmoll_mmt_v4 <= 6.9) ~ "yes",
+      TRUE ~ "no"
+    ),
+    prediab_v5 = case_when(
+      t2d_v5 == "yes" ~ "no",
+      is.na(hba1c_percent_v5) & is.na(fasting_glucose_mmoll_mmt_v5) ~ NA_character_,
+      (hba1c_percent_v5 >= 5.7 & hba1c_percent_v5 <= 6.4) | (fasting_glucose_mmoll_mmt_v5 >= 5.6 & fasting_glucose_mmoll_mmt_v5 <= 6.9) ~ "yes",
+      TRUE ~ "no"
+    ),
+
+    # de novo occurence(1 & 2y post-surgery, if NGT at baseline/previous visits)
+    denovo_prediab_v4 = case_when(
+      is.na(t2d_v0) | is.na(prediab_v0) | is.na(prediab_v4) ~ NA_character_,
+      (t2d_v0 == "no" & prediab_v0 == "no" & prediab_v4 == "yes") ~ "yes",
+      TRUE ~ "no"
+    ),
+    denovo_prediab_v5 = case_when(
+      is.na(t2d_v0) | is.na(prediab_v0) | is.na(prediab_v4) | is.na(prediab_v5) ~ NA_character_,
+      (t2d_v0 == "no" & prediab_v0 == "no" & prediab_v4 == "no" & prediab_v5 == "yes")  ~ "yes",
+      TRUE ~ "no"
+    ),
+
+    #### DO THE SAME HERE AS FOR T2D ####
+    denovo_t2d_v4 = case_when(
+      is.na(t2d_v0) & is.na(t2d_v4) ~ NA_character_,
+      (t2d_v0 == "no" & t2d_v4 == "yes") ~ "yes",
+      TRUE ~ "no"
+    ),
+    denovo_t2d_v5 = case_when(
+      is.na(t2d_v0) & is.na(t2d_v4) & is.na(t2d_v5) ~ NA_character_,
+      t2d_v0 == "no" & t2d_v4 == "no" & t2d_v5 == "yes" ~ "yes",
+      TRUE ~ "no"
+    )
   ) |> 
   select(-starts_with("hba1c_v")) |> 
   # body composition
@@ -341,29 +433,34 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     low_smm_by_weight_v4 = if_else(smm_by_weight_v4 <= smm_by_weight_v0_tertile, "yes", "no"),
     low_smm_by_weight_v6 = if_else(smm_by_weight_v6 <= smm_by_weight_v0_tertile, "yes", "no"),
 
-    # Calculate %ASM/SMM change from baseline to 1, 2 and 5 years
-    perc_asm_change_v4 = (asm_kg_v4 - asm_kg_v0) / asm_kg_v0 * 100,
+    # Calculate ΔASM and %ASM change from baseline to 1, 2 and 5 years
+    delta_asm_v4 = asm_kg_v4 - asm_kg_v0, # 1y
+    delta_asm_v5 = asm_kg_v5 - asm_kg_v0, # 2y
+    delta_asm_v6 = asm_kg_v6 - asm_kg_v0, # 5y
+    
+    perc_asm_change_v4 = (asm_kg_v4 - asm_kg_v0) / asm_kg_v0 * 100, 
     perc_asm_change_v5 = (asm_kg_v4 - asm_kg_v0) / asm_kg_v0 * 100,
     perc_asm_change_v6 = (asm_kg_v6 - asm_kg_v0) / asm_kg_v0 * 100,
-
-    perc_smm_change_v4 = (smm_kg_v4 - smm_kg_v0) / smm_kg_v0 * 100,
-    perc_smm_change_v5 = (smm_kg_v5 - smm_kg_v0) / smm_kg_v0 * 100,
-    perc_smm_change_v6 = (smm_kg_v6 - smm_kg_v0) / smm_kg_v0 * 100,
 
     # Calculate tertiles for %ASM change
     asm_change_v4_tertile = quantile(perc_asm_change_v4, probs = 1/3, na.rm = TRUE),
     asm_change_v5_tertile = quantile(perc_asm_change_v5, probs = 1/3, na.rm = TRUE),
     asm_change_v6_tertile = quantile(perc_asm_change_v6, probs = 1/3, na.rm = TRUE),
 
-    asm_change_v4_group = if_else(perc_asm_change_v4 <= asm_change_v4_tertile, "highest ASM loss", "modest ASM loss"),
-    asm_change_v5_group = if_else(perc_asm_change_v5 <= asm_change_v5_tertile, "highest ASM loss", "modest ASM loss"),
-    asm_change_v6_group = if_else(perc_asm_change_v6 <= asm_change_v6_tertile, "highest ASM loss", "modest ASM loss")
+    # here instead of groups I would pool togerther 
+
+    asm_change_v4_group = if_else(perc_asm_change_v4 <= asm_change_v4_tertile, "highest %ASM loss", "low/modest %ASM loss"),
+    asm_change_v5_group = if_else(perc_asm_change_v5 <= asm_change_v5_tertile, "highest %ASM loss", "low/modest %ASM loss"),
+    asm_change_v6_group = if_else(perc_asm_change_v6 <= asm_change_v6_tertile, "highest %ASM loss", "low/modest %ASM loss")
   ) |> 
   ungroup() |> 
   relocate(race, .after = sex) |> 
   relocate(age_v2:age_v7, .after = age_v0) |>
   relocate(v0_to_v2_weeks:v0_to_v7_numeric_y, .after = age_v7) |> 
   relocate(c(hba1c_percent_v0, homa_ir_v0, homa_b_v0), .after = hba1c_mmolmol_v0) |> # Hba1c 
+  relocate(prediab_v0, .after = t2d_v0) |> 
+  relocate(c(t2d_v4, denovo_t2d_v4, prediab_v4, denovo_prediab_v4), .before = bmi_v4) |>
+  relocate(c(t2d_v5, denovo_t2d_v5, prediab_v5, denovo_prediab_v5), .before = bmi_v5) |>
   relocate(hba1c_percent_v2, .after = hba1c_mmolmol_v2) |>
   relocate(hba1c_percent_v3, .after = hba1c_mmolmol_v3) |>
   relocate(c(hba1c_percent_v4, homa_ir_v4, homa_b_v4), .after = hba1c_mmolmol_v4) |>
@@ -378,9 +475,9 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
   relocate(c(asm_kg_v0, asm_height2_v0, smm_kg_v0, smm_by_weight_v0, low_asm_v0, low_asm_height2_v0, low_smm_v0, low_smm_by_weight_v0), .after = upperleg_cm_v0) |> # muscle mass
   relocate(asm_kg_v2, asm_height2_v2, .after = upperleg_cm_v2) |>
   relocate(asm_kg_v3, asm_height2_v3, .after = upperleg_cm_v3) |>
-  relocate(c(asm_kg_v4, asm_height2_v4, smm_kg_v4, smm_by_weight_v4, low_smm_by_weight_v4, perc_smm_change_v4, perc_asm_change_v4, asm_change_v4_tertile, asm_change_v4_group), .after = upperleg_cm_v4) |>
-  relocate(c(asm_kg_v5, asm_height2_v5, smm_kg_v5, smm_by_weight_v5, perc_smm_change_v5, perc_asm_change_v5, asm_change_v5_tertile, asm_change_v5_group), .after = upperleg_cm_v5) |>
-  relocate(c(asm_kg_v6, asm_height2_v6, smm_kg_v6, smm_by_weight_v6, low_smm_by_weight_v6, perc_smm_change_v6, perc_asm_change_v6, asm_change_v6_tertile, asm_change_v6_group), .after = upperleg_cm_v6) |>
+  relocate(c(asm_kg_v4, delta_asm_v4, asm_height2_v4, smm_kg_v4, smm_by_weight_v4, low_smm_by_weight_v4, perc_asm_change_v4, asm_change_v4_tertile, asm_change_v4_group), .after = upperleg_cm_v4) |>
+  relocate(c(asm_kg_v5, delta_asm_v5, asm_height2_v5, smm_kg_v5, smm_by_weight_v5, perc_asm_change_v5, asm_change_v5_tertile, asm_change_v5_group), .after = upperleg_cm_v5) |>
+  relocate(c(asm_kg_v6, delta_asm_v6, asm_height2_v6, smm_kg_v6, smm_by_weight_v6, low_smm_by_weight_v6, perc_asm_change_v6, asm_change_v6_tertile, asm_change_v6_group), .after = upperleg_cm_v6) |>
   relocate(asm_kg_v7, asm_height2_v7, .after = upperleg_cm_v7) |>
   mutate(across(where(is.character), as.factor)) |>
   print()
@@ -648,5 +745,5 @@ View(baria_muscle_clean)
 nrow(baria_muscle_clean)
 
 # then save as both RDS and csv files
-write.csv(baria_muscle_clean, "data/260107_BARIA_muscle_clinical.csv")
-saveRDS(baria_muscle_clean, "data/260107_BARIA_muscle_clinical.RDS")
+write.csv(baria_muscle_clean, "data/260126_BARIA_muscle_clinical.csv")
+saveRDS(baria_muscle_clean, "data/260126_BARIA_muscle_clinical.RDS")
