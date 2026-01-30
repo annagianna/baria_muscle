@@ -187,15 +187,8 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     crp_mgl_v7 = V7_CRP
   ) |>
    mutate(
-    across(
-      everything(),
-      ~ replace(.x, .x %in% c(-99, -98, -99), NA)), # these values are NA for different reasons in the Baria dataset
-    across(
-     .cols = starts_with("date"),
-      ~ na_if(., "01-01-2999")),
-    across(
-      .cols = starts_with("date"),
-      ~ na_if(., "01-01-2997"))
+    across(everything(), ~ replace(.x, .x %in% c(-99, -98, -97), NA)), # these values are NA for different reasons in the Baria dataset
+    across(.cols = starts_with("date"), ~ if_else(.x %in% c("01-01-2999", "01-01-2997", "01-01-2995"), NA_character_, .x))
   ) |> 
   mutate( # time diff from baseline visit in weeks
     across(date_v0:date_v7, dmy),
@@ -257,7 +250,7 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     homa_b_v4 = (20 * (fasting_insulin_pmoll_mmt_v4 / 6.945)) / (fasting_glucose_mmoll_mmt_v4 - 3.5),
     homa_ir_v5 = (fasting_insulin_pmoll_mmt_v5 / 6.945) * fasting_glucose_mmoll_mmt_v5 / 22.5,
     homa_b_v5 = (20 * (fasting_insulin_pmoll_mmt_v5 / 6.945)) / (fasting_glucose_mmoll_mmt_v5 - 3.5),
-
+   
     # T2D prevalence at follow-up
     # A1C ≥ 6.5% (≥ 48 mmol/mol) OR
     # FPG ≥ 126 mg/dL (≥ 7.0 mmol/L) (2h OGTT or random plasma glucose not measured)
@@ -745,5 +738,5 @@ View(baria_muscle_clean)
 nrow(baria_muscle_clean)
 
 # then save as both RDS and csv files
-write.csv(baria_muscle_clean, "data/260126_BARIA_muscle_clinical.csv")
-saveRDS(baria_muscle_clean, "data/260126_BARIA_muscle_clinical.RDS")
+write.csv(baria_muscle_clean, "data/260130_BARIA_muscle_clinical.csv")
+saveRDS(baria_muscle_clean, "data/260130_BARIA_muscle_clinical.RDS")
