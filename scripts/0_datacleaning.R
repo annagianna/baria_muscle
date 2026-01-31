@@ -440,11 +440,10 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     asm_change_v5_tertile = quantile(perc_asm_change_v5, probs = 1/3, na.rm = TRUE),
     asm_change_v6_tertile = quantile(perc_asm_change_v6, probs = 1/3, na.rm = TRUE),
 
-    # here instead of groups I would pool togerther 
-
-    asm_change_v4_group = if_else(perc_asm_change_v4 <= asm_change_v4_tertile, "highest %ASM loss", "low/modest %ASM loss"),
-    asm_change_v5_group = if_else(perc_asm_change_v5 <= asm_change_v5_tertile, "highest %ASM loss", "low/modest %ASM loss"),
-    asm_change_v6_group = if_else(perc_asm_change_v6 <= asm_change_v6_tertile, "highest %ASM loss", "low/modest %ASM loss")
+    # here instead of high/medium/low ASM loss/change groups I pool togerther
+    asm_change_v4 = if_else(perc_asm_change_v4 <= asm_change_v4_tertile, "high", "low/modest"),
+    asm_change_v5 = if_else(perc_asm_change_v5 <= asm_change_v5_tertile, "high", "low/modest"),
+    asm_change_v6 = if_else(perc_asm_change_v6 <= asm_change_v6_tertile, "high", "low/modest")
   ) |> 
   ungroup() |> 
   relocate(race, .after = sex) |> 
