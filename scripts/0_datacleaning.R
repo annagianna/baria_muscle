@@ -39,6 +39,7 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     date_v5 = V5_date,
     date_v6 = V6_date_1,
     date_v7 = V7_date,
+    sg_type = type_surgery,
 
     # Baseline (v0)
     age_v0 = Age,
@@ -440,10 +441,10 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     asm_change_v5_tertile = quantile(perc_asm_change_v5, probs = 1/3, na.rm = TRUE),
     asm_change_v6_tertile = quantile(perc_asm_change_v6, probs = 1/3, na.rm = TRUE),
 
-    # here instead of high/medium/low ASM loss/change groups I pool togerther
-    asm_change_v4 = if_else(perc_asm_change_v4 <= asm_change_v4_tertile, "high", "low/modest"),
-    asm_change_v5 = if_else(perc_asm_change_v5 <= asm_change_v5_tertile, "high", "low/modest"),
-    asm_change_v6 = if_else(perc_asm_change_v6 <= asm_change_v6_tertile, "high", "low/modest")
+    # here instead of high/medium/low ASM loss/change groups I pool together
+    asm_change_v4_group = if_else(perc_asm_change_v4 <= asm_change_v4_tertile, "high", "low/modest"), 
+    asm_change_v5_group = if_else(perc_asm_change_v5 <= asm_change_v5_tertile, "high", "low/modest"),
+    asm_change_v6_group = if_else(perc_asm_change_v6 <= asm_change_v6_tertile, "high", "low/modest")
   ) |> 
   ungroup() |> 
   relocate(race, .after = sex) |> 
@@ -737,5 +738,5 @@ View(baria_muscle_clean)
 nrow(baria_muscle_clean)
 
 # then save as both RDS and csv files
-write.csv(baria_muscle_clean, "data/260130_BARIA_muscle_clinical.csv")
-saveRDS(baria_muscle_clean, "data/260130_BARIA_muscle_clinical.RDS")
+write.csv(baria_muscle_clean, "data/260131_BARIA_muscle_clinical.csv")
+saveRDS(baria_muscle_clean, "data/260131_BARIA_muscle_clinical.RDS")
