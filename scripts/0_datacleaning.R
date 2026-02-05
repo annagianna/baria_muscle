@@ -11,7 +11,7 @@ library(purrr)
 
 # Open Data and see properties
 baria_clinical_data_raw <- readRDS("./data/BARIA.clinical.2024-12-09.723.2043.RDS")
-
+View(baria_clinical_data_raw)
 # roughly check for incorrect data entries of BIA data (repeat for v0, v4-v6)
 baria_clinical_data_raw |> 
   select(Subject_ID, tbf, ffm, weight) |> 
@@ -222,7 +222,8 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     t2d_v0 = case_when(t2d_v0 == "1" ~ "yes", t2d_v0 == "2" ~ "no"),
     aht = case_when(aht == "1" ~ "yes", aht == "2" ~ "no"),
     medication_binary_v0 = case_when(medication_binary_v0 == "1" ~ "yes", medication_binary_v0 == "2" ~ "no"),
-    sport_v0 = case_when(sport_v0 == "1" ~ "yes", sport_v0 == "2" ~ "no")
+    sport_v0 = case_when(sport_v0 == "1" ~ "yes", sport_v0 == "2" ~ "no"),
+    sg_type = case_when(sg_type == "1" ~ "rygb", sg_type == "2" ~ "omegaloop", sg_type == "3" ~ "sg")
   ) |> 
   mutate(
     # fix Hba1c units
@@ -427,6 +428,21 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     low_smm_by_weight_v4 = if_else(smm_by_weight_v4 <= smm_by_weight_v0_tertile, "yes", "no"),
     low_smm_by_weight_v6 = if_else(smm_by_weight_v6 <= smm_by_weight_v0_tertile, "yes", "no"),
 
+    # %BW change from baseline to 1, 2 and 5 years
+    perc_weight_change_v4 = (weight_kg_v4 - weight_kg_v0) / weight_kg_v0 * 100,
+    perc_weight_change_v5 = (weight_kg_v5 - weight_kg_v0) / weight_kg_v0 * 100,
+    perc_weight_change_v6 = (weight_kg_v6 - weight_kg_v6) / weight_kg_v0 * 100,
+
+    # %FFM change from baseline to 1, 2 and 5 years
+    perc_ffm_change_v4 = (ffm_kg_v4 - ffm_kg_v0) / ffm_kg_v0 * 100,
+    perc_ffm_change_v5 = (ffm_kg_v5 - ffm_kg_v0) / ffm_kg_v0 * 100,
+    perc_ffm_change_v6 = (ffm_kg_v6 - ffm_kg_v0) / ffm_kg_v0 * 100,
+
+    # %Fm change from baseline to 1, 2 and 5 years
+    perc_fm_change_v4 = (fm_kg_v4 - fm_kg_v0) / fm_kg_v0 * 100,
+    perc_fm_change_v5 = (fm_kg_v5 - fm_kg_v0) / fm_kg_v0 * 100,
+    perc_fm_change_v6 = (fm_kg_v6 - fm_kg_v0) / fm_kg_v0 * 100,
+
     # Calculate ΔASM and %ASM change from baseline to 1, 2 and 5 years
     delta_asm_v4 = asm_kg_v4 - asm_kg_v0, # 1y
     delta_asm_v5 = asm_kg_v5 - asm_kg_v0, # 2y
@@ -460,10 +476,13 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
   relocate(c(hba1c_percent_v5, homa_ir_v5, homa_b_v5), .after = hba1c_mmolmol_v5) |>
   relocate(hba1c_percent_v6, .after = hba1c_mmolmol_v6) |>
   relocate(hba1c_percent_v7, .after = hba1c_mmolmol_v7) |>
+  relocate(perc_weight_change_v4, .after = weight_kg_v4) |>
+  relocate(perc_weight_change_v5, .after = weight_kg_v5) |>
+  relocate(perc_weight_change_v6, .after = weight_kg_v6) |>
   relocate(c(ffmi_v0, fmi_v0), .after = ffm_percent_v0) |> # FFMI & FMI
-  relocate(c(ffmi_v4, fmi_v4), .after = ffm_percent_v4) |>
-  relocate(c(ffmi_v5, fmi_v5), .after = ffm_percent_v5) |>
-  relocate(c(ffmi_v6, fmi_v6), .after = ffm_percent_v6) |>
+  relocate(c(ffmi_v4, fmi_v4, perc_ffm_change_v4, perc_fm_change_v4), .after = ffm_percent_v4) |>
+  relocate(c(ffmi_v5, fmi_v5, perc_ffm_change_v5, perc_fm_change_v5), .after = ffm_percent_v5) |>
+  relocate(c(ffmi_v6, fmi_v6, perc_ffm_change_v6, perc_fm_change_v6), .after = ffm_percent_v6) |>
   relocate(asm_kg_v0_tertile:smm_by_weight_v0_tertile, .after = upperleg_cm_v0) |> # cut-offs
   relocate(c(asm_kg_v0, asm_height2_v0, smm_kg_v0, smm_by_weight_v0, low_asm_v0, low_asm_height2_v0, low_smm_v0, low_smm_by_weight_v0), .after = upperleg_cm_v0) |> # muscle mass
   relocate(asm_kg_v2, asm_height2_v2, .after = upperleg_cm_v2) |>
@@ -477,7 +496,6 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
 
 colnames(baria_muscle_clinical)
 nrow(baria_muscle_clinical)
-View(baria_muscle_clinical)
 
 ## Formulas used:
 # Hba1c(%) = (0,0915 * HbA1c (mmol/mol) + 2,15 (from diabetesfonds.nl)
@@ -489,7 +507,6 @@ View(baria_muscle_clinical)
 # Insulin was converted from pmol/l to μU/ml
 
 ## Medication
-
 baria_muscle_clinical_with_medication_notypos <- baria_muscle_clinical |>
   mutate(medication_list_v0 = str_to_lower(medication_list_v0)) |> 
   mutate(
@@ -522,7 +539,6 @@ baria_muscle_clinical_with_medication_notypos <- baria_muscle_clinical |>
 
 # Define medication categories
 # Diabetes medication
-
 dm_meds <- list(
   # Metformin
   metformin = c("metformine", "glucophage"),
@@ -738,5 +754,5 @@ View(baria_muscle_clean)
 nrow(baria_muscle_clean)
 
 # then save as both RDS and csv files
-write.csv(baria_muscle_clean, "data/260131_BARIA_muscle_clinical.csv")
-saveRDS(baria_muscle_clean, "data/260131_BARIA_muscle_clinical.RDS")
+write.csv(baria_muscle_clean, "data/260205_BARIA_muscle_clinical.csv")
+saveRDS(baria_muscle_clean, "data/260205_BARIA_muscle_clinical.RDS")
