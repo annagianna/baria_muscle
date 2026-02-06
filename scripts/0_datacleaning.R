@@ -431,7 +431,7 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     # %BW change from baseline to 1, 2 and 5 years
     perc_weight_change_v4 = (weight_kg_v4 - weight_kg_v0) / weight_kg_v0 * 100,
     perc_weight_change_v5 = (weight_kg_v5 - weight_kg_v0) / weight_kg_v0 * 100,
-    perc_weight_change_v6 = (weight_kg_v6 - weight_kg_v6) / weight_kg_v0 * 100,
+    perc_weight_change_v6 = (weight_kg_v6 - weight_kg_v0) / weight_kg_v0 * 100,
 
     # %FFM change from baseline to 1, 2 and 5 years
     perc_ffm_change_v4 = (ffm_kg_v4 - ffm_kg_v0) / ffm_kg_v0 * 100,
@@ -750,7 +750,6 @@ baria_muscle_clean <- baria_muscle_clinical_with_medication_notypos |>
   arrange(date_v0) |> 
   print()
 
-View(baria_muscle_clean)
 nrow(baria_muscle_clean)
 
 # then save as both RDS and csv files
