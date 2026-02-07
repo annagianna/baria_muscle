@@ -161,9 +161,48 @@ species_comp_asm1y_v0 <- mb_asm1y_v0 |>
   geom_bar(stat = "identity", color = "black") +
   scale_fill_manual(values = top20_species_colours) +
   guides(fill = guide_legend(ncol = 1)) +
-  labs(y = "Rrelative abundance", x = "%ASM change at 1y%", title = "Microbiota composition", fill = "") +
+  labs(y = "Relative abundance", x = "%ASM change at 1y", title = "Microbiota composition", fill = "") +
   scale_y_continuous(expand = c(0, 0)) +
   theme_composition()
 ggsave("graphs/composition/species_comp_asm1y_v0.pdf", width = 12, height = 10)
 
 ### 1y composition ###
+baria_mb_df$visit
+mb_asm1y_v4 <- baria_mb_df |> 
+  filter(
+    visit == 4, # 1y
+    !is.na(asm_change_v4_group)
+  ) |> 
+  mutate(
+    Species2 = if_else(
+        Species %in% top20_species$Species,
+        Species,
+        "Other species" # collapse other species
+        ),
+    Species2 = as.factor(Species2)
+  ) |> 
+  group_by(Species2, Sample, asm_change_v4_group) |> # species abundance per sample
+  dplyr::summarize(Abundance = sum(Abundance)) |> 
+  group_by(Species2, asm_change_v4_group) |> # species per muscle mass group
+  dplyr::summarize(Abundance = mean(Abundance)) |> # avg abundance per species per muscle group
+  ungroup() |>
+  mutate(
+    Species2 = fct_reorder(Species2, Abundance),
+    Species2 = fct_relevel(Species2, "Other species", after = 0L) # move other species to the front
+  )
+
+mb_asm1y_v4 |> # check
+  group_by(asm_change_v4_group) |> 
+  summarise(sum_Abundance = sum(Abundance)) # adds up to 100
+
+# Composition plot
+species_comp_asm1y_v4 <- mb_asm1y_v4 |> 
+  mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> # low asm/height2 first
+  ggplot(aes(x = asm_change_v4_group, y = Abundance, fill = Species2)) +
+  geom_bar(stat = "identity", color = "black") +
+  scale_fill_manual(values = top20_species_colours) +
+  guides(fill = guide_legend(ncol = 1)) +
+  labs(y = "Relative abundance", x = "%ASM change at 1y", title = "Microbiota composition at 1y", fill = "") +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme_composition()
+ggsave("graphs/composition/species_comp_asm1y_v4.pdf", width = 12, height = 10)
