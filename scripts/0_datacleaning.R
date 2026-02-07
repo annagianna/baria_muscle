@@ -753,5 +753,5 @@ baria_muscle_clean <- baria_muscle_clinical_with_medication_notypos |>
 nrow(baria_muscle_clean)
 
 # then save as both RDS and csv files
-write.csv(baria_muscle_clean, "data/260205_BARIA_muscle_clinical.csv")
-saveRDS(baria_muscle_clean, "data/260205_BARIA_muscle_clinical.RDS")
+write.csv(baria_muscle_clean, "data/260206_BARIA_muscle_clinical.csv")
+saveRDS(baria_muscle_clean, "data/260206_BARIA_muscle_clinical.RDS")
