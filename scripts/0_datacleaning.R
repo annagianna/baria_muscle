@@ -11,7 +11,7 @@ library(purrr)
 
 # Open Data and see properties
 baria_clinical_data_raw <- readRDS("./data/BARIA.clinical.2024-12-09.723.2043.RDS")
-View(baria_clinical_data_raw)
+
 # roughly check for incorrect data entries of BIA data (repeat for v0, v4-v6)
 baria_clinical_data_raw |> 
   select(Subject_ID, tbf, ffm, weight) |> 
