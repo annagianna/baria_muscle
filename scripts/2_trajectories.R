@@ -151,32 +151,35 @@ weight <- baria_muscle_long |>
   ggplot(aes(x = time_y, y = weight_kg, color = asm_change_v4_group)) +
   geom_smooth(se = FALSE, show.legend = FALSE) +
   labs(title = "Body weight", color = "%ASM loss at 1y", x = "Time (years)", y = "Weight (kg)") +
-  theme_minimal()
+  theme_minimal() +
+  coord_cartesian(xlim = c(0, 5), expand = FALSE)
 
 ffm <- baria_muscle_long |>
   filter(!is.na(asm_change_v4_group)) |> 
   ggplot(aes(x = time_y, y = ffm_kg, color = asm_change_v4_group)) +
   geom_smooth(se = FALSE) +
   coord_cartesian(xlim = c(0, 5)) +
-  labs(title = "FFM", color = "%ASM loss at 1y", x = "Time (y)", y = "FFM (kg)") +
-  theme_minimal()
+  labs(title = "FFM", color = "%ASM loss at 1y", x = "Time (years)", y = "FFM (kg)") +
+  theme_minimal() +
+  coord_cartesian(xlim = c(0, 5), expand = FALSE)
 
 fm <- baria_muscle_long |>
   filter(!is.na(asm_change_v4_group)) |> 
   ggplot(aes(x = time_y, y = fm_kg, color = asm_change_v4_group)) +
   geom_smooth(se = FALSE) +
-  labs(title = "FM", color = "%ASM loss at 1y", x = "Time (y)", y = "FM (kg)") +
-  theme_minimal()
+  labs(title = "FM", color = "%ASM loss at 1y", x = "Time (years)", y = "FM (kg)") +
+  theme_minimal() +
+  coord_cartesian(xlim = c(0, 5), expand = FALSE)
 
 trajectories_asm_1y <-
   weight / (ffm | fm ) +
   plot_layout(
     guides = "collect"
   ) &
-  scale_color_manual(values = c("high" = manet_cols[5], "low/modest" = manet_cols[20])) &
+  scale_color_manual(values = c("high" = manet_cols[10], "low/modest" = manet_cols[20])) &
   theme(legend.position = "bottom")
 
-ggsave(plot = trajectories_asm_1y, filename = "trajectories_asm_1y.png", path = "graphs/trajectories")
+ggsave(plot = trajectories_asm_1y, filename = "trajectories_asm_1y.png", path = "graphs/trajectories", height = 10, width = 14, unit = "cm")
 
 ### Scatterplot of %ASM loss vs. %BW loss ####
 asm_vs_bw_1y_data <- baria_muscle_clean |> 
@@ -195,26 +198,28 @@ asm_bw_1y_plot <- ggplot(asm_vs_bw_1y_data, aes(x = perc_asm_change_1y, y = perc
   geom_point(aes(color = asm_change_v4_group)) +
   geom_smooth(aes(color = asm_change_v4_group), method = "lm", se = FALSE, color = "grey60", alpha = 0.5, linewidth = 0.5) +
   geom_abline(slope = 1, intercept = 0, linetype = 2, color = "grey60", alpha = 0.5, linewidth = 0.5) + # reference 1:1 line
-  scale_color_manual(values = c("high" = manet_cols[5], "low/modest" = manet_cols[20])) +
+  scale_color_manual(values = c("high" = manet_cols[11], "low/modest" = manet_cols[20])) +
   theme_minimal() +
   theme(legend.position = "none") +
   labs(
-    x = "%ASM change at 1 year",
-    y = "%BW change at 1 year"
+    x = "%ASM change at 1y",
+    y = "%BW change at 1y"
   ) +
   annotate("text", x = Inf, y = -Inf, label = cor_asm_bw_1y_label, hjust = 1.1, vjust = -0.5, size = 4)
 ggsave(plot = asm_bw_1y_plot, filename = "asm_bw_1y.png", path = "graphs/trajectories")
 
-
 ### % change BW, FFM, FM ###
 # %BW change stratified by %ASM loss at 1 year
-plot_stat_data <- baria_muscle_long |> 
-  filter(!is.na(visit)) |> 
-  filter(!is.na(asm_change_v4_group)) |>
+plot_stat_data_bw <- baria_muscle_long |> 
+  filter(
+    !is.na(visit),
+    !is.na(asm_change_v4_group),
+    !is.na(perc_weight_change)
+  ) |>
   mutate(visit = factor(visit, levels = c("Baseline", "1y", "2y", "5y"))) |>
   filter(visit != "Baseline")
 
-perc_bw_asm1y <- baria_muscle_long |> 
+  perc_bw_asm1y <- baria_muscle_long |> 
   filter(!is.na(visit)) |> 
   filter(!is.na(asm_change_v4_group)) |>
   mutate(visit = factor(visit, levels = c("Baseline", "1y", "2y", "5y"))) |>
@@ -226,24 +231,46 @@ perc_bw_asm1y <- baria_muscle_long |>
     .groups = "drop"
   ) |> 
   ggplot(aes(x = visit, y = mean, group = asm_change_v4_group)) +
-  geom_col(aes(fill = asm_change_v4_group), position = position_dodge(width = 0.5), width = 0.5, color = "black", show.legend = FALSE) +
-  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), position = position_dodge(width = 0.5), width = 0.2) +
+  geom_col(aes(fill = asm_change_v4_group), position = position_dodge(width = 0.75), width = 0.8, color = "black", show.legend = TRUE) +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), position = position_dodge(width = 0.75), width = 0.2) +
+  # compare high vs. low/modest within each visit
   stat_compare_means(
-    data = plot_stat_data,
+    data = subset(plot_stat_data_bw, visit == "1y"),
+    aes(x = visit, y = perc_weight_change, group = asm_change_v4_group), 
+    method = "t.test", label = "p.signif", hide.ns = TRUE, label.y = 0.5,
+    inherit.aes = FALSE # use the raw perc_weight_change and not the means used for plotting
+  ) +
+  stat_compare_means(
+    data = subset(plot_stat_data_bw, visit == "2y"),
     aes(x = visit, y = perc_weight_change, group = asm_change_v4_group),
-    method = "t.test",
-    label = "p.signif",
-    hide.ns = TRUE
+    method = "t.test", label = "p.signif", hide.ns = TRUE, label.y = 0.5, inherit.aes = FALSE
+  ) +
+  stat_compare_means(
+    data = subset(plot_stat_data_bw, visit == "5y"),
+    aes(x = visit, y = perc_weight_change, group = asm_change_v4_group),
+    method = "t.test", label = "p.signif", hide.ns = TRUE, label.y = 0.5, inherit.aes = FALSE
   ) +
   scale_fill_manual(
-    values = c("high" = manet_cols[5], "low/modest" = manet_cols[20]),
+    values = c("high" = manet_cols[11], "low/modest" = manet_cols[20]),
     name = "%ASM change at 1y"
   ) +
   scale_x_discrete() +
-  labs(x = "Time", y = "Mean %BW change") +
-  theme_minimal()
+  labs(x = "", y = "%BW change", fill = "%ASM loss at 1y") +
+  theme_minimal() +
+  coord_cartesian(ylim = c(-65, 0), clip = "off") +
+  annotate("segment", x = 0.5, xend = 0.5, y = -67, yend = 0, linewidth = 0.5) +
+  annotate("segment", x = 0.5, xend = 3.5, y = 0, yend = 0, linewidth = 0.5)
 
 # %FFM change stratified by %ASM loss at 1 year
+plot_stat_data_ffm <- baria_muscle_long |> 
+  filter(
+    !is.na(visit),
+    !is.na(asm_change_v4_group),
+    !is.na(perc_ffm_change)
+  ) |>
+  mutate(visit = factor(visit, levels = c("Baseline", "1y", "2y", "5y"))) |>
+  filter(visit != "Baseline")
+
 perc_ffm_asm1y <- baria_muscle_long |> 
   filter(!is.na(visit)) |> 
   filter(!is.na(asm_change_v4_group)) |>
@@ -256,25 +283,47 @@ perc_ffm_asm1y <- baria_muscle_long |>
     .groups = "drop"
   ) |> 
   ggplot(aes(x = visit, y = mean, group = asm_change_v4_group)) +
-  geom_col(aes(fill = asm_change_v4_group), position = position_dodge(width = 0.5), width = 0.5, color = "black", show.legend = FALSE) +
-  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), position = position_dodge(width = 0.5), width = 0.2) +
+  geom_col(aes(fill = asm_change_v4_group), position = position_dodge(width = 0.75), width = 0.8, color = "black", show.legend = FALSE) +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), position = position_dodge(width = 0.75), width = 0.2) +
+  # compare high vs. low/modest %ASM loss groups within each visit
   stat_compare_means(
-    data = plot_stat_data,
+    data = subset(plot_stat_data_ffm, visit == "1y"),
+    aes(x = visit, y = perc_ffm_change, group = asm_change_v4_group), 
+    method = "t.test", label = "p.signif", hide.ns = TRUE, label.y = 0.5, inherit.aes = FALSE
+  ) +
+  stat_compare_means(
+    data = subset(plot_stat_data_ffm, visit == "2y"),
     aes(x = visit, y = perc_ffm_change, group = asm_change_v4_group),
-    method = "t.test",
-    label = "p.signif",
-    hide.ns = TRUE
+    method = "t.test", label = "p.signif", hide.ns = TRUE, label.y = 0.5, inherit.aes = FALSE
+  ) +
+  stat_compare_means(
+    data = subset(plot_stat_data_ffm, visit == "5y"),
+    aes(x = visit, y = perc_ffm_change, group = asm_change_v4_group),
+    method = "t.test", label = "p.signif", hide.ns = TRUE, label.y = 0.5, inherit.aes = FALSE
   ) +
   scale_fill_manual(
-    values = c("high" = manet_cols[5], "low/modest" = manet_cols[20]),
+    values = c("high" = manet_cols[11], "low/modest" = manet_cols[20]),
     name = "%ASM change at 1y"
   ) +
   scale_x_discrete() +
-  labs(x = "Time", y = "Mean %FFM change") +
+  labs(x = "", y = "%FFM change") +
   theme_minimal() +
-  coord_cartesian(ylim = c(-20, 0))
+  coord_cartesian(ylim = c(-65, 0), clip = "off") +
+  annotate("segment", x = 0.5, xend = 0.5, y = -67, yend = 0, linewidth = 0.5) +
+  annotate("segment", x = 0.5, xend = 3.5, y = 0, yend = 0, linewidth = 0.5)
 
 # %FM change stratified by %ASM loss at 1 year
+# data for comparisons
+plot_stat_data_fm <- baria_muscle_long |> 
+  filter(
+    !is.na(visit),
+    !is.na(asm_change_v4_group),
+    !is.na(perc_fm_change)
+  ) |>
+  mutate(visit = factor(visit, levels = c("Baseline", "1y", "2y", "5y"))) |>
+  filter(visit != "Baseline")
+
+# plot
 perc_fm_asm1y <- baria_muscle_long |> 
   filter(!is.na(visit)) |> 
   filter(!is.na(asm_change_v4_group)) |>
@@ -287,19 +336,41 @@ perc_fm_asm1y <- baria_muscle_long |>
     .groups = "drop"
   ) |> 
   ggplot(aes(x = visit, y = mean, group = asm_change_v4_group)) +
-  geom_col(aes(fill = asm_change_v4_group), position = position_dodge(width = 0.5), width = 0.5, color = "black", show.legend = FALSE) +
-  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), position = position_dodge(width = 0.5), width = 0.2) +
+  geom_col(aes(fill = asm_change_v4_group), position = position_dodge(width = 0.75), width = 0.8, color = "black", show.legend = FALSE) +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), position = position_dodge(width = 0.75), width = 0.2) +
+  # compare high vs. low/modest %ASM loss groups within each visit
   stat_compare_means(
-    data = plot_stat_data,
+    data = subset(plot_stat_data_fm, visit == "1y"),
+    aes(x = visit, y = perc_fm_change, group = asm_change_v4_group), 
+    method = "t.test", label = "p.signif", hide.ns = TRUE, label.y = 0.5, inherit.aes = FALSE
+  ) +
+  stat_compare_means(
+    data = subset(plot_stat_data_fm, visit == "2y"),
     aes(x = visit, y = perc_fm_change, group = asm_change_v4_group),
-    method = "t.test",
-    label = "p.signif",
-    hide.ns = TRUE
+    method = "t.test", label = "p.signif", hide.ns = TRUE, label.y = 0.5, inherit.aes = FALSE
+  ) +
+  stat_compare_means(
+    data = subset(plot_stat_data_fm, visit == "5y"),
+    aes(x = visit, y = perc_fm_change, group = asm_change_v4_group),
+    method = "t.test", label = "p.signif", hide.ns = TRUE, label.y = 0.5, inherit.aes = FALSE
   ) +
   scale_fill_manual(
-    values = c("high" = manet_cols[5], "low/modest" = manet_cols[20]),
+    values = c("high" = manet_cols[11], "low/modest" = manet_cols[20]),
     name = "%ASM change at 1y"
   ) +
   scale_x_discrete() +
-  labs(x = "Time", y = "Mean %FM change") +
-  theme_minimal()
+  labs(x = "", y = "%FM change") +
+  theme_minimal() +
+  coord_cartesian(ylim = c(-65, 0), clip = "off") +
+  annotate("segment", x = 0.5, xend = 0.5, y = -67, yend = 0, linewidth = 0.5) +
+  annotate("segment", x = 0.5, xend = 3.5, y = 0, yend = 0, linewidth = 0.5)
+
+
+# combined panel
+perc_change_asm1y <- 
+  (perc_bw_asm1y + perc_ffm_asm1y + perc_fm_asm1y) +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom") & # h/w
+  theme(aspect.ratio = 0.8)
+
+ggsave(plot = perc_change_asm1y, filename = "perc_change_asm1y.png", path = "graphs/trajectories", width = 15, height = 12, units = "cm",)
