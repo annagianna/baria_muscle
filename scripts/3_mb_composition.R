@@ -10,7 +10,9 @@ library(MetBrewer)
 library(ggthemes)
 
 # Theme
-manet <- met.brewer("Manet", n = 20)
+manet_5 <- met.brewer("Manet", n = 5)
+manet_20 <- met.brewer("Manet", n = 20)
+
 theme_composition <- function(base_size = 14, base_family = "sans") {
   
   (theme_foundation(base_size=base_size, base_family=base_family) + 
@@ -81,7 +83,7 @@ meta_baria_mb <- meta(baria_mb) |>
     Extra_data = na_if(Extra_data, "NA")
   )
 class(meta_baria_mb) # is df
-colnames(baria_muscle)
+
 # Add low muscle variables to sample_data() of phyloseq object for grouping
 new_sample_data <- baria_muscle |> 
   select(id, sex, asm_change_v4_group) |> 
@@ -104,6 +106,207 @@ baria_mb_df |> # check
   group_by(Sample) |> 
   summarise(sum_abundance = sum(Abundance)) # adds up to 100
 
+# Composition Plots
+#### Statified by %ASM change group at 1y ####
+### Phylum level ###
+top5_phyla <- baria_mb_df |> 
+  # filter(visit == 0) |>
+  group_by(Sample, Phylum) |> 
+  dplyr::summarize(Abundance = sum(Abundance), .groups = "drop") |> 
+  group_by(Phylum) |> 
+  dplyr::summarize(Abundance = mean(Abundance)) |> 
+  arrange(-Abundance) |> 
+  select(Phylum) |> 
+  head(5) |> 
+  print()
+
+# assign fixed color to each one of the top 5 phyla
+top5_phyla_vector <- top5_phyla$Phylum # top 5 phyla names as vector
+set.seed(23)
+top5_phyla_colours <- c("Other phyla" = "grey63", setNames(sample(manet_5), top5_phyla_vector))
+
+### Baseline composition ###
+mb_phyla_asm1y_v0 <- baria_mb_df |> 
+  filter(
+    visit == 0, # baseline composition (in clinical data v0 for shotgun data v1!)
+    !is.na(asm_change_v4_group)
+  ) |> 
+  mutate(
+    Phylum2 = if_else(
+        Phylum %in% top5_phyla$Phylum,
+        Phylum,
+        "Other phyla" # collapse other phyla
+        ),
+    Phylum2 = as.factor(Phylum2)
+  ) |> 
+  group_by(Phylum2, Sample, asm_change_v4_group) |> # abundance per sample
+  dplyr::summarize(Abundance = sum(Abundance)) |> 
+  group_by(Phylum2, asm_change_v4_group) |> # per %asm change group at 1y
+  dplyr::summarize(Abundance = mean(Abundance)) |> # avg abundance per phylum pergroup
+  ungroup() |>
+  mutate(
+    Phylum2 = fct_reorder(Phylum2, Abundance),
+    Phylum2 = fct_relevel(Phylum2, "Other phyla", after = 0L) # move other species to the front
+  )
+
+mb_phyla_asm1y_v0 |> # check
+  group_by(asm_change_v4_group) |> 
+  summarise(sum_Abundance = sum(Abundance)) # adds up to 100
+
+# Composition plot
+phyla_comp_asm1y_v0 <- mb_phyla_asm1y_v0 |> 
+  mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> # low asm/height2 first
+  ggplot(aes(x = asm_change_v4_group, y = Abundance, fill = Phylum2)) +
+  geom_bar(stat = "identity", color = "black") +
+  scale_fill_manual(values = top5_phyla_colours) +
+  guides(fill = guide_legend(ncol = 1)) +
+  labs(y = "Relative abundance (%)", x = "%ASM change at 1y", title = "Phylum", fill = "") +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme_composition() +
+  theme(axis.title.x = element_blank())
+ggsave("graphs/composition/phyla_comp_asm1y_v0.pdf", width = 12, height = 10)
+
+### 1y composition ###
+mb_phyla_asm1y_v4 <- baria_mb_df |> 
+  filter(
+    visit == 4, # 1y
+    !is.na(asm_change_v4_group)
+  ) |> 
+  mutate(
+    Phylum2 = if_else(
+        Phylum %in% top5_phyla$Phylum,
+        Phylum,
+        "Other phyla"
+        ),
+    Phylum2 = as.factor(Phylum2)
+  ) |> 
+  group_by(Phylum2, Sample, asm_change_v4_group) |> # phyla abundance per sample
+  dplyr::summarize(Abundance = sum(Abundance)) |> 
+  group_by(Phylum2, asm_change_v4_group) |> # phyla per %asm change at 1 year group
+  dplyr::summarize(Abundance = mean(Abundance)) |> # avg abundance per phylum per group
+  ungroup() |>
+  mutate(
+    Phylum2 = fct_reorder(Phylum2, Abundance),
+    Phylum2 = fct_relevel(Phylum2, "Other phyla", after = 0L) # move other phyla to the front
+  )
+
+mb_phyla_asm1y_v4 |> # check
+  group_by(asm_change_v4_group) |> 
+  summarise(sum_Abundance = sum(Abundance)) # adds up to 100
+
+# Composition plot
+phyla_comp_asm1y_v4 <- mb_phyla_asm1y_v4 |> 
+  mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> # high asm loss first
+  ggplot(aes(x = asm_change_v4_group, y = Abundance, fill = Phylum2)) +
+  geom_bar(stat = "identity", color = "black") +
+  scale_fill_manual(values = top5_phyla_colours) +
+  guides(fill = guide_legend(ncol = 1)) +
+  labs(y = "Relative abundance (%)", x = "%ASM change at 1y", title = "Phylum", fill = "") +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme_composition() +
+  theme(axis.title.x = element_blank())
+ggsave("graphs/composition/phyla_comp_asm1y_v4.pdf", width = 12, height = 10)
+
+### Genus level ###
+top20_genera <- baria_mb_df |> 
+  # filter(visit == 0) |>
+  group_by(Sample, Genus) |> 
+  dplyr::summarize(Abundance = sum(Abundance), .groups = "drop") |> 
+  group_by(Genus) |> 
+  dplyr::summarize(Abundance = mean(Abundance)) |> 
+  arrange(-Abundance) |> 
+  select(Genus) |> 
+  head(20) |> 
+  print()
+
+# assign fixed color to each one of the top 5 phyla
+top20_genera_vector <- top20_genera$Genus # top 5 phyla names as vector
+set.seed(14)
+top20_genera_colours <- c("Other genera" = "grey63", setNames(sample(manet_20), top20_genera_vector))
+
+### Baseline composition ###
+mb_genera_asm1y_v0 <- baria_mb_df |> 
+  filter(
+    visit == 0,
+    !is.na(asm_change_v4_group)
+  ) |> 
+  mutate(
+    Genus2 = if_else(
+        Genus %in% top20_genera$Genus,
+        Genus,
+        "Other genera" # collapse other genera
+        ),
+    Genus2 = as.factor(Genus2)
+  ) |> 
+  group_by(Genus2, Sample, asm_change_v4_group) |> # abundance per sample
+  dplyr::summarize(Abundance = sum(Abundance)) |> 
+  group_by(Genus2, asm_change_v4_group) |> # per %asm change group at 1y
+  dplyr::summarize(Abundance = mean(Abundance)) |> # avg abundance per genuys per group
+  ungroup() |>
+  mutate(
+    Genus2 = fct_reorder(Genus2, Abundance),
+    Genus2 = fct_relevel(Genus2, "Other genera", after = 0L) # move other genera to the front
+  )
+
+mb_genera_asm1y_v0 |> # check
+  group_by(asm_change_v4_group) |> 
+  summarise(sum_Abundance = sum(Abundance)) # adds up to 100
+
+# Composition plot
+genera_comp_asm1y_v0 <- mb_genera_asm1y_v0 |> 
+  mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> # low asm/height2 first
+  ggplot(aes(x = asm_change_v4_group, y = Abundance, fill = Genus2)) +
+  geom_bar(stat = "identity", color = "black") +
+  scale_fill_manual(values = top20_genera_colours) +
+  guides(fill = guide_legend(ncol = 1)) +
+  labs(y = "Relative abundance (%)", x = "%ASM change at 1y", title = "Genus", fill = "") +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme_composition() +
+  theme(axis.title.x = element_blank())
+ggsave("graphs/composition/genera_comp_asm1y_v0.pdf", width = 12, height = 10)
+
+### 1y composition ###
+mb_genera_asm1y_v4 <- baria_mb_df |> 
+  filter(
+    visit == 4, # 1y
+    !is.na(asm_change_v4_group)
+  ) |> 
+  mutate(
+    Genus2 = if_else(
+        Genus %in% top20_genera$Genus,
+        Genus,
+        "Other genera"
+        ),
+    Genus2 = as.factor(Genus2)
+  ) |> 
+  group_by(Genus2, Sample, asm_change_v4_group) |> # abundance per sample
+  dplyr::summarize(Abundance = sum(Abundance)) |> 
+  group_by(Genus2, asm_change_v4_group) |> # genera per %asm change at 1 year
+  dplyr::summarize(Abundance = mean(Abundance)) |> # avg abundance per genus per group
+  ungroup() |>
+  mutate(
+    Genus2 = fct_reorder(Genus2, Abundance),
+    Genus2 = fct_relevel(Genus2, "Other genera", after = 0L)
+  )
+
+mb_genera_asm1y_v4 |> # check
+  group_by(asm_change_v4_group) |> 
+  summarise(sum_Abundance = sum(Abundance)) # adds up to 100
+
+# Composition plot
+genera_comp_asm1y_v4 <- mb_genera_asm1y_v4 |> 
+  mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> # low asm/height2 first
+  ggplot(aes(x = asm_change_v4_group, y = Abundance, fill = Genus2)) +
+  geom_bar(stat = "identity", color = "black") +
+  scale_fill_manual(values = top20_genera_colours) +
+  guides(fill = guide_legend(ncol = 1)) +
+  labs(y = "Relative abundance (%)", x = "%ASM change at 1y", title = "Genus", fill = "") +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme_composition() +
+  theme(axis.title.x = element_blank())
+ggsave("graphs/composition/genera_comp_asm1y_v4.pdf", width = 12, height = 10)
+
+### Species level ###
 # Summarize per group and identify top 20 species (baseline = V1) 
 top20_species <- baria_mb_df |> 
   # filter(visit == 0) |> # not filtered for longitudinal approach
@@ -116,18 +319,13 @@ top20_species <- baria_mb_df |>
   head(20) |> 
   print()
 
-# assign fixed color to each one of the top20 species an
+# assign fixed color to each one of the top20 species
 top20_species_vector <- top20_species$Species # top 20 species names as vector
 set.seed(13)
-top20_species_colours <- c(
-  "Other species" = "grey90",
-  setNames(sample(manet), top20_species_vector)
-)
+top20_species_colours <- c("Other species" = "grey63", setNames(sample(manet_20), top20_species_vector))
 
-
-#### Statified by %ASM change group at 1y ####
 ### Baseline composition ###
-mb_asm1y_v0 <- baria_mb_df |> 
+mb_species_asm1y_v0 <- baria_mb_df |> 
   filter(
     visit == 0, # baseline composition (in clinical data v0 for shotgun data v1!)
     !is.na(asm_change_v4_group)
@@ -150,25 +348,25 @@ mb_asm1y_v0 <- baria_mb_df |>
     Species2 = fct_relevel(Species2, "Other species", after = 0L) # move other species to the front
   )
 
-mb_asm1y_v0 |> # check
+mb_species_asm1y_v0 |> # check
   group_by(asm_change_v4_group) |> 
   summarise(sum_Abundance = sum(Abundance)) # adds up to 100
 
 # Composition plot
-species_comp_asm1y_v0 <- mb_asm1y_v0 |> 
+species_comp_asm1y_v0 <- mb_species_asm1y_v0 |> 
   mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> # low asm/height2 first
   ggplot(aes(x = asm_change_v4_group, y = Abundance, fill = Species2)) +
   geom_bar(stat = "identity", color = "black") +
   scale_fill_manual(values = top20_species_colours) +
   guides(fill = guide_legend(ncol = 1)) +
-  labs(y = "Relative abundance", x = "%ASM change at 1y", title = "Microbiota composition", fill = "") +
+  labs(y = "Relative abundance (%)", x = "%ASM change at 1y", title = "Species", fill = "") +
   scale_y_continuous(expand = c(0, 0)) +
-  theme_composition()
+  theme_composition() +
+  theme(axis.title.x = element_blank())
 ggsave("graphs/composition/species_comp_asm1y_v0.pdf", width = 12, height = 10)
 
 ### 1y composition ###
-baria_mb_df$visit
-mb_asm1y_v4 <- baria_mb_df |> 
+mb_species_asm1y_v4 <- baria_mb_df |> 
   filter(
     visit == 4, # 1y
     !is.na(asm_change_v4_group)
@@ -191,7 +389,7 @@ mb_asm1y_v4 <- baria_mb_df |>
     Species2 = fct_relevel(Species2, "Other species", after = 0L) # move other species to the front
   )
 
-mb_asm1y_v4 |> # check
+mb_species_asm1y_v4 |> # check
   group_by(asm_change_v4_group) |> 
   summarise(sum_Abundance = sum(Abundance)) # adds up to 100
 
@@ -202,7 +400,32 @@ species_comp_asm1y_v4 <- mb_asm1y_v4 |>
   geom_bar(stat = "identity", color = "black") +
   scale_fill_manual(values = top20_species_colours) +
   guides(fill = guide_legend(ncol = 1)) +
-  labs(y = "Relative abundance", x = "%ASM change at 1y", title = "Microbiota composition at 1y", fill = "") +
+  labs(y = "Relative abundance (%)", x = "%ASM change at 1y", title = "Species", fill = "") +
   scale_y_continuous(expand = c(0, 0)) +
-  theme_composition()
+  theme_composition() +
+  theme(axis.title.x = element_blank())
 ggsave("graphs/composition/species_comp_asm1y_v4.pdf", width = 12, height = 10)
+
+# Combine phylum + genus + species plots into one panel
+# Dummy plot /shared x axis 
+shared_x_asm1y <- ggplot() +
+  labs(x = "%ASM change at 1y") +
+  theme_void() +
+  theme(
+    axis.title.x = element_text(size = 14, face = "bold"),
+    plot.margin = margin(t = -20, r = 5, b = 5, l = 10)
+  )
+
+# Baseline composition panel
+comp_pgs_v0 <- 
+  (phyla_comp_asm1y_v0 + genera_comp_asm1y_v0 + species_comp_asm1y_v0) /
+  shared_x_asm1y +
+  plot_layout(heights = c(1, 0.005))
+ggsave("graphs/composition/comp_pgs_v0.pdf", width = 12, height = 10)
+
+# 1 year composition panel
+comp_pgs_v4 <- 
+  (phyla_comp_asm1y_v4 + genera_comp_asm1y_v4 + species_comp_asm1y_v4) /
+  shared_x_asm1y +
+  plot_layout(heights = c(1, 0.005))
+ggsave("graphs/composition/comp_pgs_v4.pdf", width = 12, height = 10)
