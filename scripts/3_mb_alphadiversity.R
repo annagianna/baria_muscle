@@ -10,6 +10,7 @@ library(MetBrewer)
 library(grid)
 library(ggthemes)
 library(ggpubr)
+library(patchwork)
 
 # Theme
 manet_cols <- met.brewer("Manet", n = 20)
@@ -114,7 +115,7 @@ baria_mb_alpha <-  baria_mb_shannon_simpson |>
   rename(richness = observed)
 
 #### Plots ####
-# Shannon boxplots 
+## Shannon boxplots ##
 # Baseline
 shannon_asm1y_box_v0 <- baria_mb_alpha |> 
   filter(
@@ -133,7 +134,7 @@ shannon_asm1y_box_v0 <- baria_mb_alpha |>
 ggsave(shannon_asm1y_box_v0, filename = "graphs/alphadiversity/shannon_asm1y_box_v0.pdf", width = 7, height = 5)
 
 # 1y
-shannon_asm1y_box_v4 <- baria_mb_shannon |> 
+shannon_asm1y_box_v4 <- baria_mb_alpha |> 
   filter(
     visit == 4,
     !is.na(asm_change_v4_group)
@@ -149,7 +150,7 @@ shannon_asm1y_box_v4 <- baria_mb_shannon |>
   theme_Publication()
 ggsave(shannon_asm1y_box_v4, filename = "graphs/alphadiversity/shannon_asm1y_box_v4.pdf", width = 7, height = 5)
 
-# Shannon violin Plots
+## Shannon violin Plots ##
 shannon_asm1y_violin_v0 <- baria_mb_alpha |> 
   filter(
     visit == 0,
@@ -165,10 +166,12 @@ shannon_asm1y_violin_v0 <- baria_mb_alpha |>
     hide.ns = TRUE, 
     label.x = 1.5,
     method = "wilcox.test",
-    label = "p.signif"
-  ) +
+    label = "p.signif",
+    label.y = max(baria_mb_alpha$richness, na.rm = TRUE) * 0.99
+  ) + 
   fill_cols_asm1y +
   scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
+  scale_y_continuous(expand = expansion(mult = c(0.02, 0.05))) +
   theme_Publication()
 ggsave(shannon_asm1y_violin_v0 , filename = "graphs/alphadiversity/shannon_asm1y_violin_v0.pdf", width = 6, height = 5)
 
@@ -188,15 +191,202 @@ shannon_asm1y_violin_v4 <- baria_mb_alpha |>
     hide.ns = TRUE, 
     label.x = 1.5,
     method = "wilcox.test",
-    label = "p.signif"
+    label = "p.signif",
+    label.y = max(baria_mb_alpha$shannon, na.rm = TRUE) * 0.99
   ) +
   fill_cols_asm1y +
   scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
+  scale_y_continuous(expand = expansion(mult = c(0.02, 0.05))) +
   theme_Publication()
 ggsave(shannon_asm1y_violin_v4 , filename = "graphs/alphadiversity/shannon_asm1y_violin_v0.pdf", width = 6, height = 5)
 
+## Simpson boxplots ##
+# Baseline 
+simpson_asm1y_box_v0 <- baria_mb_alpha |> 
+  filter(
+    visit == 0,
+    !is.na(asm_change_v4_group)
+  ) |> 
+  mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> 
+  ggplot(aes(x = asm_change_v4_group, y = simpson, fill = asm_change_v4_group)) +
+  geom_boxplot() +
+  #geom_jitter(position = position_dodge(0.75)) +
+  stat_compare_means(method = "wilcox.test", label = "p.signif", hide.ns = TRUE) +
+  labs(title = "Simpson index", y = "Simpson index", x = "%ASM change at 1y") +
+  fill_cols_asm1y +
+  labs(fill = "%ASM change at 1y") + 
+  theme_Publication()
+ggsave(simpson_asm1y_box_v0, filename = "graphs/alphadiversity/simpson_asm1y_box_v0.pdf", width = 7, height = 5)
 
-## continue here ... Simpson and richness ... 
+# 1y
+simpson_asm1y_box_v4 <- baria_mb_alpha |> 
+  filter(
+    visit == 4,
+    !is.na(asm_change_v4_group)
+  ) |> 
+  mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> 
+  ggplot(aes(x = asm_change_v4_group, y = simpson, fill = asm_change_v4_group)) +
+  geom_boxplot() +
+  #geom_jitter(position = position_dodge(0.75)) +
+  stat_compare_means(method = "wilcox.test", label = "p.signif", hide.ns = TRUE) +
+  labs(title = "Simpson index", y = "Simpson index", x = "%ASM change at 1y") +
+  fill_cols_asm1y +
+  labs(fill = "%ASM change at 1y") + 
+  theme_Publication()
+ggsave(simpson_asm1y_box_v4, filename = "graphs/alphadiversity/simpson_asm1y_box_v4.pdf", width = 7, height = 5)
 
+# Simpson violin Plots
+simpson_asm1y_violin_v0 <- baria_mb_alpha |> 
+  filter(
+    visit == 0,
+    !is.na(asm_change_v4_group)
+  ) |> 
+  mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> 
+  ggplot(aes(x = asm_change_v4_group, y = simpson)) +
+  geom_violin(aes(fill = asm_change_v4_group)) +
+  geom_boxplot(fill = "white", width = 0.1) +
+  labs(x = "", y = "Simpson index", title = "Simpson index", fill = "%ASM change at 1y") +
+  stat_compare_means( 
+    tip.length = 0, 
+    hide.ns = TRUE, 
+    label.x = 1.5,
+    method = "wilcox.test",
+    label = "p.signif",
+    label.y = max(baria_mb_alpha$simpson, na.rm = TRUE) * 0.99
+  ) +
+  fill_cols_asm1y +
+  scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
+  scale_y_continuous(expand = expansion(mult = c(0.02, 0.05))) +
+  theme_Publication()
+ggsave(simpson_asm1y_violin_v0, filename = "graphs/alphadiversity/simpson_asm1y_violin_v0.pdf", width = 6, height = 5)
+
+# 1y
+simpson_asm1y_violin_v4 <- baria_mb_alpha |> 
+  filter(
+    visit == 4,
+    !is.na(asm_change_v4_group)
+  ) |> 
+  mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> 
+  ggplot(aes(x = asm_change_v4_group, y = simpson)) +
+  geom_violin(aes(fill = asm_change_v4_group)) +
+  geom_boxplot(fill = "white", width = 0.1) +
+  labs(x = "", y = "Simpson index", title = "Simpson index", fill = "%ASM change at 1y") +
+  stat_compare_means( 
+    tip.length = 0, 
+    hide.ns = TRUE, 
+    label.x = 1.5,
+    method = "wilcox.test",
+    label = "p.signif",
+    label.y = max(baria_mb_alpha$simpson, na.rm = TRUE) * 0.99
+  ) +
+  fill_cols_asm1y +
+  scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
+  scale_y_continuous(expand = expansion(mult = c(0.02, 0.05))) +
+  theme_Publication()
+ggsave(simpson_asm1y_violin_v4 , filename = "graphs/alphadiversity/simpson_asm1y_violin_v0.pdf", width = 6, height = 5)
+
+# Richness
+## Richness boxplots ##
+# Baseline 
+richness_asm1y_box_v0 <- baria_mb_alpha |> 
+  filter(
+    visit == 0,
+    !is.na(asm_change_v4_group)
+  ) |> 
+  mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> 
+  ggplot(aes(x = asm_change_v4_group, y = richness, fill = asm_change_v4_group)) +
+  geom_boxplot() +
+  #geom_jitter(position = position_dodge(0.75)) +
+  stat_compare_means(method = "wilcox.test", label = "p.signif", hide.ns = TRUE) +
+  labs(title = "Richness", y = "Richness", x = "%ASM change at 1y") +
+  fill_cols_asm1y +
+  labs(fill = "%ASM change at 1y") + 
+  theme_Publication()
+ggsave(richness_asm1y_box_v0, filename = "graphs/alphadiversity/richness_asm1y_box_v0.pdf", width = 7, height = 5)
+
+# 1y
+richness_asm1y_box_v4 <- baria_mb_alpha |> 
+  filter(
+    visit == 4,
+    !is.na(asm_change_v4_group)
+  ) |> 
+  mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> 
+  ggplot(aes(x = asm_change_v4_group, y = richness, fill = asm_change_v4_group)) +
+  geom_boxplot() +
+  #geom_jitter(position = position_dodge(0.75)) +
+  stat_compare_means(method = "wilcox.test", label = "p.signif", hide.ns = TRUE) +
+  labs(title = "Richness", y = "Richness", x = "%ASM change at 1y") +
+  fill_cols_asm1y +
+  labs(fill = "%ASM change at 1y") + 
+  theme_Publication()
+ggsave(richness_asm1y_box_v4, filename = "graphs/alphadiversity/richness_asm1y_box_v4.pdf", width = 7, height = 5)
+
+# Richness violin Plots
+richness_asm1y_violin_v0 <- baria_mb_alpha |> 
+  filter(
+    visit == 0,
+    !is.na(asm_change_v4_group)
+  ) |> 
+  mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> 
+  ggplot(aes(x = asm_change_v4_group, y = richness)) +
+  geom_violin(aes(fill = asm_change_v4_group)) +
+  geom_boxplot(fill = "white", width = 0.1) +
+  labs(x = "", y = "Richness", title = "Richness", fill = "%ASM change at 1y") +
+  stat_compare_means( 
+    tip.length = 0, 
+    hide.ns = TRUE, 
+    label.x = 1.5,
+    method = "wilcox.test",
+    label = "p.signif",
+    label.y = max(baria_mb_alpha$richness, na.rm = TRUE) * 0.99
+  ) +
+  fill_cols_asm1y +
+  scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
+  scale_y_continuous(expand = expansion(mult = c(0.02, 0.05))) +
+  theme_Publication()
+ggsave(richness_asm1y_violin_v0 , filename = "graphs/alphadiversity/richness_asm1y_violin_v0.pdf", width = 6, height = 5)
+
+# 1y
+richness_asm1y_violin_v4 <- baria_mb_alpha |> 
+  filter(
+    visit == 4,
+    !is.na(asm_change_v4_group)
+  ) |> 
+  mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> 
+  ggplot(aes(x = asm_change_v4_group, y = richness)) +
+  geom_violin(aes(fill = asm_change_v4_group)) +
+  geom_boxplot(fill = "white", width = 0.1) +
+  labs(x = "", y = "Richness", title = "Richness", fill = "%ASM change at 1y") +
+  stat_compare_means( 
+    tip.length = 0, 
+    hide.ns = TRUE, 
+    label.x = 1.5,
+    method = "wilcox.test",
+    label = "p.signif",
+    label.y = max(baria_mb_alpha$richness, na.rm = TRUE) * 0.99
+  ) +
+  fill_cols_asm1y +
+  scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
+  scale_y_continuous(expand = expansion(mult = c(0.02, 0.05))) +
+  theme_Publication()
+ggsave(richness_asm1y_violin_v4 , filename = "graphs/alphadiversity/richness_asm1y_violin_v0.pdf", width = 6, height = 5)
 
 # Combine into a panel
+# Baseline (Shannon, Simpson, Richness)
+# Violins
+alpha_panel_asm1y_v0 <- 
+  (shannon_asm1y_violin_v0 + simpson_asm1y_violin_v0 + richness_asm1y_violin_v0) +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom") &
+  theme(aspect.ratio = 0.8)
+ggsave(alpha_panel_asm1y_v0, filename = "graphs/alphadiversity/alpha_panel_asm1y_v0.pdf", width = 12, height = 8)
+
+# 1y (Shannon, Simpson, Richness)
+# Violins
+alpha_panel_asm1y_v4 <- 
+  (shannon_asm1y_violin_v4 + simpson_asm1y_violin_v4 + richness_asm1y_violin_v4) +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom") &
+  theme(aspect.ratio = 0.8)
+ggsave(alpha_panel_asm1y_v4, filename = "graphs/alphadiversity/alpha_panel_asm1y_v4.pdf", width = 12, height = 8)
+
