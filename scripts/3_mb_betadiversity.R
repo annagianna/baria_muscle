@@ -17,6 +17,7 @@ library(ggsci)
 # Theme
 manet_cols <- met.brewer("Manet", n = 20)
 fill_cols_asm1y <- scale_fill_manual(values = c("high" = manet_cols[10], "low/modest" = manet_cols[20]))
+color_cols_asm1y <- scale_color_manual(values = c("high" = manet_cols[10], "low/modest" = manet_cols[20]))
 
 theme_Publication <- function(base_size=14, base_family="sans") {
   
@@ -118,32 +119,63 @@ bray_per_v <- function(v, df = bray_meta, abd_tab = bray_wide) {
 
   meta_v <- df |> 
     filter(visit == v) |> 
-    distinct(Sample, .keep_all = TRUE)
+    distinct(Sample, .keep_all = TRUE) # drop all other cols
 
-  abd_tab_v <- abd_tab[meta_v$Sample, , drop = FALSE] # keep only Samples from that visit
+  abd_tab_v <- abd_tab[meta_v$Sample, , drop = FALSE] # keep only Samples from that visit 
 
   bray_v <- vegan::vegdist(abd_tab_v, method = "bray", na.rm = TRUE)
 
-  vegan::adonis2(bray_v ~ asm_change_v4_group, data = meta_v, by = "terms")
+  vegan::adonis2(bray_v ~ asm_change_v4_group, data = meta_v, permutations = 999, by = "terms")
 }
 
 # run it for each visit
 visits <- sort(unique(bray_meta$visit)) 
 results_per_v <- lapply(visits, bray_per_v)
-names(res_list) <- visits
+names(results_per_v) <- visits
 
+## Plots ##
+# Baseline
+bray_asm1y_v0 <- bray2 |> 
+  filter(visit == 0) |> 
+  ggplot(aes(Axis.1, Axis.2)) +
+  geom_point(aes(color = asm_change_v4_group), size = 3, alpha = 0.9) +
+  xlab(paste0("PCo1 (", round(expl_variance_bray[1], digits = 1),"%)")) +
+  ylab(paste0("PCo2 (", round(expl_variance_bray[2], digits = 1),"%)")) +
+  labs(color = "", fill = "", title = "PCoA Bray-Curtis Distance") +
+  stat_ellipse(
+    geom = "polygon", 
+    aes(color = asm_change_v4_group, fill = asm_change_v4_group),
+    type = "norm", alpha = 0.13, linewidth = 1.2) +
+  fill_cols_asm1y +
+  color_cols_asm1y +
+  theme_Publication() +
+  theme(legend.position = "top") +
+  geom_text(
+    data = as.data.frame(results_per_v$`0`),
+    aes(x = Inf, y = Inf,
+      label = paste0("p = ", round(`Pr(>F)`, 3))),
+      hjust = 1.1, vjust = 1.1, size = 3, inherit.aes = FALSE)
+ggsave(bray_asm1y_v0, filename = "graphs/betadiversity/bray_asm1y_v0.pdf", width = 8, height = 8)
 
-
-
-
-
-
-
-
-
-
-
-
-
-# Check betadisper
-bdisper <- vegan::betadisper(bray, bray_meta$asm_change_v4_group)
+# 1y
+bray_asm1y_v4 <- bray2 |> 
+  filter(visit == 4) |> 
+  ggplot(aes(Axis.1, Axis.2)) +
+  geom_point(aes(color = asm_change_v4_group), size = 3, alpha = 0.9) +
+  xlab(paste0("PCo1 (", round(expl_variance_bray[1], digits = 1),"%)")) +
+  ylab(paste0("PCo2 (", round(expl_variance_bray[2], digits = 1),"%)")) +
+  labs(color = "", fill = "", title = "PCoA Bray-Curtis Distance") +
+  stat_ellipse(
+    geom = "polygon", 
+    aes(color = asm_change_v4_group, fill = asm_change_v4_group),
+    type = "norm", alpha = 0.13, linewidth = 1.2) +
+  fill_cols_asm1y +
+  color_cols_asm1y +
+  theme_Publication() +
+  theme(legend.position = "top") +
+  geom_text(
+    data = as.data.frame(results_per_v$`0`),
+    aes(x = Inf, y = Inf,
+      label = paste0("p = ", round(`Pr(>F)`, 3))),
+      hjust = 1.1, vjust = 1.1, size = 3, inherit.aes = FALSE)
+ggsave(bray_asm1y_v4, filename = "graphs/betadiversity/bray_asm1y_v4.pdf", width = 8, height = 8)
