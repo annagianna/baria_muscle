@@ -113,20 +113,29 @@ bray2 <- as.data.frame(pcoord$vectors[, c("Axis.1", "Axis.2")]) |>
 
 ### Bray-Curtis per visit ###
 # set up function
-bray_per_visit <- function(v, df = bray2, tab = bray_wide) {
-    set.seed(1312)
-    meta_visit <- bray2 |> 
-      filter(visit == v) |> 
-      distinct(Sample, .keep_all = TRUE)
-    bray <- vegan::vegdist(tab[rownames(tab) %in% meta_visit$Sample,], method = "bray")
-    return(adonis2(bray ~ asm_change_v4_group, data = meta_visit))
+bray_per_v <- function(v, df = bray_meta, abd_tab = bray_wide) {
+  set.seed(1312)
+
+  meta_v <- df |> 
+    filter(visit == v) |> 
+    distinct(Sample, .keep_all = TRUE)
+
+  abd_tab_v <- abd_tab[meta_v$Sample, , drop = FALSE]
+
+  bray_v <- vegan::vegdist(abd_tab_v, method = "bray", na.rm = TRUE)
+
+  vegan::adonis2(bray_v ~ asm_change_v4_group, data = meta_v, by = "terms")
 }
 
 # run it for each visit (baseline & 1y)
+# visits <- sort(unique(meta$visit))
+# res_list <- lapply(visits, bray_per_visit)
+# names(res_list) <- visits
+# res_list
 
 
 
-
+# do I need to merge it back to the data frame? the PCoA axes I mean?
 
 
 
