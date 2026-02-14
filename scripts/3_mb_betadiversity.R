@@ -120,23 +120,17 @@ bray_per_v <- function(v, df = bray_meta, abd_tab = bray_wide) {
     filter(visit == v) |> 
     distinct(Sample, .keep_all = TRUE)
 
-  abd_tab_v <- abd_tab[meta_v$Sample, , drop = FALSE]
+  abd_tab_v <- abd_tab[meta_v$Sample, , drop = FALSE] # keep only Samples from that visit
 
   bray_v <- vegan::vegdist(abd_tab_v, method = "bray", na.rm = TRUE)
 
   vegan::adonis2(bray_v ~ asm_change_v4_group, data = meta_v, by = "terms")
 }
 
-# run it for each visit (baseline & 1y)
-# visits <- sort(unique(meta$visit))
-# res_list <- lapply(visits, bray_per_visit)
-# names(res_list) <- visits
-# res_list
-
-
-
-# do I need to merge it back to the data frame? the PCoA axes I mean?
-
+# run it for each visit
+visits <- sort(unique(bray_meta$visit)) 
+results_per_v <- lapply(visits, bray_per_v)
+names(res_list) <- visits
 
 
 
