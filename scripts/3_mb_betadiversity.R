@@ -151,7 +151,7 @@ bray_asm1y_v0 <- bray2 |>
   theme_Publication() +
   theme(legend.position = "top") +
   geom_text(
-    data = as.data.frame(results_per_v$`0`),
+    data = as.data.frame(results_per_v$`0`) |> slice(1),
     aes(x = Inf, y = Inf,
       label = paste0("p = ", round(`Pr(>F)`, 3))),
       hjust = 1.1, vjust = 1.1, size = 3, inherit.aes = FALSE)
@@ -174,7 +174,7 @@ bray_asm1y_v4 <- bray2 |>
   theme_Publication() +
   theme(legend.position = "top") +
   geom_text(
-    data = as.data.frame(results_per_v$`0`),
+    data = as.data.frame(results_per_v$`4`) |> slice(1),
     aes(x = Inf, y = Inf,
       label = paste0("p = ", round(`Pr(>F)`, 3))),
       hjust = 1.1, vjust = 1.1, size = 3, inherit.aes = FALSE)
