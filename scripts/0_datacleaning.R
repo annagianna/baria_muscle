@@ -3,8 +3,6 @@
 
 # Libraries
 library(tidyverse)
-library(dplyr)
-library(stringr)
 library(lubridate)
 library(ggpubr)
 library(purrr)
@@ -426,8 +424,10 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
 
     # SO proxy at 1 and 5 years
     low_smm_by_weight_v4 = if_else(smm_by_weight_v4 <= smm_by_weight_v0_tertile, "yes", "no"),
-    low_smm_by_weight_v6 = if_else(smm_by_weight_v6 <= smm_by_weight_v0_tertile, "yes", "no"),
-
+    low_smm_by_weight_v6 = if_else(smm_by_weight_v6 <= smm_by_weight_v0_tertile, "yes", "no")
+  ) |> 
+  ungroup() |> 
+  mutate(
     # %BW change from baseline to 1, 2 and 5 years
     perc_weight_change_v4 = (weight_kg_v4 - weight_kg_v0) / weight_kg_v0 * 100,
     perc_weight_change_v5 = (weight_kg_v5 - weight_kg_v0) / weight_kg_v0 * 100,
@@ -462,7 +462,6 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     asm_change_v5_group = if_else(perc_asm_change_v5 <= asm_change_v5_tertile, "high", "low/modest"),
     asm_change_v6_group = if_else(perc_asm_change_v6 <= asm_change_v6_tertile, "high", "low/modest")
   ) |> 
-  ungroup() |> 
   relocate(race, .after = sex) |> 
   relocate(age_v2:age_v7, .after = age_v0) |>
   relocate(v0_to_v2_weeks:v0_to_v7_numeric_y, .after = age_v7) |> 
@@ -747,11 +746,10 @@ baria_muscle_clean <- baria_muscle_clinical_with_medication_notypos |>
     ppi_v0 = if_else(str_detect(medication_list_v0, ppi_pattern), "yes", "no")
   ) |> 
   select(-medication_list_v0) |> 
-  arrange(date_v0) |> 
-  print()
+  arrange(date_v0)
 
 nrow(baria_muscle_clean)
 
 # then save as both RDS and csv files
-write.csv(baria_muscle_clean, "data/260206_BARIA_muscle_clinical.csv")
-saveRDS(baria_muscle_clean, "data/260206_BARIA_muscle_clinical.RDS")
+write.csv(baria_muscle_clean, "data/260217_BARIA_muscle_clinical.csv")
+saveRDS(baria_muscle_clean, "data/260217_BARIA_muscle_clinical.RDS")
