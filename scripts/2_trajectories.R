@@ -2,17 +2,15 @@
 # Anna Giannakogeorgou
 
 # Packages
-library(dplyr)
 library(tidyverse)
 library(ggpubr)
 library(scales)
 library(MetBrewer)
 library(wesanderson)
 library(patchwork)
-library(gt)
 
 # Data
-baria_muscle <- read_rds("data/260206_BARIA_muscle_clinical.RDS")
+baria_muscle <- read_rds("data/260217_BARIA_muscle_clinical.RDS")
 
 # convert body composition data to long format
 weight_long <- baria_muscle |> 
@@ -182,7 +180,7 @@ trajectories_asm_1y <-
 ggsave(plot = trajectories_asm_1y, filename = "trajectories_asm_1y.png", path = "graphs/trajectories", height = 10, width = 14, unit = "cm")
 
 ### Scatterplot of %ASM loss vs. %BW loss ####
-asm_vs_bw_1y_data <- baria_muscle_clean |> 
+asm_vs_bw_1y_data <- baria_muscle |> 
   filter(!is.na(asm_change_v4_group)) |> 
   mutate(
     perc_asm_change_1y = perc_asm_change_v4,
@@ -365,12 +363,10 @@ perc_fm_asm1y <- baria_muscle_long |>
   annotate("segment", x = 0.5, xend = 0.5, y = -67, yend = 0, linewidth = 0.5) +
   annotate("segment", x = 0.5, xend = 3.5, y = 0, yend = 0, linewidth = 0.5)
 
-
 # combined panel
 perc_change_asm1y <- 
   (perc_bw_asm1y + perc_ffm_asm1y + perc_fm_asm1y) +
   plot_layout(guides = "collect") &
   theme(legend.position = "bottom") & # h/w
   theme(aspect.ratio = 0.8)
-
 ggsave(plot = perc_change_asm1y, filename = "perc_change_asm1y.png", path = "graphs/trajectories", width = 15, height = 12, units = "cm",)
