@@ -154,7 +154,7 @@ bray_asm1y_v0 <- bray2 |>
     aes(x = Inf, y = Inf,
       label = paste0("p = ", round(`Pr(>F)`, 3))),
       hjust = 1.1, vjust = 1.1, size = 3, inherit.aes = FALSE)
-ggsave(bray_asm1y_v0, filename = "graphs/betadiversity/bray_asm1y_v0.pdf", width = 8, height = 8)
+ggsave(bray_asm1y_v0, filename = "graphs/betadiversity/bray_asm1y_v0.pdf", width = 10, height = 7)
 
 # 1y
 bray_asm1y_v4 <- bray2 |> 
@@ -177,4 +177,4 @@ bray_asm1y_v4 <- bray2 |>
     aes(x = Inf, y = Inf,
       label = paste0("p = ", round(`Pr(>F)`, 3))),
       hjust = 1.1, vjust = 1.1, size = 3, inherit.aes = FALSE)
-ggsave(bray_asm1y_v4, filename = "graphs/betadiversity/bray_asm1y_v4.pdf", width = 8, height = 8)
+ggsave(bray_asm1y_v4, filename = "graphs/betadiversity/bray_asm1y_v4.pdf", width = 10, height = 7)
