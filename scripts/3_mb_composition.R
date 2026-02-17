@@ -428,4 +428,4 @@ comp_pgs_v4 <-
   (phyla_comp_asm1y_v4 + genera_comp_asm1y_v4 + species_comp_asm1y_v4) /
   shared_x_asm1y +
   plot_layout(heights = c(1, 0.005))
-ggsave("graphs/composition/comp_pgs_v4.pdf", width = 12, height = 10)
+ggsave("graphs/composition/comp_pgs_
