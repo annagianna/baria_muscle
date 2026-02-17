@@ -3,7 +3,6 @@
 
 # Packages
 library(tidyverse)
-library(stringr)
 library(phyloseq)
 library(microbiome)
 library(vegan)
@@ -47,7 +46,7 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 } 
 
 # Data
-baria_muscle <- read_rds("data/260206_BARIA_muscle_clinical.RDS") # metadata/clinical data CHECK FOR MOST RECENT VERSION
+baria_muscle <- read_rds("data/260217_BARIA_muscle_clinical.RDS") # metadata/clinical data CHECK FOR MOST RECENT VERSION
 baria_mb <- read_rds("data/ps.BARIA.metaphlan.706.2548.RDS")
 sample_sums(baria_mb) # adds up to 100
 

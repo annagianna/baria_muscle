@@ -5,7 +5,6 @@
 library(tidyverse)
 library(phyloseq)
 library(microbiome)
-library(stringr)
 library(MetBrewer)
 library(grid)
 library(ggthemes)
@@ -44,7 +43,7 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 } 
 
 # Data
-baria_muscle <- read_rds("data/260206_BARIA_muscle_clinical.RDS") # metadata/clinical data CHECK FOR MOST RECENT VERSION
+baria_muscle <- read_rds("data/260217_BARIA_muscle_clinical.RDS") # metadata/clinical data CHECK FOR MOST RECENT VERSION
 baria_mb <- read_rds("data/ps.BARIA.metaphlan.706.2548.RDS")
 sample_sums(baria_mb) # adds up to 100
 
@@ -167,7 +166,7 @@ shannon_asm1y_violin_v0 <- baria_mb_alpha |>
     label.x = 1.5,
     method = "wilcox.test",
     label = "p.signif",
-    label.y = max(baria_mb_alpha$richness, na.rm = TRUE) * 0.99
+    label.y = max(baria_mb_alpha$shannon, na.rm = TRUE) * 0.99
   ) + 
   fill_cols_asm1y +
   scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
@@ -389,4 +388,3 @@ alpha_panel_asm1y_v4 <-
   theme(legend.position = "bottom") &
   theme(aspect.ratio = 0.8)
 ggsave(alpha_panel_asm1y_v4, filename = "graphs/alphadiversity/alpha_panel_asm1y_v4.pdf", width = 12, height = 8)
-
