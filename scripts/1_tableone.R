@@ -46,7 +46,7 @@ t1_1y <- baria_muscle_clean |>
     Variables = recode(
       Variables, 
       "age_v0" = "Age (years)",
-      "sex" = "Sex (female (%)",
+      "sex" = "Sex (female (%))",
       "bmi_v0" = "BMI (kg/m²)",
       "wc_cm_v0" = "WC (cm)",
       "fm_kg_v0" = "FM (kg)",
