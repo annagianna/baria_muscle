@@ -42,11 +42,11 @@ t1_1y <- baria_muscle_clean |>
   ) |> 
   tibble::rownames_to_column(var = "Variables") |> 
   mutate(
+    Variables = str_extract(Variables, "^\\S+"),
     Variables = recode(
-      Variables,
-      "n" = "n",
+      Variables, 
       "age_v0" = "Age (years)",
-      "sex" = "Sex",
+      "sex" = "Sex (female (%)",
       "bmi_v0" = "BMI (kg/m²)",
       "wc_cm_v0" = "WC (cm)",
       "fm_kg_v0" = "FM (kg)",
