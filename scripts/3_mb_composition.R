@@ -157,13 +157,16 @@ mb_phyla_asm1y_v0 |> # check
 phyla_comp_asm1y_v0 <- mb_phyla_asm1y_v0 |> 
   mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> # low asm/height2 first
   ggplot(aes(x = asm_change_v4_group, y = Abundance, fill = Phylum2)) +
-  geom_bar(stat = "identity", color = "black") +
+  geom_bar(stat = "identity", color = "black", width = 0.9) +
   scale_fill_manual(values = top5_phyla_colours) +
   guides(fill = guide_legend(ncol = 1)) +
   labs(y = "Relative abundance (%)", x = "%ASM change at 1y", title = "Phylum", fill = "") +
   scale_y_continuous(expand = c(0, 0)) +
   theme_composition() +
-  theme(axis.title.x = element_blank())
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
+  )
 ggsave("graphs/composition/phyla_comp_asm1y_v0.pdf", width = 12, height = 10)
 
 ### 1y composition ###
@@ -198,13 +201,16 @@ mb_phyla_asm1y_v4 |> # check
 phyla_comp_asm1y_v4 <- mb_phyla_asm1y_v4 |> 
   mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> # high asm loss first
   ggplot(aes(x = asm_change_v4_group, y = Abundance, fill = Phylum2)) +
-  geom_bar(stat = "identity", color = "black") +
+  geom_bar(stat = "identity", color = "black", width = 0.9) +
   scale_fill_manual(values = top5_phyla_colours) +
   guides(fill = guide_legend(ncol = 1)) +
   labs(y = "Relative abundance (%)", x = "%ASM change at 1y", title = "Phylum", fill = "") +
   scale_y_continuous(expand = c(0, 0)) +
   theme_composition() +
-  theme(axis.title.x = element_blank())
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
+  )
 ggsave("graphs/composition/phyla_comp_asm1y_v4.pdf", width = 12, height = 10)
 
 ### Genus level ###
@@ -256,13 +262,16 @@ mb_genera_asm1y_v0 |> # check
 genera_comp_asm1y_v0 <- mb_genera_asm1y_v0 |> 
   mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> # low asm/height2 first
   ggplot(aes(x = asm_change_v4_group, y = Abundance, fill = Genus2)) +
-  geom_bar(stat = "identity", color = "black") +
+  geom_bar(stat = "identity", color = "black", width = 0.9) +
   scale_fill_manual(values = top20_genera_colours) +
   guides(fill = guide_legend(ncol = 1)) +
   labs(y = "Relative abundance (%)", x = "%ASM change at 1y", title = "Genus", fill = "") +
   scale_y_continuous(expand = c(0, 0)) +
   theme_composition() +
-  theme(axis.title.x = element_blank())
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
+  )
 ggsave("graphs/composition/genera_comp_asm1y_v0.pdf", width = 12, height = 10)
 
 ### 1y composition ###
@@ -297,13 +306,16 @@ mb_genera_asm1y_v4 |> # check
 genera_comp_asm1y_v4 <- mb_genera_asm1y_v4 |> 
   mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> # low asm/height2 first
   ggplot(aes(x = asm_change_v4_group, y = Abundance, fill = Genus2)) +
-  geom_bar(stat = "identity", color = "black") +
+  geom_bar(stat = "identity", color = "black", width = 0.9) +
   scale_fill_manual(values = top20_genera_colours) +
   guides(fill = guide_legend(ncol = 1)) +
   labs(y = "Relative abundance (%)", x = "%ASM change at 1y", title = "Genus", fill = "") +
   scale_y_continuous(expand = c(0, 0)) +
   theme_composition() +
-  theme(axis.title.x = element_blank())
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
+  )
 ggsave("graphs/composition/genera_comp_asm1y_v4.pdf", width = 12, height = 10)
 
 ### Species level ###
@@ -356,13 +368,16 @@ mb_species_asm1y_v0 |> # check
 species_comp_asm1y_v0 <- mb_species_asm1y_v0 |> 
   mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> # low asm/height2 first
   ggplot(aes(x = asm_change_v4_group, y = Abundance, fill = Species2)) +
-  geom_bar(stat = "identity", color = "black") +
+  geom_bar(stat = "identity", color = "black", width = 0.9) +
   scale_fill_manual(values = top20_species_colours) +
   guides(fill = guide_legend(ncol = 1)) +
   labs(y = "Relative abundance (%)", x = "%ASM change at 1y", title = "Species", fill = "") +
   scale_y_continuous(expand = c(0, 0)) +
   theme_composition() +
-  theme(axis.title.x = element_blank())
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
+  )
 ggsave("graphs/composition/species_comp_asm1y_v0.pdf", width = 12, height = 10)
 
 ### 1y composition ###
@@ -397,13 +412,16 @@ mb_species_asm1y_v4 |> # check
 species_comp_asm1y_v4 <- mb_species_asm1y_v4 |> 
   mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> # low asm/height2 first
   ggplot(aes(x = asm_change_v4_group, y = Abundance, fill = Species2)) +
-  geom_bar(stat = "identity", color = "black") +
+  geom_bar(stat = "identity", color = "black", width = 0.9) +
   scale_fill_manual(values = top20_species_colours) +
   guides(fill = guide_legend(ncol = 1)) +
   labs(y = "Relative abundance (%)", x = "%ASM change at 1y", title = "Species", fill = "") +
   scale_y_continuous(expand = c(0, 0)) +
   theme_composition() +
-  theme(axis.title.x = element_blank())
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
+  )
 ggsave("graphs/composition/species_comp_asm1y_v4.pdf", width = 12, height = 10)
 
 # Combine phylum + genus + species plots into one panel
@@ -421,11 +439,11 @@ comp_pgs_v0 <-
   (phyla_comp_asm1y_v0 + genera_comp_asm1y_v0 + species_comp_asm1y_v0) /
   shared_x_asm1y +
   plot_layout(heights = c(1, 0.005))
-ggsave("graphs/composition/comp_pgs_v0.pdf", width = 12, height = 10)
+ggsave("graphs/composition/comp_pgs_v0.pdf", width = 12, height = 7)
 
 # 1 year composition panel
 comp_pgs_v4 <- 
   (phyla_comp_asm1y_v4 + genera_comp_asm1y_v4 + species_comp_asm1y_v4) /
   shared_x_asm1y +
   plot_layout(heights = c(1, 0.005))
-ggsave("graphs/composition/comp_pgs_
+ggsave("graphs/composition/comp_pgs_v4.pdf", width = 12, height = 7)
