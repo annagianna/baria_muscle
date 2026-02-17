@@ -1,13 +1,13 @@
-# Baria: associations between low muscle mass and gut microbiota (Baseline)
+# Baria: associations between muscle mass loss and gut microbiota (Baseline)
 # Anna Giannakogeorgou, a.gianna@amsterdamumc.nl
 
 # Packages
 library(tidyverse)
 library(phyloseq)
 library(microbiome)
-library(stringr)
 library(MetBrewer)
 library(ggthemes)
+library(patchwork)
 
 # Theme
 manet_5 <- met.brewer("Manet", n = 5)
@@ -70,7 +70,7 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 } 
 
 # Data
-baria_muscle <- read_rds("data/260206_BARIA_muscle_clinical.RDS") # metadata/clinical data CHECK FOR MOST RECENT VERSION
+baria_muscle <- read_rds("data/260217_BARIA_muscle_clinical.RDS") # metadata/clinical data CHECK FOR MOST RECENT VERSION
 baria_mb <- read_rds("data/ps.BARIA.metaphlan.706.2548.RDS")
 sample_sums(baria_mb) # adds up to ~100
 
@@ -219,9 +219,9 @@ top20_genera <- baria_mb_df |>
   head(20) |> 
   print()
 
-# assign fixed color to each one of the top 5 phyla
-top20_genera_vector <- top20_genera$Genus # top 5 phyla names as vector
-set.seed(14)
+# assign fixed color to each one of the top 20 genera
+top20_genera_vector <- top20_genera$Genus # names of top 20 genera as vector
+set.seed(18)
 top20_genera_colours <- c("Other genera" = "grey63", setNames(sample(manet_20), top20_genera_vector))
 
 ### Baseline composition ###
@@ -394,7 +394,7 @@ mb_species_asm1y_v4 |> # check
   summarise(sum_Abundance = sum(Abundance)) # adds up to 100
 
 # Composition plot
-species_comp_asm1y_v4 <- mb_asm1y_v4 |> 
+species_comp_asm1y_v4 <- mb_species_asm1y_v4 |> 
   mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> # low asm/height2 first
   ggplot(aes(x = asm_change_v4_group, y = Abundance, fill = Species2)) +
   geom_bar(stat = "identity", color = "black") +
