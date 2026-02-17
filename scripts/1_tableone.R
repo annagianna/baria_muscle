@@ -6,7 +6,7 @@ library(tableone)
 library(tidyverse)
 
 # Data
-baria_muscle_clean <- readRDS("data/260206_BARIA_muscle_clinical.RDS")
+baria_muscle_clean <- readRDS("data/260217_BARIA_muscle_clinical.RDS")
 
 # Table 1 grouped by %ASM change at 1y group
 t1_1y <- baria_muscle_clean |> 
