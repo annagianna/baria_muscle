@@ -369,4 +369,4 @@ perc_change_asm1y <-
   plot_layout(guides = "collect") &
   theme(legend.position = "bottom") & # h/w
   theme(aspect.ratio = 0.8)
-ggsave(plot = perc_change_asm1y, filename = "perc_change_asm1y.png", path = "graphs/trajectories", width = 15, height = 12, units = "cm",)
+ggsave(plot = perc_change_asm1y, filename = "perc_change_asm1y.png", path = "graphs/trajectories", width = 15, height = 12, units = "cm")
