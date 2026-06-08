@@ -411,12 +411,14 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
   select(-race_num) |> # only used for asm calculation
   group_by(sex) |> # calculate cut-offs for female and male participants
   mutate(
-    # Calculate tertiles for ASM and SMM (raw and indexed)
+    # Calculate tertiles for FFMI, ASM and SMM (raw and indexed)
+    ffmi_v0_tertile = quantile(ffmi_v0, probs = 1/3, na.rm = TRUE),
     asm_kg_v0_tertile = quantile(asm_kg_v0, probs = 1/3, na.rm = TRUE),
     asm_height2_v0_tertile = quantile(asm_height2_v0, probs = 1/3, na.rm = TRUE),
     smm_kg_v0_tertile = quantile(smm_kg_v0, probs = 1/3, na.rm = TRUE),
     smm_by_weight_v0_tertile = quantile(smm_by_weight_v0, probs = 1/3, na.rm = TRUE),
 
+    low_ffmi_v0 = if_else(ffmi_v0 <= ffmi_v0_tertile, "yes", "no"),
     low_asm_v0 = if_else(asm_kg_v0 <= asm_kg_v0_tertile, "yes", "no"),
     low_asm_height2_v0 = if_else(asm_height2_v0 <= asm_height2_v0_tertile, "yes", "no"),
     low_smm_v0 = if_else(smm_kg_v0 <= smm_kg_v0_tertile, "yes", "no"),
@@ -438,7 +440,16 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     perc_ffm_change_v5 = (ffm_kg_v5 - ffm_kg_v0) / ffm_kg_v0 * 100,
     perc_ffm_change_v6 = (ffm_kg_v6 - ffm_kg_v0) / ffm_kg_v0 * 100,
 
-    # %Fm change from baseline to 1, 2 and 5 years
+    # ΔFFMI and %FFMI change from baseline to 1, 2 and 5 years
+    delta_ffmi_v4 = ffmi_v4 - ffmi_v0, # 1y
+    delta_ffmi_v5 = ffmi_v5 - ffmi_v0, # 2y
+    delta_ffmi_v6 = ffmi_v6 - ffmi_v0, # 5y
+
+    perc_ffmi_change_v4 = (ffmi_v4 - ffmi_v0) / ffmi_v0 * 100,
+    perc_ffmi_change_v5 = (ffmi_v5 - ffmi_v0) / ffmi_v0 * 100,
+    perc_ffmi_change_v6 = (ffmi_v6 - ffmi_v0) / ffmi_v0 * 100,
+
+    # %FM change from baseline to 1, 2 and 5 years
     perc_fm_change_v4 = (fm_kg_v4 - fm_kg_v0) / fm_kg_v0 * 100,
     perc_fm_change_v5 = (fm_kg_v5 - fm_kg_v0) / fm_kg_v0 * 100,
     perc_fm_change_v6 = (fm_kg_v6 - fm_kg_v0) / fm_kg_v0 * 100,
@@ -452,6 +463,16 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     perc_asm_change_v5 = (asm_kg_v4 - asm_kg_v0) / asm_kg_v0 * 100,
     perc_asm_change_v6 = (asm_kg_v6 - asm_kg_v0) / asm_kg_v0 * 100,
 
+    # Calculate tertiles for %FFMI change
+    ffmi_change_v4_tertile = quantile(perc_ffmi_change_v4, probs = 1/3, na.rm = TRUE),
+    ffmi_change_v5_tertile = quantile(perc_ffmi_change_v5, probs = 1/3, na.rm = TRUE),
+    ffmi_change_v6_tertile = quantile(perc_ffmi_change_v6, probs = 1/3, na.rm = TRUE),
+
+    # Grouping based on %FFMI change tertile
+    ffmi_change_v4_group = if_else(perc_ffmi_change_v4 <= ffmi_change_v4_tertile, "high", "low/modest"),
+    ffmi_change_v5_group = if_else(perc_ffmi_change_v5 <= ffmi_change_v5_tertile, "high", "low/modest"),
+    ffmi_change_v6_group = if_else(perc_ffmi_change_v6 <= ffmi_change_v6_tertile, "high", "low/modest"), 
+   
     # Calculate tertiles for %ASM change
     asm_change_v4_tertile = quantile(perc_asm_change_v4, probs = 1/3, na.rm = TRUE),
     asm_change_v5_tertile = quantile(perc_asm_change_v5, probs = 1/3, na.rm = TRUE),
@@ -482,13 +503,13 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
   relocate(c(ffmi_v4, fmi_v4, perc_ffm_change_v4, perc_fm_change_v4), .after = ffm_percent_v4) |>
   relocate(c(ffmi_v5, fmi_v5, perc_ffm_change_v5, perc_fm_change_v5), .after = ffm_percent_v5) |>
   relocate(c(ffmi_v6, fmi_v6, perc_ffm_change_v6, perc_fm_change_v6), .after = ffm_percent_v6) |>
-  relocate(asm_kg_v0_tertile:smm_by_weight_v0_tertile, .after = upperleg_cm_v0) |> # cut-offs
-  relocate(c(asm_kg_v0, asm_height2_v0, smm_kg_v0, smm_by_weight_v0, low_asm_v0, low_asm_height2_v0, low_smm_v0, low_smm_by_weight_v0), .after = upperleg_cm_v0) |> # muscle mass
+  relocate(ffmi_v0_tertile:smm_by_weight_v0_tertile, .after = upperleg_cm_v0) |> # cut-offs
+  relocate(c(asm_kg_v0, asm_height2_v0, smm_kg_v0, smm_by_weight_v0, low_asm_v0, low_asm_height2_v0, low_smm_v0, low_smm_by_weight_v0, low_ffmi_v0), .after = upperleg_cm_v0) |> # muscle mass
   relocate(asm_kg_v2, asm_height2_v2, .after = upperleg_cm_v2) |>
   relocate(asm_kg_v3, asm_height2_v3, .after = upperleg_cm_v3) |>
-  relocate(c(asm_kg_v4, delta_asm_v4, asm_height2_v4, smm_kg_v4, smm_by_weight_v4, low_smm_by_weight_v4, perc_asm_change_v4, asm_change_v4_tertile, asm_change_v4_group), .after = upperleg_cm_v4) |>
-  relocate(c(asm_kg_v5, delta_asm_v5, asm_height2_v5, smm_kg_v5, smm_by_weight_v5, perc_asm_change_v5, asm_change_v5_tertile, asm_change_v5_group), .after = upperleg_cm_v5) |>
-  relocate(c(asm_kg_v6, delta_asm_v6, asm_height2_v6, smm_kg_v6, smm_by_weight_v6, low_smm_by_weight_v6, perc_asm_change_v6, asm_change_v6_tertile, asm_change_v6_group), .after = upperleg_cm_v6) |>
+  relocate(c(asm_kg_v4, delta_asm_v4, asm_height2_v4, smm_kg_v4, smm_by_weight_v4, low_smm_by_weight_v4, perc_asm_change_v4, asm_change_v4_tertile, asm_change_v4_group, delta_ffmi_v4, perc_ffmi_change_v4, ffmi_change_v4_tertile, ffmi_change_v4_group), .after = upperleg_cm_v4) |>
+  relocate(c(asm_kg_v5, delta_asm_v5, asm_height2_v5, smm_kg_v5, smm_by_weight_v5, perc_asm_change_v5, asm_change_v5_tertile, asm_change_v5_group, delta_ffmi_v5, perc_ffmi_change_v5, ffmi_change_v5_tertile, ffmi_change_v5_group), .after = upperleg_cm_v5) |>
+  relocate(c(asm_kg_v6, delta_asm_v6, asm_height2_v6, smm_kg_v6, smm_by_weight_v6, low_smm_by_weight_v6, perc_asm_change_v6, asm_change_v6_tertile, asm_change_v6_group, delta_ffmi_v6, perc_ffmi_change_v6, ffmi_change_v6_tertile, ffmi_change_v6_group), .after = upperleg_cm_v6) |>
   relocate(asm_kg_v7, asm_height2_v7, .after = upperleg_cm_v7) |>
   mutate(across(where(is.character), as.factor)) |>
   print()
