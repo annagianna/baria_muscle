@@ -460,7 +460,7 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     delta_asm_v6 = asm_kg_v6 - asm_kg_v0, # 5y
     
     perc_asm_change_v4 = (asm_kg_v4 - asm_kg_v0) / asm_kg_v0 * 100, 
-    perc_asm_change_v5 = (asm_kg_v4 - asm_kg_v0) / asm_kg_v0 * 100,
+    perc_asm_change_v5 = (asm_kg_v5 - asm_kg_v0) / asm_kg_v0 * 100,
     perc_asm_change_v6 = (asm_kg_v6 - asm_kg_v0) / asm_kg_v0 * 100,
 
     # Calculate tertiles for %FFMI change
@@ -772,5 +772,5 @@ baria_muscle_clean <- baria_muscle_clinical_with_medication_notypos |>
 nrow(baria_muscle_clean)
 
 # then save as both RDS and csv files
-write.csv(baria_muscle_clean, "data/260217_BARIA_muscle_clinical.csv")
-saveRDS(baria_muscle_clean, "data/260217_BARIA_muscle_clinical.RDS")
+write.csv(baria_muscle_clean, "data/260608_BARIA_muscle_clinical.csv")
+saveRDS(baria_muscle_clean, "data/260608_BARIA_muscle_clinical.RDS")
