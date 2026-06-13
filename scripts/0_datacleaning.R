@@ -3,9 +3,7 @@
 
 # Libraries
 library(tidyverse)
-library(lubridate)
 library(ggpubr)
-library(purrr)
 
 # Open Data and see properties
 baria_clinical_data_raw <- readRDS("./data/BARIA.clinical.2024-12-09.723.2043.RDS")
@@ -234,15 +232,15 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     hba1c_percent_v7 = if_else(hba1c_v7 < 15, hba1c_v7, hba1c_v7 * 0.0915 + 2.15),
 
     # hba1c in mmol/l
-    hba1c_mmolmol_v0 = if_else(is.na(hba1c_mmolmol_v0) == FALSE, hba1c_mmolmol_v0, 10.93 * hba1c_percent_v0 - 23,5),
-    hba1c_mmolmol_v2 = if_else(is.na(hba1c_mmolmol_v2) == FALSE, hba1c_mmolmol_v2, 10.93 * hba1c_percent_v2 - 23,5),
-    hba1c_mmolmol_v3 = if_else(is.na(hba1c_mmolmol_v3) == FALSE, hba1c_mmolmol_v3, 10.93 * hba1c_percent_v3 - 23,5),
-    hba1c_mmolmol_v4 = if_else(is.na(hba1c_mmolmol_v4) == FALSE, hba1c_mmolmol_v4, 10.93 * hba1c_percent_v4 - 23,5),
-    hba1c_mmolmol_v5 = if_else(is.na(hba1c_mmolmol_v5) == FALSE, hba1c_mmolmol_v5, 10.93 * hba1c_percent_v5 - 23,5),
-    hba1c_mmolmol_v6 = if_else(is.na(hba1c_mmolmol_v6) == FALSE, hba1c_mmolmol_v6, 10.93 * hba1c_percent_v6 - 23,5),
-    hba1c_mmolmol_v7 = if_else(is.na(hba1c_mmolmol_v7) == FALSE, hba1c_mmolmol_v7, 10.93 * hba1c_percent_v7 - 23,5),
+    hba1c_mmolmol_v0 = if_else(is.na(hba1c_mmolmol_v0) == FALSE, hba1c_mmolmol_v0, 10.93 * hba1c_percent_v0 - 23.5),
+    hba1c_mmolmol_v2 = if_else(is.na(hba1c_mmolmol_v2) == FALSE, hba1c_mmolmol_v2, 10.93 * hba1c_percent_v2 - 23.5),
+    hba1c_mmolmol_v3 = if_else(is.na(hba1c_mmolmol_v3) == FALSE, hba1c_mmolmol_v3, 10.93 * hba1c_percent_v3 - 23.5),
+    hba1c_mmolmol_v4 = if_else(is.na(hba1c_mmolmol_v4) == FALSE, hba1c_mmolmol_v4, 10.93 * hba1c_percent_v4 - 23.5),
+    hba1c_mmolmol_v5 = if_else(is.na(hba1c_mmolmol_v5) == FALSE, hba1c_mmolmol_v5, 10.93 * hba1c_percent_v5 - 23.5),
+    hba1c_mmolmol_v6 = if_else(is.na(hba1c_mmolmol_v6) == FALSE, hba1c_mmolmol_v6, 10.93 * hba1c_percent_v6 - 23.5),
+    hba1c_mmolmol_v7 = if_else(is.na(hba1c_mmolmol_v7) == FALSE, hba1c_mmolmol_v7, 10.93 * hba1c_percent_v7 - 23.5),
 
-    # HOMA-IR & HOMA-2B (only v0, v4-v6)
+    # HOMA-IR & HOMA-2B (only v0, v4, v5)
     # insulin unit conversion from pmol/l to uU/ml
     homa_ir_v0 = (fasting_insulin_pmoll_mmt_v0 / 6.945) * fasting_glucose_mmoll_mmt_v0 / 22.5,
     homa_b_v0 = (20 * (fasting_insulin_pmoll_mmt_v0 / 6.945)) / (fasting_glucose_mmoll_mmt_v0 - 3.5),
@@ -288,6 +286,7 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     ),
 
     # de novo occurence(1 & 2y post-surgery, if NGT at baseline/previous visits)
+    # prediabetes
     denovo_prediab_v4 = case_when(
       is.na(t2d_v0) | is.na(prediab_v0) | is.na(prediab_v4) ~ NA_character_,
       (t2d_v0 == "no" & prediab_v0 == "no" & prediab_v4 == "yes") ~ "yes",
@@ -299,14 +298,14 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
       TRUE ~ "no"
     ),
 
-    #### DO THE SAME HERE AS FOR T2D ####
+    # T2D
     denovo_t2d_v4 = case_when(
-      is.na(t2d_v0) & is.na(t2d_v4) ~ NA_character_,
+      is.na(t2d_v0) | is.na(t2d_v4) ~ NA_character_,
       (t2d_v0 == "no" & t2d_v4 == "yes") ~ "yes",
       TRUE ~ "no"
     ),
     denovo_t2d_v5 = case_when(
-      is.na(t2d_v0) & is.na(t2d_v4) & is.na(t2d_v5) ~ NA_character_,
+      is.na(t2d_v0) | is.na(t2d_v4) | is.na(t2d_v5) ~ NA_character_,
       t2d_v0 == "no" & t2d_v4 == "no" & t2d_v5 == "yes" ~ "yes",
       TRUE ~ "no"
     )
@@ -461,8 +460,9 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     
     perc_asm_change_v4 = (asm_kg_v4 - asm_kg_v0) / asm_kg_v0 * 100, 
     perc_asm_change_v5 = (asm_kg_v5 - asm_kg_v0) / asm_kg_v0 * 100,
-    perc_asm_change_v6 = (asm_kg_v6 - asm_kg_v0) / asm_kg_v0 * 100,
-
+    perc_asm_change_v6 = (asm_kg_v6 - asm_kg_v0) / asm_kg_v0 * 100) |> 
+  group_by(sex) |> 
+  mutate(
     # Calculate tertiles for %FFMI change
     ffmi_change_v4_tertile = quantile(perc_ffmi_change_v4, probs = 1/3, na.rm = TRUE),
     ffmi_change_v5_tertile = quantile(perc_ffmi_change_v5, probs = 1/3, na.rm = TRUE),
@@ -478,11 +478,12 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     asm_change_v5_tertile = quantile(perc_asm_change_v5, probs = 1/3, na.rm = TRUE),
     asm_change_v6_tertile = quantile(perc_asm_change_v6, probs = 1/3, na.rm = TRUE),
 
-    # here instead of high/medium/low ASM loss/change groups I pool together
+    # pool low/modest together
     asm_change_v4_group = if_else(perc_asm_change_v4 <= asm_change_v4_tertile, "high", "low/modest"), 
     asm_change_v5_group = if_else(perc_asm_change_v5 <= asm_change_v5_tertile, "high", "low/modest"),
     asm_change_v6_group = if_else(perc_asm_change_v6 <= asm_change_v6_tertile, "high", "low/modest")
   ) |> 
+  ungroup() |> 
   relocate(race, .after = sex) |> 
   relocate(age_v2:age_v7, .after = age_v0) |>
   relocate(v0_to_v2_weeks:v0_to_v7_numeric_y, .after = age_v7) |> 
@@ -591,46 +592,9 @@ dm_meds <- list(
 dm_meds_patterns <- lapply(dm_meds, function(x) {
   str_c("\\b(", str_c(x, collapse = "|"), ")\\b")
 })
-dm_meds_patterns
-
-# Antihypertensive medication
-
-dm_meds <- list(
-  # Metformin
-  metformin = c("metformine", "glucophage"),
-  
-  # Sulfonylureas
-  sus = c("gliclazide", "diamicron", "glibenclamide", "daonil", "glimepiride", "amaryl", 
-  "glipizide", "minodiab", "tolbutamide"),
-  
-  # DPP-4 inhibitors
-  dpp4is = c("sitagliptine", "januvia", "vildagliptine", "galvus", "saxagliptine", 
-  "onglyza", "linagliptine", "trajenta", "alogliptine", "vipidia"),
-  
-  # GLP-1 receptor agonists
-  glp1ras = c("liraglutide", "victoza", "semaglutide", "ozempic", "rybelsus",
-  "exenatide", "byetta", "bydureon", "dulaglutide", "trulicity", "lyxumia", "lixisenatide"),
-  
-  # SGLT2-inhibitors
-  sglt2is = c("dapagliflozine", "forxiga", "empagliflozine", "jardiance",
-  "canagliflozine", "invokana", "ertugliflozine", "steglatro", "steeglatro"),
-
-  # thiazolidinediones
-  tzds = c("pioglitazon", "pioglitazone"),
-  
-  #insulins (short-, medium- and long-acting)
-  insulin = c("insuline", "lantus", "levemir", "novorapid", "apidra", "toujeo", "tresiba", "degludec",
-  "humalog", "novomix", "fiasp", "actrapid", "isofaan", "insulatard", "glargine", "aspart")
-)
-
-# create regex patterns for each class of diabetes medication
-dm_meds_pattern <- lapply(dm_meds, function(x) {
-  str_c("\\b(", str_c(x, collapse = "|"), ")\\b")
-})
 dm_meds_any_pattern <- str_c("\\b(", str_c((unlist(dm_meds)), collapse = "|"), ")\\b")
 
 # Antihypertensive medication
-
 aht_meds <- list(
   # ACE inhibitors
   ace_inhibitors = c("perindopril", "candesartan", "enalapril", "ramipril", "lisinopril", "captopril", "fosinopril",
@@ -758,7 +722,7 @@ baria_muscle_clean <- baria_muscle_clinical_with_medication_notypos |>
     ndris_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_pattern$ndris), "yes", "no"),
     antipsychotics_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_pattern$antipsychotics), "yes", "no"),
     moods_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_pattern$moods), "yes", "no"),
-    adhd_meds = if_else(str_detect(medication_list_v0, psychiatric_meds_pattern$adhd_meds), "yes", "no"),
+    adhd_meds_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_pattern$adhd_meds), "yes", "no"),
     hypnotics_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_pattern$hypnotics), "yes", "no"),
 
     psychiatric_meds_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_any_pattern), "yes", "no"),
@@ -772,5 +736,5 @@ baria_muscle_clean <- baria_muscle_clinical_with_medication_notypos |>
 nrow(baria_muscle_clean)
 
 # then save as both RDS and csv files
-write.csv(baria_muscle_clean, "data/260608_BARIA_muscle_clinical.csv")
-saveRDS(baria_muscle_clean, "data/260608_BARIA_muscle_clinical.RDS")
+write.csv(baria_muscle_clean, "data/20260613_BARIA_muscle_clinical.csv")
+saveRDS(baria_muscle_clean, "data/20260613_BARIA_muscle_clinical.RDS")
