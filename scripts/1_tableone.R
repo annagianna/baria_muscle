@@ -25,7 +25,7 @@ t1_v0 <- baria_muscle |>
     value = list(sex ~ "female"),
     label = list(
       "age_v0" = "Age (years)",
-      "sex" = "Sex, female n(%))",
+      "sex" = "Sex, female n(%)",
       "bmi_v0" = "BMI (kg/m²)",
       "wc_cm_v0" = "WC (cm)",
       "fm_kg_v0" = "FM (kg)",
