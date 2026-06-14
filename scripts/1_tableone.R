@@ -41,7 +41,7 @@ t1_v0 <- baria_muscle |>
     ),
     missing = c("no")
   ) |> 
-  add_p() |> 
+  add_p(include = -c("ffmi_v0")) |> 
   bold_p() |> 
   modify_header(
     label = "**Variable**",
