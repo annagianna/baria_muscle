@@ -12,8 +12,8 @@ library(ggpubr)
 library(patchwork)
 
 # Theme
-manet_cols <- met.brewer("Manet", n = 20)
-fill_cols_2 <- scale_fill_manual(values = c("high" = manet_cols[10], "low/modest" = manet_cols[20]))
+manet_cols_30 <- met.brewer("Manet", n = 30)
+fill_cols_2 <- scale_fill_manual(values = c("yes" = manet_cols_30[14], "no" = manet_cols[30]))
 
 theme_Publication <- function(base_size = 14, base_family = "sans") {
   
@@ -82,29 +82,22 @@ alpha <- tibble(
   mutate(id = Subject_ID) |> 
   relocate(id, .before = Sample)
 
-nrow(alpha)
-count(alpha, visit)
-table(alpha$low_ffmi_v0)
-
+colnames(alpha)
 #### Baseline Plots ####
 ## Shannon ##
 # Boxplot
-shannon_ffmi_v0 <- shannon |> 
-  filter(
-    visit == 0,
-    !is.na(asm_change_v4_group)
-  ) |> 
-  left_join(baria_muscle, ) |> 
-  mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> 
-  ggplot(aes(x = asm_change_v4_group, y = shannon, fill = asm_change_v4_group)) +
+shannon_ffmi_v0 <- alpha |> 
+  filter(visit == 0) |> 
+  mutate(low_ffmi_v0 = fct_relevel(low_ffmi_v0, "yes", after = 0L)) |> 
+  ggplot(aes(x = low_ffmi_v0, y = shannon, fill = low_ffmi_v0)) +
   geom_boxplot() +
   #geom_jitter(position = position_dodge(0.75)) +
   stat_compare_means(method = "wilcox.test", label = "p.signif", hide.ns = TRUE) +
-  labs(title = "Shannon index", y = "Shannon index", x = "%ASM change at 1y") +
-  fill_cols_asm1y +
-  labs(fill = "%ASM change at 1y") + 
+  labs(title = "Shannon index", y = "Shannon index", x = "Low baseline FFMI") +
+  fill_cols_2 +
+  labs(fill = "Low baseline FFMI") + 
   theme_Publication()
-ggsave(shannon_asm1y_box_v0, filename = "graphs/alphadiversity/shannon_asm1y_box_v0.pdf", width = 7, height = 5)
+ggsave(shannon_ffmi_v0, filename = "graphs/alphadiversity/shannon_ffmi_v0.pdf", width = 7, height = 5)
 
 # Violin
 shannon_asm1y_violin_v0 <- baria_mb_alpha |> 
