@@ -1,10 +1,10 @@
-# Baria: associations between muscle mass loss and gut microbiota (Baseline)
+# Baria: Associations between muscle mass loss and gut microbiota (Baseline)
 # Anna Giannakogeorgou, a.gianna@amsterdamumc.nl
 
 # Packages
 library(tidyverse)
 library(phyloseq)
-library(microbiome)
+library(vegan)
 library(MetBrewer)
 library(ggthemes)
 library(patchwork)
@@ -70,43 +70,33 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 } 
 
 # Data
-baria_muscle <- read_rds("data/260217_BARIA_muscle_clinical.RDS") # metadata/clinical data CHECK FOR MOST RECENT VERSION
+baria_muscle <- read_rds("data/20260613_BARIA_muscle_clinical.RDS") # metadata/clinical data CHECK FOR MOST RECENT VERSION
 baria_mb <- read_rds("data/ps.BARIA.metaphlan.706.2548.RDS")
-sample_sums(baria_mb) # adds up to ~100
 
-# convert sample_data of baria_mb phyloseq obj. to a data frame to merge with selected cols from baria_muscle
-meta_baria_mb <- meta(baria_mb) |> 
-  tibble::rownames_to_column(var = "rownames") |> 
+
+# Melt phyloseq object into a data frame
+melted_mb <- psmelt(baria_mb)
+
+# Prepare for join
+mb <- melted_mb |> 
+  select(-c(Study, Sample_Type, Data_Type)) |> 
   mutate(
-    visit = as.integer(parse_number(Time_Point)),
-    visit = if_else(visit == -1, 0, visit),
-    Extra_data = na_if(Extra_data, "NA")
-  )
-class(meta_baria_mb) # is df
+    visit = str_extract(Time_Point, "\\d"),
+    visit = if_else(visit == "1", "0", visit),
+    id = Subject_ID
+  ) |> 
+  tibble::rownames_to_column(var = "otu") |> 
+  select(-Subject_ID, -Time_Point, -OTU)
 
-# Add low muscle variables to sample_data() of phyloseq object for grouping
-new_sample_data <- baria_muscle |> 
-  select(id, sex, asm_change_v4_group) |> 
-  mutate(id = as.character(id)) |> 
-  inner_join(meta_baria_mb, join_by(id == Subject_ID)) |> # only keep ids with BIA and microbiome data
-  select(-(Study:Time_Point)) |> 
-  group_by(id, visit) |>
-  slice(1) |> # keeps first occurence per group (some ids had second runs)
-  relocate(rownames, .before = id) |> 
-  relocate(visit, .after = id) |> 
-  relocate(Extra_data, .after = visit) |> 
-  tibble::column_to_rownames(var = "rownames")
+# Merge with metadata
+mb_muscle <- mb |> 
+  left_join(baria_muscle, by = join_by(id)) |> 
+  group_by(id, visit) |> 
+  slice(1) |> # keep only first occurence per group, no second runs
+  relocate(visit, .before = otu) |> 
+  relocate(id, .before = visit)
 
-# update sample_data() within baria_mb
-sample_data(baria_mb) <- sample_data(new_sample_data)
-
-# melt phyloseq object into a df
-baria_mb_df <- psmelt(baria_mb)
-baria_mb_df |> # check
-  group_by(Sample) |> 
-  summarise(sum_abundance = sum(Abundance)) # adds up to 100
-
-# Composition Plots
+#### Composition Plots ####
 #### Statified by %ASM change group at 1y ####
 ### Phylum level ###
 top5_phyla <- baria_mb_df |> 
@@ -230,93 +220,6 @@ top20_genera_vector <- top20_genera$Genus # names of top 20 genera as vector
 set.seed(18)
 top20_genera_colours <- c("Other genera" = "grey63", setNames(sample(manet_20), top20_genera_vector))
 
-### Baseline composition ###
-mb_genera_asm1y_v0 <- baria_mb_df |> 
-  filter(
-    visit == 0,
-    !is.na(asm_change_v4_group)
-  ) |> 
-  mutate(
-    Genus2 = if_else(
-        Genus %in% top20_genera$Genus,
-        Genus,
-        "Other genera" # collapse other genera
-        ),
-    Genus2 = as.factor(Genus2)
-  ) |> 
-  group_by(Genus2, Sample, asm_change_v4_group) |> # abundance per sample
-  dplyr::summarize(Abundance = sum(Abundance)) |> 
-  group_by(Genus2, asm_change_v4_group) |> # per %asm change group at 1y
-  dplyr::summarize(Abundance = mean(Abundance)) |> # avg abundance per genuys per group
-  ungroup() |>
-  mutate(
-    Genus2 = fct_reorder(Genus2, Abundance),
-    Genus2 = fct_relevel(Genus2, "Other genera", after = 0L) # move other genera to the front
-  )
-
-mb_genera_asm1y_v0 |> # check
-  group_by(asm_change_v4_group) |> 
-  summarise(sum_Abundance = sum(Abundance)) # adds up to 100
-
-# Composition plot
-genera_comp_asm1y_v0 <- mb_genera_asm1y_v0 |> 
-  mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> # low asm/height2 first
-  ggplot(aes(x = asm_change_v4_group, y = Abundance, fill = Genus2)) +
-  geom_bar(stat = "identity", color = "black", width = 0.9) +
-  scale_fill_manual(values = top20_genera_colours) +
-  guides(fill = guide_legend(ncol = 1)) +
-  labs(y = "Relative abundance (%)", x = "%ASM change at 1y", title = "Genus", fill = "") +
-  scale_y_continuous(expand = c(0, 0)) +
-  theme_composition() +
-  theme(
-    axis.title.x = element_blank(),
-    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
-  )
-ggsave("graphs/composition/genera_comp_asm1y_v0.pdf", width = 12, height = 10)
-
-### 1y composition ###
-mb_genera_asm1y_v4 <- baria_mb_df |> 
-  filter(
-    visit == 4, # 1y
-    !is.na(asm_change_v4_group)
-  ) |> 
-  mutate(
-    Genus2 = if_else(
-        Genus %in% top20_genera$Genus,
-        Genus,
-        "Other genera"
-        ),
-    Genus2 = as.factor(Genus2)
-  ) |> 
-  group_by(Genus2, Sample, asm_change_v4_group) |> # abundance per sample
-  dplyr::summarize(Abundance = sum(Abundance)) |> 
-  group_by(Genus2, asm_change_v4_group) |> # genera per %asm change at 1 year
-  dplyr::summarize(Abundance = mean(Abundance)) |> # avg abundance per genus per group
-  ungroup() |>
-  mutate(
-    Genus2 = fct_reorder(Genus2, Abundance),
-    Genus2 = fct_relevel(Genus2, "Other genera", after = 0L)
-  )
-
-mb_genera_asm1y_v4 |> # check
-  group_by(asm_change_v4_group) |> 
-  summarise(sum_Abundance = sum(Abundance)) # adds up to 100
-
-# Composition plot
-genera_comp_asm1y_v4 <- mb_genera_asm1y_v4 |> 
-  mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> # low asm/height2 first
-  ggplot(aes(x = asm_change_v4_group, y = Abundance, fill = Genus2)) +
-  geom_bar(stat = "identity", color = "black", width = 0.9) +
-  scale_fill_manual(values = top20_genera_colours) +
-  guides(fill = guide_legend(ncol = 1)) +
-  labs(y = "Relative abundance (%)", x = "%ASM change at 1y", title = "Genus", fill = "") +
-  scale_y_continuous(expand = c(0, 0)) +
-  theme_composition() +
-  theme(
-    axis.title.x = element_blank(),
-    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
-  )
-ggsave("graphs/composition/genera_comp_asm1y_v4.pdf", width = 12, height = 10)
 
 ### Species level ###
 # Summarize per group and identify top 20 species (baseline = V1) 
@@ -423,6 +326,11 @@ species_comp_asm1y_v4 <- mb_species_asm1y_v4 |>
     axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
   )
 ggsave("graphs/composition/species_comp_asm1y_v4.pdf", width = 12, height = 10)
+
+
+
+
+##### OLD CODE ######
 
 # Combine phylum + genus + species plots into one panel
 # Dummy plot /shared x axis 
