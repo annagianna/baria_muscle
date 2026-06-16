@@ -47,33 +47,11 @@ baria_muscle <- readRDS("data/20260613_BARIA_muscle_clinical.RDS") # metadata/cl
 baria_mb <- readRDS("data/ps.BARIA.metaphlan.706.2548.RDS")
 sample_sums(baria_mb) # adds up to 100
 
-# Melt phyloseq object into a data frame
-melted_mb <- psmelt(baria_mb)
-
-# Prepare for join
-mb <- melted_mb |> 
-  select(-c(Study, Sample_Type, Data_Type)) |> 
-  mutate(
-    visit = str_extract(Time_Point, "\\d"),
-    visit = if_else(visit == "1", "0", visit),
-    id = Subject_ID
-  ) |> 
-  tibble::rownames_to_column(var = "otu") |> 
-  select(-Subject_ID, -Time_Point, -OTU)
-
-# Merge with metadata
-mb_muscle <- mb |> 
-  left_join(baria_muscle, by = join_by(id)) |> 
-  group_by(id, visit) |> 
-  slice(1) |> # keep only first occurence per group, no second runs
-  relocate(visit, .before = otu) |> 
-  relocate(id, .before = visit)
-
-#### Diversity metrics ####
+# Diversity metrics
 # Convert OTU table to matrix
 matrix_mb <- as(otu_table(baria_mb), "matrix")
 
-# vegan requires a matrix with samples as cols and taxa as rows
+# vegan requires a matrix with samples as rows and taxa as cols
 if (taxa_are_rows(baria_mb)) { 
   matrix_mb <- t(matrix_mb) 
 }
@@ -83,8 +61,32 @@ shannon <- vegan::diversity(matrix_mb, index = "shannon")
 simpson <- vegan::diversity(matrix_mb, index = "simpson")
 richness <- vegan::specnumber(matrix_mb)
 
-#### Plots ####
-### Baseline ####
+# Merge with metadata
+alpha <- tibble(
+  Sample = names(shannon),
+  shannon = shannon,
+  simpson = simpson,
+  richness = richness
+)|> 
+  left_join(
+    as(sample_data(baria_mb), "data.frame") |> 
+      tibble::rownames_to_column(var = "Sample") |> 
+      mutate(
+        visit = str_extract(Time_Point, "\\d"), # visit number without the "V"
+        visit = if_else(visit == "1", "0", visit) # Baseline as v0 to match metadata
+      ),
+      select(Sample, id, visit),
+      by = "Sample"
+  ) |> 
+  inner_join(baria_muscle, by = join_by(Subject_ID == id)) |> 
+  mutate(id = Subject_ID) |> 
+  relocate(id, .before = Sample)
+
+nrow(alpha)
+count(alpha, visit)
+table(alpha$low_ffmi_v0)
+
+#### Baseline Plots ####
 ## Shannon ##
 # Boxplot
 shannon_ffmi_v0 <- shannon |> 
@@ -92,7 +94,7 @@ shannon_ffmi_v0 <- shannon |>
     visit == 0,
     !is.na(asm_change_v4_group)
   ) |> 
-  left_join() |> 
+  left_join(baria_muscle, ) |> 
   mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> 
   ggplot(aes(x = asm_change_v4_group, y = shannon, fill = asm_change_v4_group)) +
   geom_boxplot() +
