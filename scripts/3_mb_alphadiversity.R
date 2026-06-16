@@ -100,41 +100,107 @@ shannon_ffmi_v0 <- alpha |>
 ggsave(shannon_ffmi_v0, filename = "graphs/alphadiversity/shannon_ffmi_v0.pdf", width = 7, height = 5)
 
 # Violin
-shannon_asm1y_violin_v0 <- baria_mb_alpha |> 
-  filter(
-    visit == 0,
-    !is.na(asm_change_v4_group)
-  ) |> 
-  mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> 
-  ggplot(aes(x = asm_change_v4_group, y = shannon)) +
-  geom_violin(aes(fill = asm_change_v4_group)) +
+shannon_violin_ffmi_v0 <- alpha |> 
+  filter(visit == 0) |> 
+  mutate(low_ffmi_v0 = fct_relevel(low_ffmi_v0, "yes", after = 0L)) |>  
+  ggplot(aes(x = low_ffmi_v0, y = shannon)) +
+  geom_violin(aes(fill = low_ffmi_v0)) +
   geom_boxplot(fill = "white", width = 0.1) +
-  labs(x = "", y = "Shannon index", title = "Shannon index", fill = "%ASM change at 1y") +
+  labs(x = "", y = "Shannon index", title = "Shannon index", fill = "Low baseline FFMI") +
   stat_compare_means( 
     tip.length = 0, 
     hide.ns = TRUE, 
     label.x = 1.5,
     method = "wilcox.test",
     label = "p.signif",
-    label.y = max(baria_mb_alpha$shannon, na.rm = TRUE) * 0.99
+    label.y = max(alpha$shannon, na.rm = TRUE) * 0.99
   ) + 
-  fill_cols_asm1y +
+  fill_cols_2 +
   scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
-  scale_y_continuous(expand = expansion(mult = c(0.02, 0.05))) +
+  #scale_y_continuous(expand = expansion(mult = c(0.02, 0.05))) +
   theme_Publication()
-ggsave(shannon_asm1y_violin_v0 , filename = "graphs/alphadiversity/shannon_asm1y_violin_v0.pdf", width = 6, height = 5)
+ggsave(shannon_violin_ffmi_v0, filename = "graphs/alphadiversity/shannon_violin_ffmi_v0.pdf", width = 6, height = 5)
 
 ## Simpson ##
+# Boxplot
+simpson_ffmi_v0 <- alpha |> 
+  filter(visit == 0) |> 
+  mutate(low_ffmi_v0 = fct_relevel(low_ffmi_v0, "yes", after = 0L)) |> 
+  ggplot(aes(x = low_ffmi_v0, y = simpson, fill = low_ffmi_v0)) +
+  geom_boxplot() +
+  #geom_jitter(position = position_dodge(0.75)) +
+  stat_compare_means(method = "wilcox.test", label = "p.signif", hide.ns = TRUE) +
+  labs(title = "Simpson index", y = "Simpson index", x = "Low baseline FFMI") +
+  fill_cols_2 +
+  labs(fill = "Low baseline FFMI") + 
+  theme_Publication()
+ggsave(simpson_ffmi_v0, filename = "graphs/alphadiversity/simpson_ffmi_v0.pdf", width = 7, height = 5)
+
+# Violin
+simpson_violin_ffmi_v0 <- alpha |> 
+  filter(visit == 0) |> 
+  mutate(low_ffmi_v0 = fct_relevel(low_ffmi_v0, "yes", after = 0L)) |>  
+  ggplot(aes(x = low_ffmi_v0, y = simpson)) +
+  geom_violin(aes(fill = low_ffmi_v0)) +
+  geom_boxplot(fill = "white", width = 0.1) +
+  labs(x = "", y = "Simpson index", title = "Simpson index", fill = "Low baseline FFMI") +
+  stat_compare_means( 
+    tip.length = 0, 
+    hide.ns = TRUE, 
+    label.x = 1.5,
+    method = "wilcox.test",
+    label = "p.signif",
+    label.y = max(alpha$simpson, na.rm = TRUE) * 0.99
+  ) + 
+  fill_cols_2 +
+  scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
+  #scale_y_continuous(expand = expansion(mult = c(0.02, 0.05))) +
+  theme_Publication()
+ggsave(simpson_violin_ffmi_v0, filename = "graphs/alphadiversity/simpson_violin_ffmi_v0.pdf", width = 6, height = 5)
 
 ## Richness ##
+# Boxplot
+richness_ffmi_v0 <- alpha |> 
+  filter(visit == 0) |> 
+  mutate(low_ffmi_v0 = fct_relevel(low_ffmi_v0, "yes", after = 0L)) |> 
+  ggplot(aes(x = low_ffmi_v0, y = richness, fill = low_ffmi_v0)) +
+  geom_boxplot() +
+  #geom_jitter(position = position_dodge(0.75)) +
+  stat_compare_means(method = "wilcox.test", label = "p.signif", hide.ns = TRUE) +
+  labs(title = "Richness", y = "Richness", x = "Low baseline FFMI") +
+  fill_cols_2 +
+  labs(fill = "Low baseline FFMI") + 
+  theme_Publication()
+ggsave(richness_ffmi_v0, filename = "graphs/alphadiversity/richness_ffmi_v0.pdf", width = 7, height = 5)
+
+# Violin
+richness_violin_ffmi_v0 <- alpha |> 
+  filter(visit == 0) |> 
+  mutate(low_ffmi_v0 = fct_relevel(low_ffmi_v0, "yes", after = 0L)) |>  
+  ggplot(aes(x = low_ffmi_v0, y = richness)) +
+  geom_violin(aes(fill = low_ffmi_v0)) +
+  geom_boxplot(fill = "white", width = 0.1) +
+  labs(x = "", y = "Richness", title = "Richness", fill = "Low baseline FFMI") +
+  stat_compare_means( 
+    tip.length = 0, 
+    hide.ns = TRUE, 
+    label.x = 1.5,
+    method = "wilcox.test",
+    label = "p.signif",
+    label.y = max(alpha$richness, na.rm = TRUE) * 0.99
+  ) + 
+  fill_cols_2 +
+  scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
+  #scale_y_continuous(expand = expansion(mult = c(0.02, 0.05))) +
+  theme_Publication()
+ggsave(richness_violin_ffmi_v0, filename = "graphs/alphadiversity/richness_violin_ffmi_v0.pdf", width = 6, height = 5)
 
 ## Combine into a panel
-#### OLD CODE ###  CHANGE FROM HERE
 # Baseline (Shannon, Simpson, Richness)
 # Violins
-alpha_panel_asm1y_v0 <- 
-  (shannon_asm1y_violin_v0 + simpson_asm1y_violin_v0 + richness_asm1y_violin_v0) +
+alpha_panel_ffmi_v0 <- 
+  (richness_violin_ffmi_v0+ richness_violin_ffmi_v0 + richness_violin_ffmi_v0) +
   plot_layout(guides = "collect") &
   theme(legend.position = "bottom") &
   theme(aspect.ratio = 0.8)
-ggsave(alpha_panel_asm1y_v0, filename = "graphs/alphadiversity/alpha_panel_asm1y_v0.pdf", width = 12, height = 8)
+ggsave(alpha_panel_ffmi_v0, filename = "graphs/alphadiversity/alpha_panel_ffmi_v0.pdf", width = 12, height = 8)
