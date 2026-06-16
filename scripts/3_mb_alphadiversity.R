@@ -1,10 +1,10 @@
-# Baria: associations between muscle loss and gut microbiota (Baseline)
+# BARIA: Associations between muscle mass and gut microbiota
 # Anna Giannakogeorgou, a.gianna@amsterdamumc.nl
 
 # Packages
 library(tidyverse)
 library(phyloseq)
-library(microbiome)
+library(vegan)
 library(MetBrewer)
 library(grid)
 library(ggthemes)
@@ -15,7 +15,7 @@ library(patchwork)
 manet_cols <- met.brewer("Manet", n = 20)
 fill_cols_asm1y <- scale_fill_manual(values = c("high" = manet_cols[10], "low/modest" = manet_cols[20]))
 
-theme_Publication <- function(base_size=14, base_family="sans") {
+theme_Publication <- function(base_size = 14, base_family = "sans") {
   
   (theme_foundation(base_size = base_size, base_family = base_family) + 
     theme(
@@ -43,75 +43,44 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 } 
 
 # Data
-baria_muscle <- read_rds("data/260217_BARIA_muscle_clinical.RDS") # metadata/clinical data CHECK FOR MOST RECENT VERSION
-baria_mb <- read_rds("data/ps.BARIA.metaphlan.706.2548.RDS")
+baria_muscle <- readRDS("data/20260613_BARIA_muscle_clinical.RDS") # metadata/clinical data
+baria_mb <- readRDS("data/ps.BARIA.metaphlan.706.2548.RDS")
 sample_sums(baria_mb) # adds up to 100
 
-# convert sample_data of baria_mb to a data frame to merge with selected cols from baria_muscle
-meta_baria_mb <- meta(baria_mb) |> 
-  tibble::rownames_to_column(var = "rownames") |> 
+# Melt phyloseq object into a data frame
+melted_mb <- psmelt(baria_mb)
+
+# Prepare for join
+mb <- melted_mb |> 
+  select(-c(Study, Sample_Type, Data_Type)) |> 
   mutate(
-    visit = as.integer(parse_number(Time_Point)),
-    visit = if_else(visit == -1, 0, visit),
-    Extra_data = na_if(Extra_data, "NA")
-  )
-class(meta_baria_mb) # is df
+    visit = str_extract(Time_Point, "\\d"),
+    visit = if_else(visit == "1", "0", visit),
+    id = Subject_ID
+  ) |> 
+  tibble::rownames_to_column(var = "otu") |> 
+  select(-Subject_ID, -Time_Point, -OTU)
 
-# Add low muscle variables to sample_data() of phyloseq object
-new_sample_data <- baria_muscle |> 
-  select(id, sex, asm_change_v4_group) |> 
-  mutate(id = as.character(id)) |> 
-  inner_join(meta_baria_mb, join_by(id == Subject_ID)) |> # only keep ids with BIA and microbiome data
-  select(-(Study:Time_Point)) |> 
-  group_by(id, visit) |>
-  slice(1) |> # keeps first occurence per group (some ids had second runs)
-  relocate(rownames, .before = id) |> 
-  relocate(visit, .after = id) |> 
-  relocate(Extra_data, .after = visit) |> 
-  tibble::column_to_rownames(var = "rownames")
+# Merge with metadata
+mb_muscle <- mb |> 
+  left_join(baria_muscle, by = join_by(id)) |> 
+  group_by(id, visit) |> 
+  slice(1) |> # keep only first occurence per group, no second runs
+  relocate(visit, .before = otu) |> 
+  relocate(id, .before = visit)
 
-# update sample_data() within baria_mb
-sample_data(baria_mb) <- sample_data(new_sample_data)
+#### Diversity metrics ####
+# Convert OTU table to matrix
+matrix_mb <- as(otu_table(baria_mb), "matrix")
 
-# melt phyloseq object into a df
-baria_mb_df <- psmelt(baria_mb)
-baria_mb_df |> # check
-  group_by(Sample) |> 
-  summarise(sum_abundance = sum(Abundance)) # adds up to 100
+if (taxa_are_rows(baria_mb)) { 
+  matrix_mb <- t(matrix_mb) # vegan requires a matrix with samples as cols and taxa as rows
+}
 
-# Diversity metrics
-# Shannon
-shannon <- microbiome::alpha(baria_mb, index = "shannon")
-shannon_df <- shannon |> 
-  tibble::rownames_to_column(var = "rownames") |>
-  rename(Sample = rownames)
-
-# join shannon with baria_mb_df
-baria_mb_shannon <- baria_mb_df |> 
-  inner_join(shannon_df, by = join_by(Sample)) |> 
-  rename(shannon = diversity_shannon)
-
-# Simpson
-simpson <- microbiome::alpha(baria_mb, index = "simpson")
-simpson_df <- simpson |> 
-  mutate(simpson = (1 - dominance_simpson)) |> 
-  tibble::rownames_to_column(var = "rownames") |> 
-  rename(Sample = rownames)
-
-# join simpson with baria_mb_shannon
-baria_mb_shannon_simpson <- baria_mb_shannon |> 
-  inner_join(simpson_df, by = join_by(Sample))
-
-# Richness
-richness <- microbiome::alpha(baria_mb, index = "observed")
-richness_df <- richness |> 
-  tibble::rownames_to_column(var = "rownames") |>
-  rename(Sample = rownames)
-
-# join richness with baria_mb_shannon_simpson
-baria_mb_alpha <-  baria_mb_shannon_simpson |> 
-  inner_join(richness_df, by = join_by(Sample)) |> 
-  rename(richness = observed)
+# Shannon, Simpson, Richness
+shannon <- vegan::diversity(matrix_mb, index = "shannon")
+simpson <- vegan::diversity(matrix_mb, index = "simpson")
+richness <- vegan::specnumber(matrix_mb)
 
 #### Plots ####
 ## Shannon boxplots ##
@@ -276,11 +245,11 @@ simpson_asm1y_violin_v4 <- baria_mb_alpha |>
     label.x = 1.5,
     method = "wilcox.test",
     label = "p.signif",
-    label.y = max(baria_mb_alpha$simpson, na.rm = TRUE) * 0.99
+    label.y = max(baria_mb_alpha$simpson, na.rm = TRUE) * 0.999
   ) +
   fill_cols_asm1y +
   scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
-  scale_y_continuous(expand = expansion(mult = c(0.02, 0.05))) +
+  scale_y_continuous(expand = expansion(mult = c(0.02, 0.045))) +
   theme_Publication()
 ggsave(simpson_asm1y_violin_v4 , filename = "graphs/alphadiversity/simpson_asm1y_violin_v0.pdf", width = 6, height = 5)
 
@@ -362,7 +331,7 @@ richness_asm1y_violin_v4 <- baria_mb_alpha |>
     label.x = 1.5,
     method = "wilcox.test",
     label = "p.signif",
-    label.y = max(baria_mb_alpha$richness, na.rm = TRUE) * 0.99
+    label.y = max(baria_mb_alpha$richness, na.rm = TRUE) * 0.89
   ) +
   fill_cols_asm1y +
   scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
