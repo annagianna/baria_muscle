@@ -61,28 +61,29 @@ shannon <- vegan::diversity(matrix_mb, index = "shannon")
 simpson <- vegan::diversity(matrix_mb, index = "simpson")
 richness <- vegan::specnumber(matrix_mb)
 
-# Merge with metadata
+# Create a df with Shannon, Simpson, Richness
 alpha <- tibble(
   Sample = names(shannon),
   shannon = shannon,
   simpson = simpson,
   richness = richness
-)|> 
-  left_join(
-    as(sample_data(baria_mb), "data.frame") |> 
-      tibble::rownames_to_column(var = "Sample") |> 
-      mutate(
-        visit = str_extract(Time_Point, "\\d"), # visit number without the "V"
-        visit = if_else(visit == "1", "0", visit) # Baseline as v0 to match metadata
-      ),
-      select(Sample, id, visit),
-      by = "Sample"
+)
+
+# Merge with metadata
+baria_mb_df <- as(sample_data(baria_mb), "data.frame")
+
+alpha_meta <- baria_mb_df |> 
+  tibble::rownames_to_column(var = "Sample") |> 
+  mutate(
+    visit = str_extract(Time_Point, "\\d"),
+    visit = if_else(visit == "1", "0", visit)
   ) |> 
-  inner_join(baria_muscle, by = join_by(Subject_ID == id)) |> 
+  select(Sample, Subject_ID, visit) |> 
+  left_join(alpha, by = "Sample") |> 
   mutate(id = Subject_ID) |> 
+  inner_join(baria_muscle, by = "id") |> 
   relocate(id, .before = Sample)
 
-colnames(alpha)
 #### Baseline Plots ####
 ## Shannon ##
 # Boxplot
@@ -104,7 +105,7 @@ shannon_violin_ffmi_v0 <- alpha |>
   filter(visit == 0) |> 
   mutate(low_ffmi_v0 = fct_relevel(low_ffmi_v0, "yes", after = 0L)) |>  
   ggplot(aes(x = low_ffmi_v0, y = shannon)) +
-  geom_violin(aes(fill = low_ffmi_v0)) +
+  geom_violin(aes(fill = low_ffmi_v0), trim = FALSE) +
   geom_boxplot(fill = "white", width = 0.1) +
   labs(x = "", y = "Shannon index", title = "Shannon index", fill = "Low baseline FFMI") +
   stat_compare_means( 
@@ -112,8 +113,7 @@ shannon_violin_ffmi_v0 <- alpha |>
     hide.ns = TRUE, 
     label.x = 1.5,
     method = "wilcox.test",
-    label = "p.signif",
-    label.y = max(alpha$shannon, na.rm = TRUE) * 0.99
+    label = "p.signif"
   ) + 
   fill_cols_2 +
   scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
@@ -149,8 +149,7 @@ simpson_violin_ffmi_v0 <- alpha |>
     hide.ns = TRUE, 
     label.x = 1.5,
     method = "wilcox.test",
-    label = "p.signif",
-    label.y = max(alpha$simpson, na.rm = TRUE) * 0.99
+    label = "p.signif"
   ) + 
   fill_cols_2 +
   scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
@@ -186,8 +185,7 @@ richness_violin_ffmi_v0 <- alpha |>
     hide.ns = TRUE, 
     label.x = 1.5,
     method = "wilcox.test",
-    label = "p.signif",
-    label.y = max(alpha$richness, na.rm = TRUE) * 0.99
+    label = "p.signif"
   ) + 
   fill_cols_2 +
   scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
@@ -199,7 +197,7 @@ ggsave(richness_violin_ffmi_v0, filename = "graphs/alphadiversity/richness_violi
 # Baseline (Shannon, Simpson, Richness)
 # Violins
 alpha_panel_ffmi_v0 <- 
-  (richness_violin_ffmi_v0+ richness_violin_ffmi_v0 + richness_violin_ffmi_v0) +
+  (shannon_violin_ffmi_v0 + simpson_violin_ffmi_v0 + richness_violin_ffmi_v0) +
   plot_layout(guides = "collect") &
   theme(legend.position = "bottom") &
   theme(aspect.ratio = 0.8)
