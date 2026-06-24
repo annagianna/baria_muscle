@@ -7,7 +7,7 @@ library(gtsummary)
 library(gt)
 
 # Data
-baria_muscle <- readRDS("data/20260613_BARIA_muscle_clinical.RDS")
+baria_muscle <- readRDS("data/20260624_BARIA_muscle_clinical.RDS")
 
 ### Baseline low muscle mass / FFMI ###
 # Table 1 grouped by FFMI status at baseline
@@ -58,5 +58,3 @@ t1_v0 |>
 t1_v0 |>
   as_tibble() |>
   write_tsv("tables/t1_v0.tsv")
-
-### Low muscle mass / FFMI at year 1 post-operatively ###
