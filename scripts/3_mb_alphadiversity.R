@@ -13,7 +13,7 @@ library(patchwork)
 
 # Theme
 manet_cols_30 <- met.brewer("Manet", n = 30)
-fill_cols_2 <- scale_fill_manual(values = c("yes" = manet_cols[14], "no" = manet_cols[30]))
+fill_cols_2 <- scale_fill_manual(values = c("yes" = manet_cols_30[14], "no" = manet_cols_30[30]))
 
 theme_Publication <- function(base_size = 14, base_family = "sans") {
   
