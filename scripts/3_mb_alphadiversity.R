@@ -13,7 +13,7 @@ library(patchwork)
 
 # Theme
 manet_cols_30 <- met.brewer("Manet", n = 30)
-fill_cols_2 <- scale_fill_manual(values = c("yes" = manet_cols_30[14], "no" = manet_cols[30]))
+fill_cols_2 <- scale_fill_manual(values = c("yes" = manet_cols[14], "no" = manet_cols[30]))
 
 theme_Publication <- function(base_size = 14, base_family = "sans") {
   
@@ -43,7 +43,7 @@ theme_Publication <- function(base_size = 14, base_family = "sans") {
 } 
 
 # Data
-baria_muscle <- readRDS("data/20260613_BARIA_muscle_clinical.RDS") # metadata/clinical data
+baria_muscle <- readRDS("data/20260624_BARIA_muscle_clinical.RDS") # metadata/clinical data
 baria_mb <- readRDS("data/ps.BARIA.metaphlan.706.2548.RDS")
 sample_sums(baria_mb) # adds up to 100
 
@@ -82,13 +82,18 @@ alpha_meta <- baria_mb_df |>
   left_join(alpha, by = "Sample") |> 
   mutate(id = Subject_ID) |> 
   inner_join(baria_muscle, by = "id") |> 
+  select(-Subject_ID) |> 
   relocate(id, .before = Sample)
 
 #### Baseline Plots ####
+alpha_v0 <- alpha_meta |>
+  filter(visit == 0) |>
+  arrange(id, Sample) |>
+  distinct(id,.keep_all = TRUE)
+
 ## Shannon ##
 # Boxplot
-shannon_ffmi_v0 <- alpha |> 
-  filter(visit == 0) |> 
+shannon_ffmi_v0 <- alpha_v0 |> 
   mutate(low_ffmi_v0 = fct_relevel(low_ffmi_v0, "yes", after = 0L)) |> 
   ggplot(aes(x = low_ffmi_v0, y = shannon, fill = low_ffmi_v0)) +
   geom_boxplot() +
@@ -101,8 +106,7 @@ shannon_ffmi_v0 <- alpha |>
 ggsave(shannon_ffmi_v0, filename = "graphs/alphadiversity/shannon_ffmi_v0.pdf", width = 7, height = 5)
 
 # Violin
-shannon_violin_ffmi_v0 <- alpha |> 
-  filter(visit == 0) |> 
+shannon_violin_ffmi_v0 <- alpha_v0 |> 
   mutate(low_ffmi_v0 = fct_relevel(low_ffmi_v0, "yes", after = 0L)) |>  
   ggplot(aes(x = low_ffmi_v0, y = shannon)) +
   geom_violin(aes(fill = low_ffmi_v0), trim = FALSE) +
@@ -123,8 +127,7 @@ ggsave(shannon_violin_ffmi_v0, filename = "graphs/alphadiversity/shannon_violin_
 
 ## Simpson ##
 # Boxplot
-simpson_ffmi_v0 <- alpha |> 
-  filter(visit == 0) |> 
+simpson_ffmi_v0 <- alpha_v0 |> 
   mutate(low_ffmi_v0 = fct_relevel(low_ffmi_v0, "yes", after = 0L)) |> 
   ggplot(aes(x = low_ffmi_v0, y = simpson, fill = low_ffmi_v0)) +
   geom_boxplot() +
@@ -137,11 +140,10 @@ simpson_ffmi_v0 <- alpha |>
 ggsave(simpson_ffmi_v0, filename = "graphs/alphadiversity/simpson_ffmi_v0.pdf", width = 7, height = 5)
 
 # Violin
-simpson_violin_ffmi_v0 <- alpha |> 
-  filter(visit == 0) |> 
+simpson_violin_ffmi_v0 <- alpha_v0 |> 
   mutate(low_ffmi_v0 = fct_relevel(low_ffmi_v0, "yes", after = 0L)) |>  
   ggplot(aes(x = low_ffmi_v0, y = simpson)) +
-  geom_violin(aes(fill = low_ffmi_v0)) +
+  geom_violin(aes(fill = low_ffmi_v0), trim = FALSE) +
   geom_boxplot(fill = "white", width = 0.1) +
   labs(x = "", y = "Simpson index", title = "Simpson index", fill = "Low baseline FFMI") +
   stat_compare_means( 
@@ -159,8 +161,7 @@ ggsave(simpson_violin_ffmi_v0, filename = "graphs/alphadiversity/simpson_violin_
 
 ## Richness ##
 # Boxplot
-richness_ffmi_v0 <- alpha |> 
-  filter(visit == 0) |> 
+richness_ffmi_v0 <- alpha_v0 |> 
   mutate(low_ffmi_v0 = fct_relevel(low_ffmi_v0, "yes", after = 0L)) |> 
   ggplot(aes(x = low_ffmi_v0, y = richness, fill = low_ffmi_v0)) +
   geom_boxplot() +
@@ -173,11 +174,10 @@ richness_ffmi_v0 <- alpha |>
 ggsave(richness_ffmi_v0, filename = "graphs/alphadiversity/richness_ffmi_v0.pdf", width = 7, height = 5)
 
 # Violin
-richness_violin_ffmi_v0 <- alpha |> 
-  filter(visit == 0) |> 
+richness_violin_ffmi_v0 <- alpha_v0 |> 
   mutate(low_ffmi_v0 = fct_relevel(low_ffmi_v0, "yes", after = 0L)) |>  
   ggplot(aes(x = low_ffmi_v0, y = richness)) +
-  geom_violin(aes(fill = low_ffmi_v0)) +
+  geom_violin(aes(fill = low_ffmi_v0), trim = FALSE) +
   geom_boxplot(fill = "white", width = 0.1) +
   labs(x = "", y = "Richness", title = "Richness", fill = "Low baseline FFMI") +
   stat_compare_means( 
