@@ -512,11 +512,8 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
   relocate(c(asm_kg_v5, delta_asm_v5, asm_height2_v5, smm_kg_v5, smm_by_weight_v5, perc_asm_change_v5, asm_change_v5_tertile, asm_change_v5_group, delta_ffmi_v5, perc_ffmi_change_v5, ffmi_change_v5_tertile, ffmi_change_v5_group), .after = upperleg_cm_v5) |>
   relocate(c(asm_kg_v6, delta_asm_v6, asm_height2_v6, smm_kg_v6, smm_by_weight_v6, low_smm_by_weight_v6, perc_asm_change_v6, asm_change_v6_tertile, asm_change_v6_group, delta_ffmi_v6, perc_ffmi_change_v6, ffmi_change_v6_tertile, ffmi_change_v6_group), .after = upperleg_cm_v6) |>
   relocate(asm_kg_v7, asm_height2_v7, .after = upperleg_cm_v7) |>
-  mutate(across(where(is.character), as.factor)) |>
+  mutate(across(where(is.character) & !id, as.factor)) |> 
   print()
-
-colnames(baria_muscle_clinical)
-nrow(baria_muscle_clinical)
 
 ## Formulas used:
 # Hba1c(%) = (0,0915 * HbA1c (mmol/mol) + 2,15 (from diabetesfonds.nl)
@@ -733,8 +730,7 @@ baria_muscle_clean <- baria_muscle_clinical_with_medication_notypos |>
   select(-medication_list_v0) |> 
   arrange(date_v0)
 
-nrow(baria_muscle_clean)
 
 # then save as both RDS and csv files
-write.csv(baria_muscle_clean, "data/20260613_BARIA_muscle_clinical.csv")
-saveRDS(baria_muscle_clean, "data/20260613_BARIA_muscle_clinical.RDS")
+write.csv(baria_muscle_clean, "data/20260624_BARIA_muscle_clinical.csv")
+saveRDS(baria_muscle_clean, "data/20260624_BARIA_muscle_clinical.RDS")
