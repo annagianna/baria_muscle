@@ -85,24 +85,14 @@ melted_mb |>
   ) # returns 100 for all
 
 # Identify samples with multiple runs (per sample per visit)
-
-
-
-
-
-# Check samples with 2 runs/duplicates per visit
-samp_2run <- melted_mb |>
-  mutate(
-    visit = str_extract(Time_Point, "\\d"),
-    visit = if_else(visit == "1", "0", visit),
-    id = Subject_ID
-  ) |>
-  distinct(id, visit, Sample, Time_Point) |>
-  count(id, visit) |>
+run2_samples <- melted_mb |> 
+  distinct(Sample, Time_Point, Subject_ID) |> 
+  count(Subject_ID, Time_Point) |> 
   filter(n > 1)
 
 # Merge with metadata
 mb <- melted_mb |> 
+  filter(!is.na(Extra_data) | Extra_data == "rep1") |> 
   select(-c(Study, Sample_Type, Data_Type)) |> 
   mutate(
     visit = str_extract(Time_Point, "\\d"),
@@ -113,10 +103,19 @@ mb <- melted_mb |>
   select(-Subject_ID, -Time_Point, -OTU) |> 
   left_join(baria_muscle, by = join_by(id)) |> 
   group_by(id, visit, Species) |>
-  slice(1) |> # keep the first run per sample
   ungroup() |> 
   relocate(visit, .before = otu) |> 
   relocate(id, .before = visit)
+
+# QC sums
+mb |> 
+  group_by(Sample) |> 
+  summarise(total_abundance = sum(Abundance, na.rm = TRUE)) |> 
+  summarise(
+    min = min(total_abundance),
+    mean = mean(total_abundance),
+    max = max(total_abundance)
+  ) # returns 100 for all
 
 #### Composition Plots ####
 #### Statified by FFMI status at baseline ####
