@@ -70,14 +70,38 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 } 
 
 # Data
-baria_muscle <- read_rds("data/20260613_BARIA_muscle_clinical.RDS") # metadata/clinical data CHECK FOR MOST RECENT VERSION
-baria_mb <- read_rds("data/ps.BARIA.metaphlan.706.2548.RDS")
+baria_muscle <- read_rds("data/20260624_BARIA_muscle_clinical.RDS") # metadata/clinical data CHECK FOR MOST RECENT VERSION
+mb <- read_rds("data/ps.BARIA.metaphlan.706.2548.RDS")
+
+# QC
+# Check that the raw metaphlan rel. abundances sum to 100% per sample
+melted_mb |> 
+  group_by(Sample) |> 
+  summarize(total_abundance = sum(Abundance)) |> 
+  summarize(
+    min = min(total_abundance),
+    mean = mean(total_abundance),
+    max = max(total_abundance)
+  ) # returns 100 for all
+
+# Identify samples with multiple runs (per sample per visit)
 
 
-# Melt phyloseq object into a data frame
-melted_mb <- psmelt(baria_mb)
 
-# Prepare for join
+
+
+# Check samples with 2 runs/duplicates per visit
+samp_2run <- melted_mb |>
+  mutate(
+    visit = str_extract(Time_Point, "\\d"),
+    visit = if_else(visit == "1", "0", visit),
+    id = Subject_ID
+  ) |>
+  distinct(id, visit, Sample, Time_Point) |>
+  count(id, visit) |>
+  filter(n > 1)
+
+# Merge with metadata
 mb <- melted_mb |> 
   select(-c(Study, Sample_Type, Data_Type)) |> 
   mutate(
@@ -86,144 +110,19 @@ mb <- melted_mb |>
     id = Subject_ID
   ) |> 
   tibble::rownames_to_column(var = "otu") |> 
-  select(-Subject_ID, -Time_Point, -OTU)
-
-# Merge with metadata
-mb_muscle <- mb |> 
+  select(-Subject_ID, -Time_Point, -OTU) |> 
   left_join(baria_muscle, by = join_by(id)) |> 
-  group_by(id, visit) |> 
-  slice(1) |> # keep only first occurence per group, no second runs
+  group_by(id, visit, Species) |>
+  slice(1) |> # keep the first run per sample
+  ungroup() |> 
   relocate(visit, .before = otu) |> 
   relocate(id, .before = visit)
 
 #### Composition Plots ####
-#### Statified by %ASM change group at 1y ####
-### Phylum level ###
-top5_phyla <- baria_mb_df |> 
-  # filter(visit == 0) |>
-  group_by(Sample, Phylum) |> 
-  dplyr::summarize(Abundance = sum(Abundance), .groups = "drop") |> 
-  group_by(Phylum) |> 
-  dplyr::summarize(Abundance = mean(Abundance)) |> 
-  arrange(-Abundance) |> 
-  select(Phylum) |> 
-  head(5) |> 
-  print()
-
-# assign fixed color to each one of the top 5 phyla
-top5_phyla_vector <- top5_phyla$Phylum # top 5 phyla names as vector
-set.seed(23)
-top5_phyla_colours <- c("Other phyla" = "grey63", setNames(sample(manet_5), top5_phyla_vector))
-
-### Baseline composition ###
-mb_phyla_asm1y_v0 <- baria_mb_df |> 
-  filter(
-    visit == 0, # baseline composition (in clinical data v0 for shotgun data v1!)
-    !is.na(asm_change_v4_group)
-  ) |> 
-  mutate(
-    Phylum2 = if_else(
-        Phylum %in% top5_phyla$Phylum,
-        Phylum,
-        "Other phyla" # collapse other phyla
-        ),
-    Phylum2 = as.factor(Phylum2)
-  ) |> 
-  group_by(Phylum2, Sample, asm_change_v4_group) |> # abundance per sample
-  dplyr::summarize(Abundance = sum(Abundance)) |> 
-  group_by(Phylum2, asm_change_v4_group) |> # per %asm change group at 1y
-  dplyr::summarize(Abundance = mean(Abundance)) |> # avg abundance per phylum pergroup
-  ungroup() |>
-  mutate(
-    Phylum2 = fct_reorder(Phylum2, Abundance),
-    Phylum2 = fct_relevel(Phylum2, "Other phyla", after = 0L) # move other species to the front
-  )
-
-mb_phyla_asm1y_v0 |> # check
-  group_by(asm_change_v4_group) |> 
-  summarise(sum_Abundance = sum(Abundance)) # adds up to 100
-
-# Composition plot
-phyla_comp_asm1y_v0 <- mb_phyla_asm1y_v0 |> 
-  mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> # low asm/height2 first
-  ggplot(aes(x = asm_change_v4_group, y = Abundance, fill = Phylum2)) +
-  geom_bar(stat = "identity", color = "black", width = 0.9) +
-  scale_fill_manual(values = top5_phyla_colours) +
-  guides(fill = guide_legend(ncol = 1)) +
-  labs(y = "Relative abundance (%)", x = "%ASM change at 1y", title = "Phylum", fill = "") +
-  scale_y_continuous(expand = c(0, 0)) +
-  theme_composition() +
-  theme(
-    axis.title.x = element_blank(),
-    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
-  )
-ggsave("graphs/composition/phyla_comp_asm1y_v0.pdf", width = 12, height = 10)
-
-### 1y composition ###
-mb_phyla_asm1y_v4 <- baria_mb_df |> 
-  filter(
-    visit == 4, # 1y
-    !is.na(asm_change_v4_group)
-  ) |> 
-  mutate(
-    Phylum2 = if_else(
-        Phylum %in% top5_phyla$Phylum,
-        Phylum,
-        "Other phyla"
-        ),
-    Phylum2 = as.factor(Phylum2)
-  ) |> 
-  group_by(Phylum2, Sample, asm_change_v4_group) |> # phyla abundance per sample
-  dplyr::summarize(Abundance = sum(Abundance)) |> 
-  group_by(Phylum2, asm_change_v4_group) |> # phyla per %asm change at 1 year group
-  dplyr::summarize(Abundance = mean(Abundance)) |> # avg abundance per phylum per group
-  ungroup() |>
-  mutate(
-    Phylum2 = fct_reorder(Phylum2, Abundance),
-    Phylum2 = fct_relevel(Phylum2, "Other phyla", after = 0L) # move other phyla to the front
-  )
-
-mb_phyla_asm1y_v4 |> # check
-  group_by(asm_change_v4_group) |> 
-  summarise(sum_Abundance = sum(Abundance)) # adds up to 100
-
-# Composition plot
-phyla_comp_asm1y_v4 <- mb_phyla_asm1y_v4 |> 
-  mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> # high asm loss first
-  ggplot(aes(x = asm_change_v4_group, y = Abundance, fill = Phylum2)) +
-  geom_bar(stat = "identity", color = "black", width = 0.9) +
-  scale_fill_manual(values = top5_phyla_colours) +
-  guides(fill = guide_legend(ncol = 1)) +
-  labs(y = "Relative abundance (%)", x = "%ASM change at 1y", title = "Phylum", fill = "") +
-  scale_y_continuous(expand = c(0, 0)) +
-  theme_composition() +
-  theme(
-    axis.title.x = element_blank(),
-    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
-  )
-ggsave("graphs/composition/phyla_comp_asm1y_v4.pdf", width = 12, height = 10)
-
-### Genus level ###
-top20_genera <- baria_mb_df |> 
-  # filter(visit == 0) |>
-  group_by(Sample, Genus) |> 
-  dplyr::summarize(Abundance = sum(Abundance), .groups = "drop") |> 
-  group_by(Genus) |> 
-  dplyr::summarize(Abundance = mean(Abundance)) |> 
-  arrange(-Abundance) |> 
-  select(Genus) |> 
-  head(20) |> 
-  print()
-
-# assign fixed color to each one of the top 20 genera
-top20_genera_vector <- top20_genera$Genus # names of top 20 genera as vector
-set.seed(18)
-top20_genera_colours <- c("Other genera" = "grey63", setNames(sample(manet_20), top20_genera_vector))
-
-
+#### Statified by FFMI status at baseline ####
 ### Species level ###
 # Summarize per group and identify top 20 species (baseline = V1) 
-top20_species <- baria_mb_df |> 
+top20_species <- mb |> 
   # filter(visit == 0) |> # not filtered for longitudinal approach
   group_by(Sample, Species) |> 
   dplyr::summarize(Abundance = sum(Abundance), .groups = "drop") |> 
@@ -231,8 +130,7 @@ top20_species <- baria_mb_df |>
   dplyr::summarize(Abundance = mean(Abundance)) |> 
   arrange(-Abundance) |> 
   select(Species) |> 
-  head(20) |> 
-  print()
+  head(20)
 
 # assign fixed color to each one of the top20 species
 top20_species_vector <- top20_species$Species # top 20 species names as vector
@@ -240,10 +138,10 @@ set.seed(13)
 top20_species_colours <- c("Other species" = "grey63", setNames(sample(manet_20), top20_species_vector))
 
 ### Baseline composition ###
-mb_species_asm1y_v0 <- baria_mb_df |> 
+species_ffmi_v0 <- mb |> 
   filter(
     visit == 0, # baseline composition (in clinical data v0 for shotgun data v1!)
-    !is.na(asm_change_v4_group)
+    !is.na(low_ffmi_v0)
   ) |> 
   mutate(
     Species2 = if_else(
@@ -253,105 +151,32 @@ mb_species_asm1y_v0 <- baria_mb_df |>
         ),
     Species2 = as.factor(Species2)
   ) |> 
-  group_by(Species2, Sample, asm_change_v4_group) |> # species abundance per sample
+  group_by(Species2, Sample, low_ffmi_v0) |> # species abundance per sample
   dplyr::summarize(Abundance = sum(Abundance)) |> 
-  group_by(Species2, asm_change_v4_group) |> # species per muscle mass group
-  dplyr::summarize(Abundance = mean(Abundance)) |> # avg abundance per species per muscle group
+  group_by(Species2, low_ffmi_v0) |> # species per muscle mass group
+  dplyr::summarize(Abundance = mean(Abundance)) |> # avg abundance per species per FFMI group
   ungroup() |>
   mutate(
     Species2 = fct_reorder(Species2, Abundance),
     Species2 = fct_relevel(Species2, "Other species", after = 0L) # move other species to the front
   )
 
-mb_species_asm1y_v0 |> # check
-  group_by(asm_change_v4_group) |> 
-  summarise(sum_Abundance = sum(Abundance)) # adds up to 100
+species_ffmi_v0 |> # check
+  group_by(low_ffmi_v0) |> 
+  summarize(sum_Abundance = sum(Abundance)) # adds up to 100
 
 # Composition plot
-species_comp_asm1y_v0 <- mb_species_asm1y_v0 |> 
-  mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> # low asm/height2 first
-  ggplot(aes(x = asm_change_v4_group, y = Abundance, fill = Species2)) +
-  geom_bar(stat = "identity", color = "black", width = 0.9) +
-  scale_fill_manual(values = top20_species_colours) +
-  guides(fill = guide_legend(ncol = 1)) +
-  labs(y = "Relative abundance (%)", x = "%ASM change at 1y", title = "Species", fill = "") +
-  scale_y_continuous(expand = c(0, 0)) +
-  theme_composition() +
-  theme(
-    axis.title.x = element_blank(),
-    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
-  )
-ggsave("graphs/composition/species_comp_asm1y_v0.pdf", width = 12, height = 10)
-
-### 1y composition ###
-mb_species_asm1y_v4 <- baria_mb_df |> 
-  filter(
-    visit == 4, # 1y
-    !is.na(asm_change_v4_group)
-  ) |> 
-  mutate(
-    Species2 = if_else(
-        Species %in% top20_species$Species,
-        Species,
-        "Other species" # collapse other species
-        ),
-    Species2 = as.factor(Species2)
-  ) |> 
-  group_by(Species2, Sample, asm_change_v4_group) |> # species abundance per sample
-  dplyr::summarize(Abundance = sum(Abundance)) |> 
-  group_by(Species2, asm_change_v4_group) |> # species per muscle mass group
-  dplyr::summarize(Abundance = mean(Abundance)) |> # avg abundance per species per muscle group
-  ungroup() |>
-  mutate(
-    Species2 = fct_reorder(Species2, Abundance),
-    Species2 = fct_relevel(Species2, "Other species", after = 0L) # move other species to the front
-  )
-
-mb_species_asm1y_v4 |> # check
-  group_by(asm_change_v4_group) |> 
-  summarise(sum_Abundance = sum(Abundance)) # adds up to 100
-
-# Composition plot
-species_comp_asm1y_v4 <- mb_species_asm1y_v4 |> 
-  mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> # low asm/height2 first
-  ggplot(aes(x = asm_change_v4_group, y = Abundance, fill = Species2)) +
-  geom_bar(stat = "identity", color = "black", width = 0.9) +
-  scale_fill_manual(values = top20_species_colours) +
-  guides(fill = guide_legend(ncol = 1)) +
-  labs(y = "Relative abundance (%)", x = "%ASM change at 1y", title = "Species", fill = "") +
-  scale_y_continuous(expand = c(0, 0)) +
-  theme_composition() +
-  theme(
-    axis.title.x = element_blank(),
-    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
-  )
-ggsave("graphs/composition/species_comp_asm1y_v4.pdf", width = 12, height = 10)
-
-
-
-
-##### OLD CODE ######
-
-# Combine phylum + genus + species plots into one panel
-# Dummy plot /shared x axis 
-shared_x_asm1y <- ggplot() +
-  labs(x = "%ASM change at 1y") +
-  theme_void() +
-  theme(
-    axis.title.x = element_text(size = 14, face = "bold"),
-    plot.margin = margin(t = -20, r = 5, b = 5, l = 10)
-  )
-
-# Baseline composition panel
-comp_pgs_v0 <- 
-  (phyla_comp_asm1y_v0 + genera_comp_asm1y_v0 + species_comp_asm1y_v0) /
-  shared_x_asm1y +
-  plot_layout(heights = c(1, 0.005))
-ggsave("graphs/composition/comp_pgs_v0.pdf", width = 12, height = 7)
-
-# 1 year composition panel
-comp_pgs_v4 <- 
-  (phyla_comp_asm1y_v4 + genera_comp_asm1y_v4 + species_comp_asm1y_v4) /
-  shared_x_asm1y +
-  plot_layout(heights = c(1, 0.005))
-ggsave("graphs/composition/comp_pgs_v4.pdf", width = 12, height = 7)
+#species_comp_asm1y_v0 <- mb_species_asm1y_v0 |> 
+  #mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> # low asm/height2 first
+  #ggplot(aes(x = asm_change_v4_group, y = Abundance, fill = Species2)) +
+  #geom_bar(stat = "identity", color = "black", width = 0.9) +
+  #scale_fill_manual(values = top20_species_colours) +
+  #guides(fill = guide_legend(ncol = 1)) +
+  #labs(y = "Relative abundance (%)", x = "%ASM change at 1y", title = "Species", fill = "") +
+  #scale_y_continuous(expand = c(0, 0)) +
+  #theme_composition() +
+  #theme(
+   # axis.title.x = element_blank(),
+   # axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
+  #)
+#ggsave("graphs/composition/species_comp_asm1y_v0.pdf", width = 12, height = 10)
