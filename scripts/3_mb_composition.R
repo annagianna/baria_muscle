@@ -160,22 +160,23 @@ species_ffmi_v0 <- mb |>
     Species2 = fct_relevel(Species2, "Other species", after = 0L) # move other species to the front
   )
 
+# check sum
 species_ffmi_v0 |> # check
   group_by(low_ffmi_v0) |> 
   summarize(sum_Abundance = sum(Abundance)) # adds up to 100
 
 # Composition plot
-#species_comp_asm1y_v0 <- mb_species_asm1y_v0 |> 
-  #mutate(asm_change_v4_group = fct_relevel(asm_change_v4_group, "high", after = 0L)) |> # low asm/height2 first
-  #ggplot(aes(x = asm_change_v4_group, y = Abundance, fill = Species2)) +
-  #geom_bar(stat = "identity", color = "black", width = 0.9) +
-  #scale_fill_manual(values = top20_species_colours) +
-  #guides(fill = guide_legend(ncol = 1)) +
-  #labs(y = "Relative abundance (%)", x = "%ASM change at 1y", title = "Species", fill = "") +
-  #scale_y_continuous(expand = c(0, 0)) +
-  #theme_composition() +
-  #theme(
-   # axis.title.x = element_blank(),
-   # axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
-  #)
-#ggsave("graphs/composition/species_comp_asm1y_v0.pdf", width = 12, height = 10)
+species_comp_ffmi_v0 <- species_ffmi_v0 |> 
+  mutate(low_ffmi_v0 = fct_relevel(low_ffmi_v0, "yes", after = 0L)) |> # low baseline FFMI first
+  ggplot(aes(x = low_ffmi_v0, y = Abundance, fill = Species2)) +
+  geom_bar(stat = "identity", color = "black", width = 0.9) +
+  scale_fill_manual(values = top20_species_colours) +
+  guides(fill = guide_legend(ncol = 1)) +
+  labs(y = "Relative abundance (%)", x = "Low baseline FFMI", title = "Species", fill = "") +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme_composition() +
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
+  )
+ggsave("graphs/composition/species_comp_ffmi_v0.pdf", width = 12, height = 10)
