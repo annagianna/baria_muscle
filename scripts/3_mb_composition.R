@@ -71,7 +71,9 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 
 # Data
 baria_muscle <- read_rds("data/20260624_BARIA_muscle_clinical.RDS") # metadata/clinical data CHECK FOR MOST RECENT VERSION
-mb <- read_rds("data/ps.BARIA.metaphlan.706.2548.RDS")
+baria_mb <- read_rds("data/ps.BARIA.metaphlan.706.2548.RDS")
+
+melted_mb <- psmelt(baria_mb)
 
 # QC
 # Check that the raw metaphlan rel. abundances sum to 100% per sample
@@ -92,7 +94,7 @@ run2_samples <- melted_mb |>
 
 # Merge with metadata
 mb <- melted_mb |> 
-  filter(!is.na(Extra_data) | Extra_data == "rep1") |> 
+  filter(Extra_data == "NA" | Extra_data == "rep1") |> # keep first run of samples with extra data
   select(-c(Study, Sample_Type, Data_Type)) |> 
   mutate(
     visit = str_extract(Time_Point, "\\d"),
@@ -102,8 +104,6 @@ mb <- melted_mb |>
   tibble::rownames_to_column(var = "otu") |> 
   select(-Subject_ID, -Time_Point, -OTU) |> 
   left_join(baria_muscle, by = join_by(id)) |> 
-  group_by(id, visit, Species) |>
-  ungroup() |> 
   relocate(visit, .before = otu) |> 
   relocate(id, .before = visit)
 
@@ -129,7 +129,8 @@ top20_species <- mb |>
   dplyr::summarize(Abundance = mean(Abundance)) |> 
   arrange(-Abundance) |> 
   select(Species) |> 
-  head(20)
+  head(20) |> 
+  print()
 
 # assign fixed color to each one of the top20 species
 top20_species_vector <- top20_species$Species # top 20 species names as vector
@@ -139,7 +140,7 @@ top20_species_colours <- c("Other species" = "grey63", setNames(sample(manet_20)
 ### Baseline composition ###
 species_ffmi_v0 <- mb |> 
   filter(
-    visit == 0, # baseline composition (in clinical data v0 for shotgun data v1!)
+    visit == "0", # baseline composition (in clinical data v0 for shotgun data v1!)
     !is.na(low_ffmi_v0)
   ) |> 
   mutate(
@@ -179,4 +180,4 @@ species_comp_ffmi_v0 <- species_ffmi_v0 |>
     axis.title.x = element_blank(),
     axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
   )
-ggsave("graphs/composition/species_comp_ffmi_v0.pdf", width = 12, height = 10)
+ggsave("graphs/composition/species_comp_ffmi_v0.pdf", plot = species_comp_ffmi_v0, width = 12, height = 10)
