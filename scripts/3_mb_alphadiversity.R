@@ -45,14 +45,23 @@ theme_Publication <- function(base_size = 14, base_family = "sans") {
 # Data
 baria_muscle <- readRDS("data/20260624_BARIA_muscle_clinical.RDS") # metadata/clinical data
 baria_mb <- readRDS("data/ps.BARIA.metaphlan.706.2548.RDS")
-sample_sums(baria_mb) # adds up to 100
+
+# qc
+sample_sums(baria_mb) |>
+  summary() # adds up to 100
+
+# Subset; keep only samples with one run or first run of samples with dublicates
+run1_mb <- prune_samples(
+  sample_data(baria_mb)$Extra_data == "NA" | sample_data(baria_mb)$Extra_data == "rep1",
+  baria_mb
+)
 
 # Diversity metrics
 # Convert OTU table to matrix
-matrix_mb <- as(otu_table(baria_mb), "matrix")
+matrix_mb <- as(otu_table(run1_mb), "matrix")
 
 # vegan requires a matrix with samples as rows and taxa as cols
-if (taxa_are_rows(baria_mb)) { 
+if (taxa_are_rows(run1_mb)) { 
   matrix_mb <- t(matrix_mb) 
 }
 
@@ -70,7 +79,7 @@ alpha <- tibble(
 )
 
 # Merge with metadata
-baria_mb_df <- as(sample_data(baria_mb), "data.frame")
+baria_mb_df <- as(sample_data(run1_mb), "data.frame")
 
 alpha_meta <- baria_mb_df |> 
   tibble::rownames_to_column(var = "Sample") |> 
@@ -83,8 +92,9 @@ alpha_meta <- baria_mb_df |>
   mutate(id = Subject_ID) |> 
   inner_join(baria_muscle, by = "id") |> 
   select(-Subject_ID) |> 
-  relocate(id, .before = Sample)
+  relocate(id, .before = Sample) |> 
 
+head(alpha_meta)
 #### Baseline Plots ####
 alpha_v0 <- alpha_meta |>
   filter(visit == 0) |>
