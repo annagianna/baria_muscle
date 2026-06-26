@@ -85,19 +85,19 @@ alpha_meta <- baria_mb_df |>
   tibble::rownames_to_column(var = "Sample") |> 
   mutate(
     visit = str_extract(Time_Point, "\\d"),
-    visit = if_else(visit == "1", "0", visit)
+    visit = if_else(visit == "1", "0", visit),
+    visit = as.factor(visit)
   ) |> 
   select(Sample, Subject_ID, visit) |> 
   left_join(alpha, by = "Sample") |> 
   mutate(id = Subject_ID) |> 
   inner_join(baria_muscle, by = "id") |> 
   select(-Subject_ID) |> 
-  relocate(id, .before = Sample) |> 
+  relocate(id, .before = Sample)
 
-head(alpha_meta)
 #### Baseline Plots ####
 alpha_v0 <- alpha_meta |>
-  filter(visit == 0) |>
+  filter(visit == "0") |>
   arrange(id, Sample) |>
   distinct(id,.keep_all = TRUE)
 
