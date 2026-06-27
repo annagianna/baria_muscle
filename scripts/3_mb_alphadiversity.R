@@ -50,7 +50,7 @@ baria_mb <- readRDS("data/ps.BARIA.metaphlan.706.2548.RDS")
 sample_sums(baria_mb) |>
   summary() # adds up to 100
 
-# Subset; keep only samples with one run or first run of samples with dublicates
+# Subset; keep only samples with one run or first run of samples with duplicates
 run1_mb <- prune_samples(
   sample_data(baria_mb)$Extra_data == "NA" | sample_data(baria_mb)$Extra_data == "rep1",
   baria_mb
