@@ -4,7 +4,6 @@
 # Packages
 library(tidyverse)
 library(phyloseq)
-library(microbiome)
 library(vegan)
 library(MetBrewer)
 library(grid)
@@ -46,70 +45,84 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 } 
 
 # Data
-baria_muscle <- read_rds("data/260217_BARIA_muscle_clinical.RDS") # metadata/clinical data CHECK FOR MOST RECENT VERSION
+baria_muscle <- read_rds("data/20260624_BARIA_muscle_clinical.RDS") # clinical data
 baria_mb <- read_rds("data/ps.BARIA.metaphlan.706.2548.RDS")
-sample_sums(baria_mb) # adds up to 100
 
-# convert sample_data of baria_mb to a data frame to merge with selected cols from baria_muscle
-meta_baria_mb <- meta(baria_mb) |> 
-  tibble::rownames_to_column(var = "rownames") |> 
+# qc
+sample_sums(baria_mb) |>
+  summary() # adds up to 100
+
+# Subset; keep only samples with one run or first run of samples with duplicates
+run1_mb <- prune_samples(
+  sample_data(baria_mb)$Extra_data == "NA" | sample_data(baria_mb)$Extra_data == "rep1",
+  baria_mb
+)
+
+# Convert OTU table to matrix
+matrix_mb <- as(otu_table(run1_mb), "matrix")
+
+# vegan requires a matrix with samples as rows and taxa as cols
+if (taxa_are_rows(run1_mb)) { 
+  matrix_mb <- t(matrix_mb) 
+}
+
+# checks
+dim(matrix_mb) # should be n samples (rows) x n taxa (cols)
+rownames(matrix_mb)[1:5] # Samples
+colnames(matrix_mb)[1:5] # Taxa
+summary(rowSums(matrix_mb)) # should be ~100
+
+# Convert sample data into a df
+mb_df <- sample_data(run1_mb) |> 
+  data.frame() |> 
+  tibble::rownames_to_column(var = "Sample")
+
+# Merge with metadata
+mb_meta <- mb_df |> 
   mutate(
-    visit = as.integer(parse_number(Time_Point)),
-    visit = if_else(visit == -1, 0, visit),
-    Extra_data = na_if(Extra_data, "NA")
-  )
-class(meta_baria_mb) # is df
-
-# Add %ASM change groups to sample_data() of phyloseq object
-new_sample_data <- baria_muscle |> 
-  select(id, sex, asm_change_v4_group) |> 
-  mutate(id = as.character(id)) |> 
-  inner_join(meta_baria_mb, join_by(id == Subject_ID)) |> # only keep ids with BIA and microbiome data
-  select(-(Study:Time_Point)) |> 
-  group_by(id, visit) |>
-  slice(1) |> # keeps first occurence per group (some ids had second runs)
-  relocate(rownames, .before = id) |> 
-  relocate(visit, .after = id) |> 
-  relocate(Extra_data, .after = visit) |> 
-  tibble::column_to_rownames(var = "rownames")
-
-# update sample_data() within baria_mb
-sample_data(baria_mb) <- sample_data(new_sample_data)
-
-# melt phyloseq object into a df
-baria_mb_df <- psmelt(baria_mb)
-baria_mb_df |> # check
-  group_by(Sample) |> 
-  summarise(sum_abundance = sum(Abundance)) # adds up to 100
-
-## Calculate Bray-Curtis Distance
-# select only needed cols for bray-curtis calculation
-bray_cols <- baria_mb_df |> 
-  select(Sample, OTU, Abundance)
-
-# Pivot wider for bray-curtis calculation
-bray_wide <- bray_cols |> 
-  pivot_wider(
-    names_from = OTU,
-    values_from = Abundance,
-    values_fill = 0 # if Abundance 0
+    visit = str_extract(Time_Point, "\\d"),
+    visit = if_else(visit == "1", "0", visit),
+    visit = as.factor(visit),
+    id = Subject_ID
   ) |> 
-  tibble::column_to_rownames(var = "Sample")
+  select(Sample, id, visit) |> 
+  inner_join(baria_muscle, by = "id") |> 
+  relocate(id, .before = Sample)
 
-# Make metadata for bray
-bray_meta <- baria_mb_df |> 
-  select(Sample, id, visit, sex, asm_change_v4_group) |> 
-  filter(!is.na(asm_change_v4_group)) |> 
-  distinct(Sample, .keep_all = TRUE)
+# Keep only baseline samples for baseline beta diversity analysis
+mb_meta_v0 <- mb_meta |> 
+  filter(visit == "0")
+
+# Check whether all samples from metadata are in the (baseline) mb matrix
+all(mb_meta_v0$Sample %in% rownames(matrix_mb)) # returns TRUE
+
+# Keep only samples that also have matched metadata; order to match mb_meta exactly for downstream analyses
+mb_v0 <- matrix_mb[mb_meta_v0$Sample, , drop = FALSE]
+
+# Final check
+all(rownames(mb_v0) == mb_meta_v0$Sample)
 
 ### Compute Bray-Curtis distance ###
-bray <- vegan::vegdist(bray_wide[rownames(bray_wide) %in% bray_meta$Sample, ], method = "bray")
-pcoord <- ape::pcoa(bray, correction = "cailliez")
-expl_variance_bray <- pcoord$values$Rel_corr_eig * 100
+bray_v0 <- vegan::vegdist(mb_v0, method = "bray")
 
-bray2 <- as.data.frame(pcoord$vectors[, c("Axis.1", "Axis.2")]) |>
+# PCoA
+pcoord_v0 <- ape::pcoa(bray_v0, correction = "cailliez") # corrects for negative eigenvalues
+
+# Percentage of variation explained by each PCoA axis
+expl_variance_bray_v0 <- pcoord_v0$values$Rel_corr_eig * 100
+
+# Check how much variation is explained by PCoA1 and 2
+expl_variance_bray_v0[1:2]
+
+# Extract first 2 PCoA axes and add Sample names
+bray_v0_2 <- as.data.frame(pcoord_v0$vectors[, c("Axis.1", "Axis.2")]) |>
   tibble::rownames_to_column("Sample") |>
-  left_join(bray_meta, by = "Sample") # add metadata
+  left_join(mb_meta_v0, by = "Sample") # merge with ordered metadata 
+
+
+
+
+
 
 ### Bray-Curtis per visit ###
 # set up function
@@ -155,26 +168,3 @@ bray_asm1y_v0 <- bray2 |>
       label = paste0("p = ", round(`Pr(>F)`, 3))),
       hjust = 1.1, vjust = 1.1, size = 3, inherit.aes = FALSE)
 ggsave(bray_asm1y_v0, filename = "graphs/betadiversity/bray_asm1y_v0.pdf", width = 10, height = 7)
-
-# 1y
-bray_asm1y_v4 <- bray2 |> 
-  filter(visit == 4) |> 
-  ggplot(aes(Axis.1, Axis.2)) +
-  geom_point(aes(color = asm_change_v4_group), size = 3, alpha = 0.9) +
-  xlab(paste0("PCo1 (", round(expl_variance_bray[1], digits = 1),"%)")) +
-  ylab(paste0("PCo2 (", round(expl_variance_bray[2], digits = 1),"%)")) +
-  labs(color = "", fill = "", title = "PCoA Bray-Curtis Distance") +
-  stat_ellipse(
-    geom = "polygon", 
-    aes(color = asm_change_v4_group, fill = asm_change_v4_group),
-    type = "norm", alpha = 0.13, linewidth = 1.2) +
-  fill_cols_asm1y +
-  color_cols_asm1y +
-  theme_Publication() +
-  theme(legend.position = "top") +
-  geom_text(
-    data = as.data.frame(results_per_v$`4`) |> slice(1),
-    aes(x = Inf, y = Inf,
-      label = paste0("p = ", round(`Pr(>F)`, 3))),
-      hjust = 1.1, vjust = 1.1, size = 3, inherit.aes = FALSE)
-ggsave(bray_asm1y_v4, filename = "graphs/betadiversity/bray_asm1y_v4.pdf", width = 10, height = 7)
