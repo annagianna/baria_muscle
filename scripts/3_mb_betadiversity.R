@@ -130,6 +130,14 @@ anova(disp_v0)
 
 ## Plots ##
 # Baseline
+centroids_v0 <- bray_2_v0 |> 
+  group_by(low_ffmi_v0) |> 
+  summarize(
+    Axis.1 = mean(Axis.1, na.rm = TRUE),
+    Axis.2 = mean(Axis.2, na.rm = TRUE),
+    .groups = "drop"
+  )
+
 bray_ffmi_v0 <- bray_2_v0 |> 
   mutate(low_ffmi_v0 = factor(low_ffmi_v0, levels = c("yes", "no"))) |> 
   ggplot(aes(Axis.1, Axis.2)) +
@@ -141,6 +149,11 @@ bray_ffmi_v0 <- bray_2_v0 |>
     geom = "polygon", 
     aes(color = low_ffmi_v0, fill = low_ffmi_v0),
     type = "norm", alpha = 0.13, linewidth = 1) +
+  geom_point(
+    data = centroids_v0, 
+    aes(x = Axis.1, y = Axis.2),
+    size = 6, shape = 21
+  ) +
   annotate(
     "text",
     x = Inf, y = Inf,
