@@ -151,8 +151,9 @@ bray_ffmi_v0 <- bray_2_v0 |>
     type = "norm", alpha = 0.13, linewidth = 1) +
   geom_point(
     data = centroids_v0, 
-    aes(x = Axis.1, y = Axis.2),
-    size = 6, shape = 21
+    aes(x = Axis.1, y = Axis.2, fill = low_ffmi_v0),
+    size = 6, shape = 21, stroke = 1.2,
+    inherit.aes = FALSE
   ) +
   annotate(
     "text",
