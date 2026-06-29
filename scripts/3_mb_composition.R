@@ -72,6 +72,7 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 baria_muscle <- read_rds("data/20260624_BARIA_muscle_clinical.RDS") # metadata/clinical data CHECK FOR MOST RECENT VERSION
 baria_mb <- read_rds("data/ps.BARIA.metaphlan.706.2548.RDS")
 
+# Melt into df
 melted_mb <- psmelt(baria_mb)
 
 # QC
