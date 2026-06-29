@@ -99,7 +99,7 @@ alpha_meta <- baria_mb_df |>
 alpha_v0 <- alpha_meta |>
   filter(visit == "0") |>
   arrange(id, Sample) |>
-  distinct(id,.keep_all = TRUE)
+  distinct(id, .keep_all = TRUE)
 
 ## Shannon ##
 # Boxplot
