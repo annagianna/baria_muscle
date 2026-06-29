@@ -65,7 +65,8 @@ if (taxa_are_rows(run1_mb)) {
   matrix_mb <- t(matrix_mb) 
 }
 
-# Shannon, Simpson, Richness
+# Shannon, Simpson, Richness 
+# note to self: calculated per sample, no filtering per visit needed at this stage
 shannon <- vegan::diversity(matrix_mb, index = "shannon")
 simpson <- vegan::diversity(matrix_mb, index = "simpson")
 richness <- vegan::specnumber(matrix_mb)
