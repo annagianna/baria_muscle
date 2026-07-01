@@ -4,6 +4,7 @@
 # Packages
 library(tidyverse)
 library(phyloseq)
+library(broom)
 
 # Data
 baria_muscle <- read_rds("data/20260624_BARIA_muscle_clinical.RDS") # clinical data
@@ -109,6 +110,53 @@ species_v0_fltr <- species_v0 |>
 rowSums(species_v0_fltr, na.rm = TRUE) |>
   summary()
 
-length(species_v0_keep)
+#### Associations
+# Prepare data for linear models
+model_data_v0 <- mb_v0 |> 
+  select(id, age_v0, sex, bmi_v0, ffmi_v0, low_ffmi_v0, all_of(species_v0_keep))
 
-dim(species_v0_fltr)
+# Pivot longer
+model_data_v0_long <- model_data_v0 |> 
+  pivot_longer(
+    cols = all_of(species_v0_keep),
+    names_to = "species",
+    values_to = "abundance"
+  )
+
+## Test for one species
+species1_data <- model_data_ffmi_v0_long |> 
+  filter(species == species_v0_keep[1]) |> 
+  select(id, ffmi_v0, age_v0, sex, bmi_v0, species, abundance)
+
+# Run first model (for one species)
+species1_model <- lm(
+  ffmi_v0 ~ abundance + age_v0 + sex + bmi_v0,
+  data = species1_data
+)
+
+summary(species1_model)
+
+## All species
+# Create one nested df per species to fit the same model repeatedly
+model_data_v0_nested <- model_data_v0_long |> 
+  group_by(species) |> 
+  nest()
+
+# Fit one lm per species
+model_v0 <- model_data_v0_nested |> 
+  mutate( # add model as a new col to the (nested) df
+    model = map( # applies lm to each nested species-specific df
+      data,
+      \(x) lm(ffmi_v0 ~ abundance + age_v0 + sex + bmi_v0, data = x)
+    )
+  )
+
+
+
+
+
+
+
+### Low FFMI 
+
+
