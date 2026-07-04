@@ -5,6 +5,7 @@
 library(tidyverse)
 library(phyloseq)
 library(broom)
+library(ggrepel)
 library(ggthemes)
 library(MetBrewer)
 
@@ -195,7 +196,20 @@ model_v0_results <- model_v0_tidy |>
   select(species, results) |> 
   unnest(results) |> 
   filter(term == "abundance") |> # keep only abundance term
-  mutate(p_fdr = p.adjust(p.value, method = "BH")) # add FDR-adjusted p-values
+  mutate(
+    p_fdr = p.adjust(p.value, method = "BH"), # add FDR-adjusted p-values
+
+    signif = if_else(p_fdr < 0.05, "significant", "not significant"),
+    posneg = if_else(estimate > 0, "positive", "negative"),
+
+    species_label = str_extract(species, "s__[^|]+"), # extract only species part
+    species_label = str_remove(species_label, "^s__"), # remove prefix
+
+    strain_label = str_extract(species, "t__[^|]+"),
+    strain_label = str_remove(strain_label, "^t__"),
+
+    species_strain_label = paste(species_label, strain_label, sep = " ")
+  ) 
 
 # Top 10 significant species
 model_v0_top10 <- model_v0_results |> 
@@ -207,18 +221,7 @@ model_v0_top10 <- model_v0_results |>
 # Species significantly associated with FFMI after FDR correction
 model_v0_signif <- model_v0_results |> 
   filter(p_fdr < 0.05) |> 
-  arrange(p_fdr) |> 
-  mutate(
-    species_label = str_extract(species, "s__[^|]+"), # extract only species part
-    species_label = str_remove(species_label, "^s__"), # remove prefix
-
-    strain_label = str_extract(species, "t__[^|]+"),
-    strain_label = str_remove(strain_label, "^t__"),
-
-    species_strain_label = paste(species_label, strain_label, sep = " "),
-
-    posneg = if_else(estimate > 0, "positive", "negative")
-  ) |> 
+  arrange(p_fdr) |>
   relocate(c(species_label, strain_label, species_strain_label), .after = species) |> 
   ungroup()
 
@@ -240,7 +243,20 @@ forest_model_v0 <- model_v0_signif |>
   scale_color_manual(values = c("positive" = manet_15[4], "negative" = manet_15[9]))
 ggsave(plot = forest_model_v0, filename = "graphs/microbe_associations/forest_model_v0.pdf", width = 8, height = 6)
 
-
+### Volcano plot
+volcano_model_v0 <-  model_v0_results |> 
+  ggplot(aes(x = estimate, y = -log10(p_fdr))) +
+  geom_point(aes(color = signif), size = 2) +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "grey") +
+  geom_label_repel(
+    data = filter(model_v0_results, signif == "significant"),
+    aes(label = species_strain_label)
+  ) +
+  labs(x = "Beta-coefficient") +
+  scale_color_manual(values = c("significant" = manet_15[9], "not significant" = "grey")) +
+  theme_minimal() +
+  theme(legend.position = "none")
+ggsave(plot = volcano_model_v0, filename = "graphs/microbe_associations/volcano_model_v0.pdf", width = 8, height = 6)
 
 
 ## Low FFMI 
