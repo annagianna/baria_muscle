@@ -5,6 +5,38 @@
 library(tidyverse)
 library(phyloseq)
 library(broom)
+library(ggthemes)
+library(MetBrewer)
+
+# Theme
+manet_15 <- met.brewer("Manet", n = 15)
+
+theme_Publication <- function(base_size = 14, base_family = "sans") {
+  
+  (theme_foundation(base_size = base_size, base_family = base_family) + 
+    theme(
+      plot.title = element_text(face = "bold", size = rel(0.8), hjust = 0.5),
+      text = element_text(),
+      panel.background = element_rect(colour = NA),
+      plot.background = element_rect(colour = NA),
+      panel.border = element_rect(colour = NA),
+      axis.title = element_text(face = "bold", size = rel(0.8)),
+      axis.title.y = element_text(angle = 90, vjust = 2),
+      axis.title.x = element_text(vjust = -0.2),
+      axis.text = element_text(), 
+      axis.line = element_line(colour = "black"),
+      axis.ticks = element_line(),
+      panel.grid.major = element_line(colour = "#f0f0f0"),
+      panel.grid.minor = element_blank(),
+      legend.key = element_rect(colour = NA),
+      legend.position = "bottom",
+      legend.key.size = unit(0.2, "cm"),
+      legend.spacing = unit(0, "cm"),
+      plot.margin = unit(c(10,5,5,5),"mm"),
+      strip.background = element_rect(colour = "#f0f0f0", fill = "#f0f0f0"),
+      strip.text = element_text(face = "bold")
+    ))
+}
 
 # Data
 baria_muscle <- read_rds("data/20260624_BARIA_muscle_clinical.RDS") # clinical data
@@ -124,7 +156,7 @@ model_data_v0_long <- model_data_v0 |>
   )
 
 ## Test for one species
-species1_data <- model_data_ffmi_v0_long |> 
+species1_data <- model_data_v0_long |> 
   filter(species == species_v0_keep[1]) |> 
   select(id, ffmi_v0, age_v0, sex, bmi_v0, species, abundance)
 
@@ -135,6 +167,8 @@ species1_model <- lm(
 )
 
 summary(species1_model)
+broom::tidy(species1_model)
+broom::glance(species1_model)
 
 ## All species
 # Create one nested df per species to fit the same model repeatedly
@@ -143,6 +177,7 @@ model_data_v0_nested <- model_data_v0_long |>
   nest()
 
 # Fit one lm per species
+## FFMI
 model_v0 <- model_data_v0_nested |> 
   mutate( # add model as a new col to the (nested) df
     model = map( # applies lm to each nested species-specific df
@@ -151,12 +186,61 @@ model_v0 <- model_data_v0_nested |>
     )
   )
 
+# Extract coefficient tables for all species models
+model_v0_tidy <- model_v0 |> 
+  mutate(results = map(model, broom::tidy, conf.int = TRUE))
+
+# Unnest coefficient tables and keep only abundance coefficient, add FDR-adjusted p-values
+model_v0_results <- model_v0_tidy |> 
+  select(species, results) |> 
+  unnest(results) |> 
+  filter(term == "abundance") |> # keep only abundance term
+  mutate(p_fdr = p.adjust(p.value, method = "BH")) # add FDR-adjusted p-values
+
+# Top 10 significant species
+model_v0_top10 <- model_v0_results |> 
+  arrange(p_fdr) |> # sort by (ascending) FDR-adjusted p-value
+  select(species, estimate, conf.low, conf.high, p.value, p_fdr) |> 
+  ungroup() |> 
+  slice_head(n = 10) # keep only the top 10 significant species
+
+# Species significantly associated with FFMI after FDR correction
+model_v0_signif <- model_v0_results |> 
+  filter(p_fdr < 0.05) |> 
+  arrange(p_fdr) |> 
+  mutate(
+    species_label = str_extract(species, "s__[^|]+"), # extract only species part
+    species_label = str_remove(species_label, "^s__"), # remove prefix
+
+    strain_label = str_extract(species, "t__[^|]+"),
+    strain_label = str_remove(strain_label, "^t__"),
+
+    species_strain_label = paste(species_label, strain_label, sep = " ")
+  ) |> 
+  relocate(c(species_label, strain_label, species_strain_label), .after = species) |> 
+  ungroup()
+
+### Forrest plot
+forrest_model_v0 <- model_v0_signif |> 
+  mutate(species_strain_label = fct_reorder(species_strain_label, estimate)) |> 
+  ggplot(aes(x = estimate, y = species_strain_label)) +
+  geom_point(aes(color = species_strain_label), size = 2.5) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high, color = species_strain_label), height = 0.2) +
+  labs(
+    x = "Beta-coefficients (95% CI)",
+    y = NULL,
+    title = "Species associated with baseline FFMI",
+    subtitle = "Linear models adjusted for age, sex, and BMI; FDR < 0.05"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  scale_color_manual(values = manet_20)
+ggsave(forrest_model_v0, filename = "graphs/microbe_associations/forrest_model_v0.pdf")
 
 
 
 
-
-
-### Low FFMI 
+## Low FFMI 
 
 
