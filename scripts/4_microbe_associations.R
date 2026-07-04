@@ -215,18 +215,20 @@ model_v0_signif <- model_v0_results |>
     strain_label = str_extract(species, "t__[^|]+"),
     strain_label = str_remove(strain_label, "^t__"),
 
-    species_strain_label = paste(species_label, strain_label, sep = " ")
+    species_strain_label = paste(species_label, strain_label, sep = " "),
+
+    posneg = if_else(estimate > 0, "positive", "negative")
   ) |> 
   relocate(c(species_label, strain_label, species_strain_label), .after = species) |> 
   ungroup()
 
-### Forrest plot
-forrest_model_v0 <- model_v0_signif |> 
+### Forest plot
+forest_model_v0 <- model_v0_signif |> 
   mutate(species_strain_label = fct_reorder(species_strain_label, estimate)) |> 
   ggplot(aes(x = estimate, y = species_strain_label)) +
-  geom_point(aes(color = species_strain_label), size = 2.5) +
+  geom_point(aes(color = posneg), size = 2.5) +
   geom_vline(xintercept = 0, linetype = "dashed") +
-  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high, color = species_strain_label), height = 0.2) +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high, color = posneg), height = 0.2) +
   labs(
     x = "Beta-coefficients (95% CI)",
     y = NULL,
@@ -235,8 +237,8 @@ forrest_model_v0 <- model_v0_signif |>
   ) +
   theme_minimal() +
   theme(legend.position = "none") +
-  scale_color_manual(values = manet_20)
-ggsave(forrest_model_v0, filename = "graphs/microbe_associations/forrest_model_v0.pdf")
+  scale_color_manual(values = c("positive" = manet_15[4], "negative" = manet_15[9]))
+ggsave(plot = forest_model_v0, filename = "graphs/microbe_associations/forest_model_v0.pdf", width = 8, height = 6)
 
 
 
