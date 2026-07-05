@@ -243,6 +243,17 @@ forest_model_v0 <- model_v0_signif |>
   scale_color_manual(values = c("positive" = manet_15[4], "negative" = manet_15[9]))
 ggsave(plot = forest_model_v0, filename = "graphs/microbe_associations/forest_model_v0.pdf", width = 8, height = 6)
 
+### Bar plot
+col_model_v0 <- model_v0_signif |> 
+  mutate(species_strain_label = fct_reorder(species_strain_label, estimate)) |> 
+  ggplot(aes(x = estimate, y = species_strain_label, fill = posneg)) +
+  geom_col(width = 0.8) +
+  labs(x = "Beta-coefficients") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  scale_fill_manual(values = c("positive" = manet_15[4], "negative" = manet_15[9]))
+ggsave(plot = col_model_v0, filename = "graphs/microbe_associations/col_model_v0.pdf", width = 8, height = 6)
+
 ### Volcano plot
 volcano_model_v0 <-  model_v0_results |> 
   ggplot(aes(x = estimate, y = -log10(p_fdr))) +
