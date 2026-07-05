@@ -143,7 +143,7 @@ species_v0_fltr <- species_v0 |>
 rowSums(species_v0_fltr, na.rm = TRUE) |>
   summary()
 
-#### Associations
+#### Associations with baseline FFMI ####
 # Prepare data for linear models
 model_data_v0 <- mb_v0 |> 
   select(id, age_v0, sex, bmi_v0, ffmi_v0, low_ffmi_v0, all_of(species_v0_keep))
@@ -166,10 +166,6 @@ species1_model <- lm(
   ffmi_v0 ~ abundance + age_v0 + sex + bmi_v0,
   data = species1_data
 )
-
-summary(species1_model)
-broom::tidy(species1_model)
-broom::glance(species1_model)
 
 ## All species
 # Create one nested df per species to fit the same model repeatedly
@@ -270,6 +266,108 @@ volcano_model_v0 <-  model_v0_results |>
 ggsave(plot = volcano_model_v0, filename = "graphs/microbe_associations/volcano_model_v0.pdf", width = 8, height = 6)
 
 
-## Low FFMI 
+
+#### Associations with ΔFFMI loss at 1 year ####
+# Prepare data for linear models
+model_data_ffmi_v4 <- mb_v0 |> 
+  select(id, age_v0, sex, bmi_v0, delta_ffmi_v4, perc_weight_change_v4, all_of(species_v0_keep)) |> 
+  filter(!is.na(delta_ffmi_v4)) |> 
+  filter(!is.na(perc_weight_change_v4))
+
+# Pivot longer
+model_data_ffmi_v4_long <- model_data_ffmi_v4 |> 
+  pivot_longer(
+    cols = all_of(species_v0_keep),
+    names_to = "species",
+    values_to = "abundance"
+  )
+
+# Create one nested df per species to fit the same model repeatedly
+model_data_ffmi_v4_nested <- model_data_ffmi_v4_long |> 
+  group_by(species) |> 
+  nest()
+
+# Fit one lm per species
+model_ffmi_v4 <- model_data_ffmi_v4_nested |> 
+  mutate(
+    model = map( # applies lm to each nested species-specific df
+      data,
+      \(x) lm(delta_ffmi_v4 ~ abundance + age_v0 + sex + bmi_v0 + perc_weight_change_v4, data = x)
+    )
+  )
+
+# Extract coefficient tables for all species models
+model_ffmi_v4_tidy <- model_ffmi_v4 |> 
+  mutate(results = map(model, broom::tidy, conf.int = TRUE))
+
+# Unnest coefficient tables and keep only abundance coefficient, add FDR-adjusted p-values
+model_ffmi_v4_results <- model_ffmi_v4_tidy |> 
+  select(species, results) |> 
+  unnest(results) |> 
+  filter(term == "abundance") |> # keep only abundance term
+  mutate(
+    p_fdr = p.adjust(p.value, method = "BH"), # add FDR-adjusted p-values
+
+    signif = if_else(p_fdr < 0.05, "significant", "not significant"),
+    posneg = if_else(estimate > 0, "positive", "negative"),
+
+    species_label = str_extract(species, "s__[^|]+"), # extract only species part
+    species_label = str_remove(species_label, "^s__"), # remove prefix
+
+    strain_label = str_extract(species, "t__[^|]+"),
+    strain_label = str_remove(strain_label, "^t__"),
+
+    species_strain_label = paste(species_label, strain_label, sep = " ")
+  ) 
 
 
+# Species significantly associated with ΔFFMI at 1 year after FDR correction
+model_ffmi_v4_signif <- model_ffmi_v4_results |> 
+  filter(p_fdr < 0.05) |> 
+  arrange(p_fdr) |>
+  relocate(c(species_label, strain_label, species_strain_label), .after = species) |> 
+  ungroup()
+
+### Forest plot
+forest_model_ffmi_v4 <- model_ffmi_v4_signif |> 
+  mutate(species_strain_label = fct_reorder(species_strain_label, estimate)) |> 
+  ggplot(aes(x = estimate, y = species_strain_label)) +
+  geom_point(aes(color = posneg), size = 2.5) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high, color = posneg), height = 0.2) +
+  labs(
+    x = "Beta-coefficients (95% CI)",
+    y = NULL,
+    title = "Species associated with ΔFFMI",
+    subtitle = "Linear models adjusted for age, sex, baseline BMI and %TWL; FDR < 0.05"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  scale_color_manual(values = c("positive" = manet_15[15], "negative" = manet_15[8]))
+ggsave(plot = forest_model_ffmi_v4, filename = "graphs/microbe_associations/forest_model_ffmi_v4.pdf", width = 8, height = 6)
+
+### Bar plot
+col_model_ffmi_v4 <- model_ffmi_v4_signif |> 
+  mutate(species_strain_label = fct_reorder(species_strain_label, estimate)) |> 
+  ggplot(aes(x = estimate, y = species_strain_label, fill = posneg)) +
+  geom_col(width = 0.8) +
+  labs(x = "Beta-coefficients") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  scale_fill_manual(values = c("positive" = manet_15[15], "negative" = manet_15[8]))
+ggsave(plot = col_model_ffmi_v4, filename = "graphs/microbe_associations/col_model_ffmi_v4.pdf", width = 8, height = 6)
+
+### Volcano plot
+volcano_model_ffmi_v4 <-  model_ffmi_v4_results |> 
+  ggplot(aes(x = estimate, y = -log10(p_fdr))) +
+  geom_point(aes(color = signif), size = 2) +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "grey") +
+  geom_label_repel(
+    data = filter(model_v0_results, signif == "significant"),
+    aes(label = species_strain_label)
+  ) +
+  labs(x = "Beta-coefficient") +
+  scale_color_manual(values = c("significant" = manet_15[15], "not significant" = "grey")) +
+  theme_minimal() +
+  theme(legend.position = "none")
+ggsave(plot = volcano_model_ffmi_v4, filename = "graphs/microbe_associations/volcano_model_ffmi_v4.pdf", width = 8, height = 6)
