@@ -320,7 +320,6 @@ model_ffmi_v4_results <- model_ffmi_v4_tidy |>
     species_strain_label = paste(species_label, strain_label, sep = " ")
   ) 
 
-
 # Species significantly associated with ΔFFMI at 1 year after FDR correction
 model_ffmi_v4_signif <- model_ffmi_v4_results |> 
   filter(p_fdr < 0.05) |> 
@@ -363,7 +362,7 @@ volcano_model_ffmi_v4 <-  model_ffmi_v4_results |>
   geom_point(aes(color = signif), size = 2) +
   geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "grey") +
   geom_label_repel(
-    data = filter(model_v0_results, signif == "significant"),
+    data = filter(model_ffmi_v4_results, signif == "significant"),
     aes(label = species_strain_label)
   ) +
   labs(x = "Beta-coefficient") +
