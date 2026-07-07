@@ -174,4 +174,4 @@ species_comp_ffmi_v0 <- species_ffmi_v0 |>
     axis.title.x = element_blank(),
     axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
   )
-ggsave("graphs/composition/species_comp_ffmi_v0.pdf", plot = species_comp_ffmi_v0, width = 12, height = 10)
+ggsave("graphs/composition/species_comp_ffmi_v0.pdf", plot = species_comp_ffmi_v0, width = 14, height = 8)
