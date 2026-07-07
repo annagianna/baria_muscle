@@ -13,9 +13,15 @@ library(patchwork)
 library(ggsci)
 
 # Theme
-manet_cols_30 <- met.brewer("Manet", n = 30)
-fill_cols_2 <- scale_fill_manual(values = c("yes" = manet_cols_30[14], "no" = manet_cols_30[30]))
-color_cols_2 <- scale_color_manual(values = c("yes" = manet_cols_30[14], "no" = manet_cols_30[30]))
+renoir_cols_20 <- met.brewer("Renoir", n = 20)
+fill_cols_2 <- scale_fill_manual(
+  values = c("yes" = renoir_cols_20[18], "no" = renoir_cols_20[5]),
+  labels = c("yes" = "Low FFMI", "no" = "High/moderate FFMI")
+)
+color_cols_2 <- scale_color_manual(
+  values = c("yes" = renoir_cols_20[18], "no" = renoir_cols_20[5]),
+  labels = c("yes" = "Low FFMI", "no" = "High/moderate FFMI")
+)
 
 theme_Publication <- function(base_size=14, base_family="sans") {
   
@@ -23,8 +29,8 @@ theme_Publication <- function(base_size=14, base_family="sans") {
     theme(
       plot.title = element_text(face = "bold", size = rel(0.8), hjust = 0.5),
       text = element_text(),
-      panel.background = element_rect(colour = NA),
-      plot.background = element_rect(colour = NA),
+      panel.background = element_rect(colour = NA, fill = NA),
+      plot.background = element_rect(colour = NA, fill = NA),
       panel.border = element_rect(colour = NA),
       axis.title = element_text(face = "bold", size = rel(0.8)),
       axis.title.y = element_text(angle = 90, vjust = 2),
@@ -130,15 +136,6 @@ disp_v0 <- vegan::betadisper(bray_v0, group = mb_meta_v0$low_ffmi_v0)
 anova(disp_v0)
 
 ## Plots ##
-# Baseline
-centroids_v0 <- bray_2_v0 |> 
-  group_by(low_ffmi_v0) |> 
-  summarize(
-    Axis.1 = mean(Axis.1, na.rm = TRUE),
-    Axis.2 = mean(Axis.2, na.rm = TRUE),
-    .groups = "drop"
-  )
-
 bray_ffmi_v0 <- bray_2_v0 |> 
   mutate(low_ffmi_v0 = factor(low_ffmi_v0, levels = c("yes", "no"))) |> 
   ggplot(aes(Axis.1, Axis.2)) +
@@ -150,12 +147,6 @@ bray_ffmi_v0 <- bray_2_v0 |>
     geom = "polygon", 
     aes(color = low_ffmi_v0, fill = low_ffmi_v0),
     type = "norm", alpha = 0.13, linewidth = 1) +
-  geom_point(
-    data = centroids_v0, 
-    aes(x = Axis.1, y = Axis.2, fill = low_ffmi_v0),
-    size = 6, shape = 21, stroke = 1.2,
-    inherit.aes = FALSE
-  ) +
   annotate(
     "text",
     x = Inf, y = Inf,
