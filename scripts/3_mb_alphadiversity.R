@@ -13,7 +13,7 @@ library(patchwork)
 
 # Theme
 renoir_cols_20 <- met.brewer("Renoir", n = 20)
-fill_cols_2 <- scale_fill_manual(values = c("yes" = renoir_cols_20[5], "no" = renoir_cols_20[18]))
+fill_cols_2 <- scale_fill_manual(values = c("yes" = renoir_cols_20[18], "no" = renoir_cols_20[5]))
 
 theme_Publication <- function(base_size = 14, base_family = "sans") {
   
