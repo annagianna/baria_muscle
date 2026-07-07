@@ -123,6 +123,7 @@ bray_2_v0 <- as.data.frame(pcoord_v0$vectors[, c("Axis.1", "Axis.2")]) |>
 # Test whether overall mb composition differs by baseline low FFMI group
 adonis_v0 <- vegan::adonis2(bray_v0 ~ low_ffmi_v0, data = mb_meta_v0, permutations = 999, by = "terms")
 p_adonis_v0 <- adonis_v0$`Pr(>F)`[1]
+r2_adonis_v0 <- adonis_v0$R2[1]
 
 # Check homogeneity of dispertion (variances)
 disp_v0 <- vegan::betadisper(bray_v0, group = mb_meta_v0$low_ffmi_v0)
@@ -158,9 +159,12 @@ bray_ffmi_v0 <- bray_2_v0 |>
   annotate(
     "text",
     x = Inf, y = Inf,
-    label = paste0("PERMANOVA p = ", round(p_adonis_v0, 3)),
-    hjust = 1.0, vjust = 1.2,
-    size = 3
+    label = paste0(
+      "PERMANOVA p = ", round(p_adonis_v0, 3),
+      "\nR² = ", round(r2_adonis_v0, 3)
+  ),
+  hjust = 1.0, vjust = 1.2,
+  size = 3
   ) +
   fill_cols_2 +
   color_cols_2 +
