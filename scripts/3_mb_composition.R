@@ -10,7 +10,7 @@ library(ggthemes)
 library(patchwork)
 
 # Theme
-manet_20 <- met.brewer("Manet", n = 20)
+renoir_20 <- met.brewer("Renoir", n = 20)
 
 theme_composition <- function(base_size = 14, base_family = "sans") {
   
@@ -18,8 +18,8 @@ theme_composition <- function(base_size = 14, base_family = "sans") {
     theme(
       plot.title = element_text(face = "bold",size = rel(1.0), hjust = 0.5), 
       text = element_text(),
-      panel.background = element_rect(colour = NA),
-      plot.background = element_rect(colour = NA),
+      panel.background = element_rect(colour = NA, fill = NA),
+      plot.background = element_rect(colour = NA, fill = NA),
       panel.border = element_rect(colour = NA),
       axis.title = element_text(face = "bold",size = rel(1)),
       axis.title.y = element_text(angle = 90,vjust = 2),
@@ -47,8 +47,8 @@ theme_Publication <- function(base_size=14, base_family="sans") {
     theme(
       plot.title = element_text(face = "bold", size = rel(0.8), hjust = 0.5),
       text = element_text(),
-      panel.background = element_rect(colour = NA),
-      plot.background = element_rect(colour = NA),
+      panel.background = element_rect(colour = NA, fill = NA),
+      plot.background = element_rect(colour = NA, fill = NA),
       panel.border = element_rect(colour = NA),
       axis.title = element_text(face = "bold", size = rel(0.8)),
       axis.title.y = element_text(angle = 90, vjust = 2),
@@ -130,7 +130,7 @@ top20_species_v0 <- mb |>
 # assign fixed color to each one of the top20 species
 top20_species_v0_vector <- top20_species_v0$Species # top 20 species names as vector
 set.seed(13)
-top20_species_v0_colours <- c("Other species" = "grey63", setNames(sample(manet_20), top20_species_v0_vector))
+top20_species_v0_colours <- c("Other species" = "grey75", setNames(sample(renoir_20), top20_species_v0_vector))
 
 ### Baseline composition ###
 species_ffmi_v0 <- mb |> 
@@ -168,10 +168,11 @@ species_comp_ffmi_v0 <- species_ffmi_v0 |>
   scale_fill_manual(values = top20_species_v0_colours) +
   guides(fill = guide_legend(ncol = 1)) +
   labs(y = "Relative abundance (%)", x = "Low baseline FFMI", title = "Species", fill = "") +
+  scale_x_discrete(labels = c("yes" = "Low FFMI", "no" = "High/moderate FFMI")) +
   scale_y_continuous(expand = c(0, 0)) +
   theme_composition() +
   theme(
     axis.title.x = element_blank(),
     axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
   )
-ggsave("graphs/composition/species_comp_ffmi_v0.pdf", plot = species_comp_ffmi_v0, width = 14, height = 8)
+ggsave(plot = species_comp_ffmi_v0, "graphs/composition/species_comp_ffmi_v0.pdf", width = 14, height = 8)
