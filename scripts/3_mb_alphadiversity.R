@@ -12,8 +12,8 @@ library(ggpubr)
 library(patchwork)
 
 # Theme
-manet_cols_30 <- met.brewer("Manet", n = 30)
-fill_cols_2 <- scale_fill_manual(values = c("yes" = manet_cols_30[14], "no" = manet_cols_30[30]))
+renoir_cols_20 <- met.brewer("Renoir", n = 20)
+fill_cols_2 <- scale_fill_manual(values = c("yes" = renoir_cols_20[5], "no" = renoir_cols_20[18]))
 
 theme_Publication <- function(base_size = 14, base_family = "sans") {
   
@@ -21,8 +21,8 @@ theme_Publication <- function(base_size = 14, base_family = "sans") {
     theme(
       plot.title = element_text(face = "bold", size = rel(0.8), hjust = 0.5),
       text = element_text(),
-      panel.background = element_rect(colour = NA),
-      plot.background = element_rect(colour = NA),
+      panel.background = element_rect(colour = NA, fill = NA),
+      plot.background = element_rect(colour = NA, fill = NA),
       panel.border = element_rect(colour = NA),
       axis.title = element_text(face = "bold", size = rel(0.8)),
       axis.title.y = element_text(angle = 90, vjust = 2),
@@ -37,7 +37,7 @@ theme_Publication <- function(base_size = 14, base_family = "sans") {
       legend.key.size = unit(0.2, "cm"),
       legend.spacing = unit(0, "cm"),
       plot.margin = unit(c(10,5,5,5),"mm"),
-      strip.background=element_rect(colour = "#f0f0f0", fill = "#f0f0f0"),
+      strip.background = element_rect(colour = "#f0f0f0", fill = "#f0f0f0"),
       strip.text = element_text(face = "bold")
     ))
 } 
@@ -121,7 +121,7 @@ shannon_violin_ffmi_v0 <- alpha_v0 |>
   ggplot(aes(x = low_ffmi_v0, y = shannon)) +
   geom_violin(aes(fill = low_ffmi_v0), trim = FALSE) +
   geom_boxplot(fill = "white", width = 0.1) +
-  labs(x = "", y = "Shannon index", title = "Shannon index", fill = "Low baseline FFMI") +
+  labs(x = "", y = "Shannon index", title = "Shannon index", fill = "Baseline FFMI status") +
   stat_compare_means( 
     tip.length = 0, 
     hide.ns = TRUE, 
@@ -131,8 +131,9 @@ shannon_violin_ffmi_v0 <- alpha_v0 |>
   ) + 
   fill_cols_2 +
   scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
-  #scale_y_continuous(expand = expansion(mult = c(0.02, 0.05))) +
-  theme_Publication()
+  scale_x_discrete(labels = c("yes" = "Low FFMI", "no" = "High/moderate FFMI")) +
+  theme_Publication() +
+  theme(legend.position = "none")
 ggsave(shannon_violin_ffmi_v0, filename = "graphs/alphadiversity/shannon_violin_ffmi_v0.pdf", width = 6, height = 5)
 
 ## Simpson ##
@@ -155,7 +156,7 @@ simpson_violin_ffmi_v0 <- alpha_v0 |>
   ggplot(aes(x = low_ffmi_v0, y = simpson)) +
   geom_violin(aes(fill = low_ffmi_v0), trim = FALSE) +
   geom_boxplot(fill = "white", width = 0.1) +
-  labs(x = "", y = "Simpson index", title = "Simpson index", fill = "Low baseline FFMI") +
+  labs(x = "", y = "Simpson index", title = "Simpson index", fill = "Baseline FFMI status") +
   stat_compare_means( 
     tip.length = 0, 
     hide.ns = TRUE, 
@@ -165,8 +166,9 @@ simpson_violin_ffmi_v0 <- alpha_v0 |>
   ) + 
   fill_cols_2 +
   scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
-  #scale_y_continuous(expand = expansion(mult = c(0.02, 0.05))) +
-  theme_Publication()
+  scale_x_discrete(labels = c("yes" = "Low FFMI", "no" = "High/moderate FFMI")) +
+  theme_Publication() +
+  theme(legend.position = "none")
 ggsave(simpson_violin_ffmi_v0, filename = "graphs/alphadiversity/simpson_violin_ffmi_v0.pdf", width = 6, height = 5)
 
 ## Richness ##
@@ -189,7 +191,7 @@ richness_violin_ffmi_v0 <- alpha_v0 |>
   ggplot(aes(x = low_ffmi_v0, y = richness)) +
   geom_violin(aes(fill = low_ffmi_v0), trim = FALSE) +
   geom_boxplot(fill = "white", width = 0.1) +
-  labs(x = "", y = "Richness", title = "Richness", fill = "Low baseline FFMI") +
+  labs(x = "", y = "Richness", title = "Richness", fill = "Baseline FFMI status") +
   stat_compare_means( 
     tip.length = 0, 
     hide.ns = TRUE, 
@@ -199,8 +201,9 @@ richness_violin_ffmi_v0 <- alpha_v0 |>
   ) + 
   fill_cols_2 +
   scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
-  #scale_y_continuous(expand = expansion(mult = c(0.02, 0.05))) +
-  theme_Publication()
+  scale_x_discrete(labels = c("yes" = "Low FFMI", "no" = "High/moderate FFMI")) +
+  theme_Publication() +
+  theme(legend.position = "none")
 ggsave(richness_violin_ffmi_v0, filename = "graphs/alphadiversity/richness_violin_ffmi_v0.pdf", width = 6, height = 5)
 
 ## Combine into a panel
@@ -209,6 +212,6 @@ ggsave(richness_violin_ffmi_v0, filename = "graphs/alphadiversity/richness_violi
 alpha_panel_ffmi_v0 <- 
   (shannon_violin_ffmi_v0 + simpson_violin_ffmi_v0 + richness_violin_ffmi_v0) +
   plot_layout(guides = "collect") &
-  theme(legend.position = "bottom") &
+  # theme(legend.position = "bottom") &
   theme(aspect.ratio = 0.8)
 ggsave(alpha_panel_ffmi_v0, filename = "graphs/alphadiversity/alpha_panel_ffmi_v0.pdf", width = 12, height = 8)
