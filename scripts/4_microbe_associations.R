@@ -256,7 +256,7 @@ model_ffmi_v0_1_results <- model_ffmi_v0_1_tidy |>
 
     species_label = str_extract(species, "s__[^|]+"), # extract only species part
     species_label = str_remove(species_label, "^s__"), # remove prefix
-    species_label = str_remove(species_label, "SGB\\d+$"), # remove suffix / SGB identifier
+    species_label = str_remove(species_label, "_SGB\\d+$"), # remove suffix / SGB identifier
     species_label = str_replace_all(species_label, "_", " "),
     species_label = make.unique(species_label)
   )
@@ -272,9 +272,9 @@ model_ffmi_v0_1_signif <- model_ffmi_v0_1_results |>
 forest_model_ffmi_v0_1 <- model_ffmi_v0_1_signif |> 
   mutate(species_label = fct_reorder(species_label, estimate)) |> 
   ggplot(aes(x = estimate, y = species_label)) +
-  geom_point(aes(color = posneg), size = 2.5) +
   geom_vline(xintercept = 0, linetype = "dashed") +
-  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high, color = posneg), height = 0.2) +
+  geom_point(aes(color = posneg), size = 2.5) +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high, color = posneg), height = 0.5) +
   labs(
     x = "Estimate (95% CI)",
     y = NULL,
