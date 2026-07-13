@@ -12,7 +12,7 @@ library(ggthemes)
 library(MetBrewer)
 
 # Theme
-manet_15 <- met.brewer("Manet", n = 15)
+renoir_15 <- met.brewer("Renoir", n = 15)
 
 theme_Publication <- function(base_size = 14, base_family = "sans") {
   
@@ -221,14 +221,15 @@ model_data_ffmi_v0_long <- model_data_ffmi_v0 |>
     cols = all_of(species_v0_keep),
     names_to = "species",
     values_to = "abundance"
-  )
+  ) |> 
+  arrange(species) # to make the order deterministic before make.unique()
 
 # Create one nested df per species to fit the same model repeatedly
 model_data_ffmi_v0_nested <- model_data_ffmi_v0_long |> 
   group_by(species) |> 
   nest()
 
-# First model (adj. for age and sex only)
+# First model: adjusted for age and sex
 # Fit one lm per species
 model_ffmi_v0_1 <- model_data_ffmi_v0_nested |> 
   mutate( # add model as a new col to the (nested) df
@@ -250,19 +251,14 @@ model_ffmi_v0_1_results <- model_ffmi_v0_1_tidy |>
   mutate(
     p_fdr = p.adjust(p.value, method = "BH"), # add FDR-adjusted p-values
 
-    signif = if_else(p_fdr < 0.05, "significant", "not significant"),
+    signif = if_else(p_fdr < 0.05, "significant", "not significant"), # for plots
     posneg = if_else(estimate > 0, "positive", "negative"),
 
     species_label = str_extract(species, "s__[^|]+"), # extract only species part
-    species_label = str_remove(species_label, "^s__") # remove prefix
-  ) 
-
-# Top 10 significant species
-model_ffmi_v0_1_top10 <- model_ffmi_v0_1_results |> 
-  arrange(p_fdr) |> # sort by (ascending) FDR-adjusted p-value
-  select(species, estimate, conf.low, conf.high, p.value, p_fdr) |> 
-  ungroup() |> 
-  slice_head(n = 10) # keep only the top 10 significant species
+    species_label = str_remove(species_label, "^s__"), # remove prefix
+    species_label = str_replace_all(species_label, "_", " "),
+    species_label = make.unique(species_label)
+  )
 
 # Species significantly associated with baseline FFMI after FDR correction
 model_ffmi_v0_1_signif <- model_ffmi_v0_1_results |> 
@@ -273,32 +269,32 @@ model_ffmi_v0_1_signif <- model_ffmi_v0_1_results |>
 
 ### Forest plot
 forest_model_ffmi_v0_1 <- model_ffmi_v0_1_signif |> 
-  mutate(species_strain_label = fct_reorder(species_label, estimate)) |> 
+  mutate(species_label = fct_reorder(species_label, estimate)) |> 
   ggplot(aes(x = estimate, y = species_label)) +
   geom_point(aes(color = posneg), size = 2.5) +
   geom_vline(xintercept = 0, linetype = "dashed") +
   geom_errorbarh(aes(xmin = conf.low, xmax = conf.high, color = posneg), height = 0.2) +
   labs(
-    x = "Beta-coefficients (95% CI)",
+    x = "Estimate (95% CI)",
     y = NULL,
     title = "Species associated with baseline FFMI",
-    subtitle = "Linear models adjusted for age, sex, and BMI; FDR < 0.05"
+    subtitle = "Linear models adjusted for age and sex; FDR < 0.05"
   ) +
   theme_minimal() +
   theme(legend.position = "none") +
-  scale_color_manual(values = c("positive" = manet_15[4], "negative" = manet_15[9]))
-ggsave(plot = forest_model_v0, filename = "graphs/microbe_associations/forest_model_v0.pdf", width = 8, height = 6)
+  scale_color_manual(values = c("positive" = renoir_15[14], "negative" = renoir_15[6]))
+ggsave(plot = forest_model_ffmi_v0_1, filename = "graphs/microbe_associations/forest_model_ffmi_v0_1.pdf", width = 8, height = 6)
 
 ### Bar plot
 col_model_ffmi_v0_1 <- model_ffmi_v0_1_signif |> 
-  mutate(species_strain_label = fct_reorder(species_label, estimate)) |> 
+  mutate(species_label = fct_reorder(species_label, estimate)) |> 
   ggplot(aes(x = estimate, y = species_label, fill = posneg)) +
   geom_col(width = 0.8) +
-  labs(x = "Beta-coefficients") +
+  labs(x = "Estimate") +
   theme_minimal() +
   theme(legend.position = "none") +
-  scale_fill_manual(values = c("positive" = manet_15[4], "negative" = manet_15[9]))
-ggsave(plot = col_model_v0, filename = "graphs/microbe_associations/col_model_v0.pdf", width = 8, height = 6)
+  scale_fill_manual(values = c("positive" = renoir_15[14], "negative" = renoir_15[6]))
+ggsave(plot = col_model_ffmi_v0_1, filename = "graphs/microbe_associations/col_model_ffmi_v0_1.pdf", width = 8, height = 6)
 
 ### Volcano plot
 volcano_model_ffmi_v0_1 <-  model_ffmi_v0_1_results |> 
@@ -306,11 +302,11 @@ volcano_model_ffmi_v0_1 <-  model_ffmi_v0_1_results |>
   geom_point(aes(color = signif), size = 2) +
   geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "grey") +
   geom_label_repel(
-    data = filter(model_v0_results, signif == "significant"),
+    data = filter(model_ffmi_v0_1_results, signif == "significant"),
     aes(label = species_label)
   ) +
   labs(x = "Beta-coefficient") +
-  scale_color_manual(values = c("significant" = manet_15[9], "not significant" = "grey")) +
+  scale_color_manual(values = c("significant" = renoir_15[6], "not significant" = "grey")) +
   theme_minimal() +
   theme(legend.position = "none")
-ggsave(plot = volcano_model_v0, filename = "graphs/microbe_associations/volcano_model_v0.pdf", width = 8, height = 6)
+ggsave(plot = volcano_model_ffmi_v0_1, filename = "graphs/microbe_associations/volcano_model_ffmi_v0_1.pdf", width = 8, height = 6)
