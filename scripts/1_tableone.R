@@ -32,29 +32,35 @@ t1_v0_vars |>
     values_to = "value"
   ) |>
   ggplot(aes(x = value)) +
-  geom_histogram() +
-  facet_wrap(~ variable, scales = "free") +
-
-
+  geom_histogram(binwidth = 1) +
+  facet_wrap(~ variable, scales = "free")
 
 # Create table
 t1_v0 <- CreateTableOne(
-  vars = names(t1_v0_vars)[[names(t1_v0_vars) != "low_ffmi_v0"]],
+  vars = names(t1_v0_vars)[names(t1_v0_vars) != "low_ffmi_v0"],
   strata = "low_ffmi_v0",
   data = t1_v0_vars, 
   factorVars = c("sex", "prediab_v0", "t2d_v0"),
   test = TRUE
 )
 
-class(t1_v0)
+# Print & format table
+t1_v0_matrix <- print(
+  t1_v0,
+  nonnormal = c(
+    "fasting_glucose_mmoll_mmt_v0", 
+    "fasting_insulin_pmoll_mmt_v0",
+    "hba1c_percent_v0",
+    "homa_ir_v0",
+    "homa_b_v0"
+    ),
+    showAllLevels = TRUE,
+    quote = FALSE,
+    noSpaces = TRUE,
+    printToggle = FALSE,
+    contDigits = 1,
+    catDigits = 1,
+    pDigitsw = 3
+)
 
-
-
-# Export
-
-
-print(t1_v0)
-
-t1_v0_matrix <- print()
-
-write.csv(t1_v0_matrix, file = "tables/t1_v0.csv")
+write.csv(t1_v0_matrix, file = "tables/t1_v0_matrix.csv", row.names = TRUE)
