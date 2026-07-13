@@ -42,6 +42,28 @@ theme_Publication <- function(base_size = 14, base_family = "sans") {
     ))
 } 
 
+theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
+
+  theme_minimal(base_size = base_size, base_family = base_family) +
+    theme(
+      plot.title = element_text(face = "bold", size = rel(0.8), hjust = 0.5),
+      axis.title = element_text(face = "bold", size = rel(0.8)),
+      axis.title.y = element_text(angle = 90, vjust = 2),
+      axis.title.x = element_text(vjust = -0.2),
+      axis.text = element_text(colour = "black"),
+      axis.line.x.bottom = element_line(colour = "black", linewidth = 0.5),
+      axis.line.y.left = element_line(colour = "black", linewidth = 0.5),
+      axis.ticks = element_line(colour = "black", linewidth = 0.4),
+      panel.grid.major = element_line(colour = "#dddddd", linewidth = 0.4, linetype = "22"),
+      panel.grid.minor = element_blank(),
+      panel.background = element_rect(fill = "white", colour = NA),
+      plot.background = element_rect(fill = "white", colour = NA),
+      legend.position = "bottom",
+      plot.margin = unit(c(10, 5, 5, 5), "mm")
+    )
+
+}
+
 # Data
 baria_muscle <- readRDS("data/20260624_BARIA_muscle_clinical.RDS") # metadata/clinical data
 baria_mb <- readRDS("data/ps.BARIA.metaphlan.706.2548.RDS")
@@ -112,7 +134,7 @@ shannon_ffmi_v0 <- alpha_v0 |>
   labs(title = "Shannon index", y = "Shannon index", x = "Low baseline FFMI") +
   fill_cols_2 +
   labs(fill = "Low baseline FFMI") + 
-  theme_Publication()
+  theme_minimal_custom()
 ggsave(shannon_ffmi_v0, filename = "graphs/alphadiversity/shannon_ffmi_v0.pdf", width = 7, height = 5)
 
 # Violin
@@ -132,7 +154,7 @@ shannon_violin_ffmi_v0 <- alpha_v0 |>
   fill_cols_2 +
   scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
   scale_x_discrete(labels = c("yes" = "Low FFMI", "no" = "High/moderate FFMI")) +
-  theme_Publication() +
+  theme_minimal_custom() +
   theme(legend.position = "none")
 ggsave(shannon_violin_ffmi_v0, filename = "graphs/alphadiversity/shannon_violin_ffmi_v0.pdf", width = 6, height = 5)
 
@@ -147,7 +169,7 @@ simpson_ffmi_v0 <- alpha_v0 |>
   labs(title = "Simpson index", y = "Simpson index", x = "Low baseline FFMI") +
   fill_cols_2 +
   labs(fill = "Low baseline FFMI") + 
-  theme_Publication()
+  theme_minimal_custom()
 ggsave(simpson_ffmi_v0, filename = "graphs/alphadiversity/simpson_ffmi_v0.pdf", width = 7, height = 5)
 
 # Violin
@@ -167,7 +189,7 @@ simpson_violin_ffmi_v0 <- alpha_v0 |>
   fill_cols_2 +
   scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
   scale_x_discrete(labels = c("yes" = "Low FFMI", "no" = "High/moderate FFMI")) +
-  theme_Publication() +
+  theme_minimal_custom() +
   theme(legend.position = "none")
 ggsave(simpson_violin_ffmi_v0, filename = "graphs/alphadiversity/simpson_violin_ffmi_v0.pdf", width = 6, height = 5)
 
@@ -182,7 +204,7 @@ richness_ffmi_v0 <- alpha_v0 |>
   labs(title = "Richness", y = "Richness", x = "Low baseline FFMI") +
   fill_cols_2 +
   labs(fill = "Low baseline FFMI") + 
-  theme_Publication()
+  theme_minimal_custom()
 ggsave(richness_ffmi_v0, filename = "graphs/alphadiversity/richness_ffmi_v0.pdf", width = 7, height = 5)
 
 # Violin
@@ -202,7 +224,7 @@ richness_violin_ffmi_v0 <- alpha_v0 |>
   fill_cols_2 +
   scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
   scale_x_discrete(labels = c("yes" = "Low FFMI", "no" = "High/moderate FFMI")) +
-  theme_Publication() +
+  theme_minimal_custom() +
   theme(legend.position = "none")
 ggsave(richness_violin_ffmi_v0, filename = "graphs/alphadiversity/richness_violin_ffmi_v0.pdf", width = 6, height = 5)
 
