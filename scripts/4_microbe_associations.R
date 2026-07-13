@@ -310,7 +310,8 @@ volcano_model_ffmi_v0_1 <-  model_ffmi_v0_1_results |>
   geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "grey") +
   geom_label_repel(
     data = filter(model_ffmi_v0_1_results, signif == "significant"),
-    aes(label = species_label)
+    aes(label = species_label),
+    fontface = "italic"
   ) +
   labs(x = "Beta-coefficient") +
   scale_color_manual(values = c("significant" = renoir_15[6], "not significant" = "grey")) +
