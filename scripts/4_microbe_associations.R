@@ -55,11 +55,17 @@ run1_mb <- prune_samples(
   baria_mb
 )
 
+# Filter out poorly annotated ("GGB"-containing) taxa for species-level associations
+run1_mb_clean <- prune_taxa(
+  str_detect(rownames(otu_table(run1_mb)), "GGB\\d+", negate = TRUE),
+  run1_mb
+)
+
 # Extract abundance matrix
-matrix_mb <- as(otu_table(run1_mb), "matrix")
+matrix_mb <- as(otu_table(run1_mb_clean), "matrix")
 
 # vegan requires a matrix with samples as rows, taxa as cols
-if (taxa_are_rows(run1_mb)) {
+if (taxa_are_rows(run1_mb_clean)) {
   matrix_mb <- t(matrix_mb)
 }
 
@@ -69,7 +75,7 @@ rowSums(matrix_mb, na.rm = TRUE) |>
 
 # Create analysis table: abundance matrix + mb sample data + clinical metadata
 # Sample data as df
-run1_mb_df <- as(sample_data(run1_mb), "data.frame") |> 
+run1_mb_clean_df <- as(sample_data(run1_mb_clean), "data.frame") |> 
   tibble::rownames_to_column(var = "Sample") |> 
   mutate(
     visit = case_when(
@@ -88,14 +94,12 @@ mb_df <- matrix_mb |> # abundance matrix
   as.data.frame() |> 
   tibble::rownames_to_column(var = "Sample") |> 
   left_join(
-    run1_mb_df |> # mb sample data
+    run1_mb_clean_df |> # mb sample data
       select(Sample, visit, id),
     by = "Sample"
   ) |> 
   left_join(baria_muscle, by = "id") |> 
-  relocate(id, visit, .before = everything()) |> 
-  select(-matches("GGB\\d+")) # remove "GGB"-containing/unclassified taxa
-
+  relocate(id, visit, .before = everything())
 
 # Keep baseline samples only for cross-sectional associations (baseline species abundance with FFMI)
 mb_v0 <- mb_df |> 
@@ -111,11 +115,8 @@ mb_v0 |>
 
 ## Calculate prevalence and mean relative abundance per species
 # Use only mb species cols from matrix_mb
-species_cols_matrix_mb <- colnames(matrix_mb) |>
-  str_subset("GGB\\d+", negate = TRUE)
-
 species_v0 <- mb_v0 |>
-  select(all_of(species_cols_matrix_mb))
+  select(all_of(colnames(matrix_mb))) 
 
 # Prevalence (= proportion of patients/samples where species is detected)
 # nts: relative prevalence, not absolute count
@@ -132,16 +133,15 @@ species_v0_fltr_check <- tibble(
 )
 
 ### Filter
-# Keep species detected in at least 20% of baseline samples, with mean relative abundance >= 0.01%
-# Check this approach
+# Keep species detected in at least 10% of baseline samples, with mean relative abundance >= 0.01%
 species_v0_keep <- species_v0_fltr_check |>
   filter(
-    prevalence >= 0.20,
+    prevalence >= 0.10,
     mean_abundance >= 0.01
   ) |>
   pull(species)
 
-length(species_v0_keep)
+length(species_v0_keep) # check
 
 # Filter baseline species
 species_v0_fltr <- species_v0 |>
@@ -254,12 +254,7 @@ model_ffmi_v0_1_results <- model_ffmi_v0_1_tidy |>
     posneg = if_else(estimate > 0, "positive", "negative"),
 
     species_label = str_extract(species, "s__[^|]+"), # extract only species part
-    species_label = str_remove(species_label, "^s__"), # remove prefix
-
-    strain_label = str_extract(species, "t__[^|]+"),
-    strain_label = str_remove(strain_label, "^t__"),
-
-    species_strain_label = paste(species_label, strain_label, sep = " ")
+    species_label = str_remove(species_label, "^s__") # remove prefix
   ) 
 
 # Top 10 significant species
@@ -273,13 +268,13 @@ model_ffmi_v0_1_top10 <- model_ffmi_v0_1_results |>
 model_ffmi_v0_1_signif <- model_ffmi_v0_1_results |> 
   filter(p_fdr < 0.05) |> 
   arrange(p_fdr) |>
-  relocate(c(species_label, strain_label, species_strain_label), .after = species) |> 
+  relocate(species_label, .after = species) |> 
   ungroup()
 
 ### Forest plot
 forest_model_ffmi_v0_1 <- model_ffmi_v0_1_signif |> 
-  mutate(species_strain_label = fct_reorder(species_strain_label, estimate)) |> 
-  ggplot(aes(x = estimate, y = species_strain_label)) +
+  mutate(species_strain_label = fct_reorder(species_label, estimate)) |> 
+  ggplot(aes(x = estimate, y = species_label)) +
   geom_point(aes(color = posneg), size = 2.5) +
   geom_vline(xintercept = 0, linetype = "dashed") +
   geom_errorbarh(aes(xmin = conf.low, xmax = conf.high, color = posneg), height = 0.2) +
@@ -296,8 +291,8 @@ ggsave(plot = forest_model_v0, filename = "graphs/microbe_associations/forest_mo
 
 ### Bar plot
 col_model_ffmi_v0_1 <- model_ffmi_v0_1_signif |> 
-  mutate(species_strain_label = fct_reorder(species_strain_label, estimate)) |> 
-  ggplot(aes(x = estimate, y = species_strain_label, fill = posneg)) +
+  mutate(species_strain_label = fct_reorder(species_label, estimate)) |> 
+  ggplot(aes(x = estimate, y = species_label, fill = posneg)) +
   geom_col(width = 0.8) +
   labs(x = "Beta-coefficients") +
   theme_minimal() +
@@ -312,7 +307,7 @@ volcano_model_ffmi_v0_1 <-  model_ffmi_v0_1_results |>
   geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "grey") +
   geom_label_repel(
     data = filter(model_v0_results, signif == "significant"),
-    aes(label = species_strain_label)
+    aes(label = species_label)
   ) +
   labs(x = "Beta-coefficient") +
   scale_color_manual(values = c("significant" = manet_15[9], "not significant" = "grey")) +
