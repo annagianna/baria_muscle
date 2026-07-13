@@ -20,8 +20,8 @@ theme_Publication <- function(base_size = 14, base_family = "sans") {
     theme(
       plot.title = element_text(face = "bold", size = rel(0.8), hjust = 0.5),
       text = element_text(),
-      panel.background = element_rect(colour = NA),
-      plot.background = element_rect(colour = NA),
+      panel.background = element_rect(colour = NA, fill = NA),
+      plot.background = element_rect(colour = NA, fill = NA),
       panel.border = element_rect(colour = NA),
       axis.title = element_text(face = "bold", size = rel(0.8)),
       axis.title.y = element_text(angle = 90, vjust = 2),
@@ -39,6 +39,28 @@ theme_Publication <- function(base_size = 14, base_family = "sans") {
       strip.background = element_rect(colour = "#f0f0f0", fill = "#f0f0f0"),
       strip.text = element_text(face = "bold")
     ))
+}
+
+theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
+
+  theme_minimal(base_size = base_size, base_family = base_family) +
+    theme(
+      plot.title = element_text(face = "bold", size = rel(0.8), hjust = 0.5),
+      axis.title = element_text(face = "bold", size = rel(0.8)),
+      axis.title.y = element_text(angle = 90, vjust = 2),
+      axis.title.x = element_text(vjust = -0.2),
+      axis.text = element_text(colour = "black"),
+      axis.line.x.bottom = element_line(colour = "black", linewidth = 0.5),
+      axis.line.y.left = element_line(colour = "black", linewidth = 0.5),
+      axis.ticks = element_line(colour = "black", linewidth = 0.4),
+      panel.grid.major = element_line(colour = "#dddddd", linewidth = 0.4, linetype = "22"),
+      panel.grid.minor = element_blank(),
+      panel.background = element_rect(fill = "white", colour = NA),
+      plot.background = element_rect(fill = "white", colour = NA),
+      legend.position = "bottom",
+      plot.margin = unit(c(10, 5, 5, 5), "mm")
+    )
+
 }
 
 # Data
@@ -281,12 +303,12 @@ forest_model_ffmi_v0_1 <- model_ffmi_v0_1_signif |>
     title = "Species associated with baseline FFMI",
     subtitle = "Linear models adjusted for age and sex; FDR < 0.05"
   ) +
-  theme_minimal() +
+  theme_minimal_custom() +
   theme(
     legend.position = "none",
     axis.text.y = element_text(face = "italic")
   ) +
-  scale_color_manual(values = c("positive" = renoir_15[14], "negative" = renoir_15[6]))
+  scale_color_manual(values = c("positive" = renoir_15[14], "negative" = renoir_15[6])) 
 ggsave(plot = forest_model_ffmi_v0_1, filename = "graphs/microbe_associations/forest_model_ffmi_v0_1.pdf", width = 8, height = 6)
 
 ### Bar plot
@@ -294,8 +316,8 @@ col_model_ffmi_v0_1 <- model_ffmi_v0_1_signif |>
   mutate(species_label = fct_reorder(species_label, estimate)) |> 
   ggplot(aes(x = estimate, y = species_label, fill = posneg)) +
   geom_col(width = 0.8) +
-  labs(x = "Estimate") +
-  theme_minimal() +
+  labs(x = "Estimate", y = NULL) +
+  theme_minimal_custom() +
   theme(
     legend.position = "none",
     axis.text.y = element_text(face = "italic")
@@ -313,13 +335,11 @@ volcano_model_ffmi_v0_1 <-  model_ffmi_v0_1_results |>
     aes(label = species_label),
     fontface = "italic"
   ) +
-  labs(x = "Beta-coefficient") +
+  labs(x = "Estimate (95% CI)") +
   scale_color_manual(values = c("significant" = renoir_15[6], "not significant" = "grey")) +
-  theme_minimal() +
+  theme_minimal_custom() +
   theme(legend.position = "none")
 ggsave(plot = volcano_model_ffmi_v0_1, filename = "graphs/microbe_associations/volcano_model_ffmi_v0_1.pdf", width = 8, height = 6)
-
-
 
 
 #### Model  2: Adjusted for age, sex and adiposity (FMI) ####
@@ -374,7 +394,7 @@ forest_model_ffmi_v0_2 <- model_ffmi_v0_2_signif |>
     title = "Species associated with baseline FFMI",
     subtitle = "Linear models adjusted for age, sex and FMI; FDR < 0.05"
   ) +
-  theme_minimal() +
+  theme_minimal_custom() +
   theme(
     legend.position = "none",
     axis.text.y = element_text(face = "italic")
@@ -387,8 +407,8 @@ col_model_ffmi_v0_2 <- model_ffmi_v0_2_signif |>
   mutate(species_label = fct_reorder(species_label, estimate)) |> 
   ggplot(aes(x = estimate, y = species_label, fill = posneg)) +
   geom_col(width = 0.8) +
-  labs(x = "Estimate") +
-  theme_minimal() +
+  labs(x = "Estimate", y = NULL) +
+  theme_minimal_custom() +
   theme(
     legend.position = "none",
     axis.text.y = element_text(face = "italic")
@@ -408,7 +428,7 @@ volcano_model_ffmi_v0_2 <-  model_ffmi_v0_2_results |>
   ) +
   labs(x = "Beta-coefficient") +
   scale_color_manual(values = c("significant" = renoir_15[6], "not significant" = "grey")) +
-  theme_minimal() +
+  theme_minimal_custom() +
   theme(legend.position = "none")
 ggsave(plot = volcano_model_ffmi_v0_2, filename = "graphs/microbe_associations/volcano_model_ffmi_v0_2.pdf", width = 8, height = 6)
 
