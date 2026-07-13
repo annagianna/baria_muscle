@@ -256,6 +256,7 @@ model_ffmi_v0_1_results <- model_ffmi_v0_1_tidy |>
 
     species_label = str_extract(species, "s__[^|]+"), # extract only species part
     species_label = str_remove(species_label, "^s__"), # remove prefix
+    species_label = str_remove(species_label, "SGB\\d+$"), # remove suffix / SGB identifier
     species_label = str_replace_all(species_label, "_", " "),
     species_label = make.unique(species_label)
   )
@@ -281,7 +282,10 @@ forest_model_ffmi_v0_1 <- model_ffmi_v0_1_signif |>
     subtitle = "Linear models adjusted for age and sex; FDR < 0.05"
   ) +
   theme_minimal() +
-  theme(legend.position = "none") +
+  theme(
+    legend.position = "none",
+    axis.text.y = element_text(face = "italic")
+  ) +
   scale_color_manual(values = c("positive" = renoir_15[14], "negative" = renoir_15[6]))
 ggsave(plot = forest_model_ffmi_v0_1, filename = "graphs/microbe_associations/forest_model_ffmi_v0_1.pdf", width = 8, height = 6)
 
@@ -292,7 +296,10 @@ col_model_ffmi_v0_1 <- model_ffmi_v0_1_signif |>
   geom_col(width = 0.8) +
   labs(x = "Estimate") +
   theme_minimal() +
-  theme(legend.position = "none") +
+  theme(
+    legend.position = "none",
+    axis.text.y = element_text(face = "italic")
+  ) +
   scale_fill_manual(values = c("positive" = renoir_15[14], "negative" = renoir_15[6]))
 ggsave(plot = col_model_ffmi_v0_1, filename = "graphs/microbe_associations/col_model_ffmi_v0_1.pdf", width = 8, height = 6)
 
