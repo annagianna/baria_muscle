@@ -146,7 +146,9 @@ bray_ffmi_v0 <- bray_2_v0 |>
   stat_ellipse(
     geom = "polygon", 
     aes(color = low_ffmi_v0, fill = low_ffmi_v0),
-    type = "norm", alpha = 0.13, linewidth = 1) +
+    type = "norm", alpha = 0.13, linewidth = 1,
+    show.legend = FALSE
+  ) +
   annotate(
     "text",
     x = Inf, y = Inf,
@@ -159,6 +161,6 @@ bray_ffmi_v0 <- bray_2_v0 |>
   ) +
   fill_cols_2 +
   color_cols_2 +
-  theme_Publication() +
+  theme_minimal_custom() +
   theme(legend.position = "top") 
 ggsave(bray_ffmi_v0, filename = "graphs/betadiversity/bray_ffmi_v0.pdf", width = 10, height = 7)
