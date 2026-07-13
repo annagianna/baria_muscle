@@ -9,8 +9,7 @@ library(tableone)
 baria_muscle <- readRDS("data/20260624_BARIA_muscle_clinical.RDS")
 
 # Table 1 grouped by FFMI status at baseline
-
-
+# Choose vars
 t1_v0_vars <- baria_muscle |> 
   select(age_v0, sex, bmi_v0, wc_cm_v0, fm_kg_v0, ffm_kg_v0, ffmi_v0, low_ffmi_v0, prediab_v0, t2d_v0, 
     hba1c_percent_v0, fasting_glucose_mmoll_mmt_v0, fasting_insulin_pmoll_mmt_v0, homa_ir_v0, homa_b_v0) |> 
@@ -24,14 +23,30 @@ t1_v0_vars <- baria_muscle |>
     )
   )
 
+# Check distribution of continuous vars
+t1_v0_vars |>
+  select(low_ffmi_v0, where(is.numeric)) |>
+  pivot_longer(
+    cols = -low_ffmi_v0,
+    names_to = "variable",
+    values_to = "value"
+  ) |>
+  ggplot(aes(x = value)) +
+  geom_histogram() +
+  facet_wrap(~ variable, scales = "free") +
+
+
+
+# Create table
 t1_v0 <- CreateTableOne(
-  vars = names(t1d_v0_vars)[[names(t1_v0_vars) != "low_ffmi_v0"]],
+  vars = names(t1_v0_vars)[[names(t1_v0_vars) != "low_ffmi_v0"]],
   strata = "low_ffmi_v0",
   data = t1_v0_vars, 
   factorVars = c("sex", "prediab_v0", "t2d_v0"),
   test = TRUE
 )
 
+class(t1_v0)
 
 
 
