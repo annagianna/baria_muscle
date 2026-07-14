@@ -190,15 +190,16 @@ species_ffmi_v0 |> # check
 species_comp_ffmi_v0 <- species_ffmi_v0 |> 
   mutate(low_ffmi_v0 = fct_relevel(low_ffmi_v0, "yes", after = 0L)) |> # low baseline FFMI first
   ggplot(aes(x = low_ffmi_v0, y = Abundance, fill = Species2)) +
-  geom_bar(stat = "identity", color = "black", width = 0.9) +
+  geom_bar(stat = "identity", color = "black", width = 0.65) +
   scale_fill_manual(values = top20_species_v0_colours) +
   guides(fill = guide_legend(ncol = 1)) +
-  labs(y = "Relative abundance (%)", x = "Low baseline FFMI", title = "Species", fill = "") +
+  labs(x = NULL, y = "Relative abundance (%)", title = "Species", fill = "") +
   scale_x_discrete(labels = c("yes" = "Low FFMI", "no" = "High/moderate FFMI")) +
   scale_y_continuous(expand = c(0, 0)) +
+  theme_minimal_composition() +
   theme(
     axis.title.x = element_blank(),
-    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
-  ) +
-  theme_minimal_composition()
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+    legend.text = element_text(size = rel(0.9))
+  )
 ggsave(plot = species_comp_ffmi_v0, "graphs/composition/species_comp_ffmi_v0.pdf", width = 14, height = 8)
