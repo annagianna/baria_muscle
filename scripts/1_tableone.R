@@ -3,12 +3,14 @@
 
 # Packages
 library(tidyverse)
+library(phyloseq)
 library(tableone)
 
 # Data
 baria_muscle <- readRDS("data/20260624_BARIA_muscle_clinical.RDS")
+baria_mb <- readRDS("data/ps.BARIA.metaphlan.706.2548.RDS")
 
-# Table 1 grouped by FFMI status at baseline
+### Table 1 grouped by FFMI status at baseline (clinical cohort) ###
 # Choose vars
 t1_v0_vars <- baria_muscle |> 
   select(age_v0, sex, bmi_v0, wc_cm_v0, fm_kg_v0, ffm_kg_v0, ffmi_v0, low_ffmi_v0, prediab_v0, t2d_v0, 
@@ -71,7 +73,7 @@ t1_v0_matrix <- print(
     "HOMA-IR",
     "HOMA-B"
   ),
-  showAllLevels = TRUE,
+  showAllLevels = FALSE,
   quote = FALSE,
   noSpaces = TRUE,
   printToggle = FALSE,
@@ -83,3 +85,18 @@ t1_v0_matrix <- print(
 # Write table
 write.csv(t1_v0_matrix, file = "tables/t1_v0_matrix.csv", row.names = TRUE)
 write.csv(t1_v0_matrix, file = "tables/t1_v0_matrix.html", row.names = TRUE)
+
+
+### Table 1 grouped by FFMI status at baseline (participants with available shotgun data) ###
+# Filter patient IDs out of phyloseq object
+shotgun_ids <- sample_data(baria_mb)$Subject_ID
+
+# Filter metadata only to include ids that also appear in the phyloseq object
+baria_muscle_mb <- baria_muscle |> 
+  filter(id %in% shotgun_ids)
+
+nrow(baria_muscle)
+nrow(baria_muscle_mb)
+
+n_distinct(baria_muscle$id)
+n_distinct(baria_muscle_mb$id)
