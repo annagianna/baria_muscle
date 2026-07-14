@@ -21,26 +21,43 @@ t1_v0_vars <- baria_muscle |>
       levels = c("yes", "no"),
       labels = c("Low FFMI", "High/moderate FFMI")
     )
+  ) |> 
+  rename(
+    `Age (years)` = age_v0,
+    `Sex` = sex,
+    `BMI (kg/m²)` = bmi_v0,
+    `Waist circumference (cm)` = wc_cm_v0,
+    `Fat mass (kg)` = fm_kg_v0,
+    `Fat-free mass (kg)` = ffm_kg_v0,
+    `Fat-free mass index (kg/m²)` = ffmi_v0,
+    `FFMI group` = low_ffmi_v0,
+    `Prediabetes` = prediab_v0,
+    `T2D` = t2d_v0,
+    `HbA1c%` = hba1c_percent_v0,
+    `Fasting glucose (mmol/L)` = fasting_glucose_mmoll_mmt_v0,
+    `Fasting insulin (pmol/L)` = fasting_insulin_pmoll_mmt_v0,
+    `HOMA-IR` = homa_ir_v0,
+    `HOMA-B` = homa_b_v0
   )
 
 # Check distribution of continuous vars
 t1_v0_vars |>
-  select(low_ffmi_v0, where(is.numeric)) |>
+  select(`FFMI group`, where(is.numeric)) |>
   pivot_longer(
-    cols = -low_ffmi_v0,
+    cols = -`FFMI group`,
     names_to = "variable",
     values_to = "value"
   ) |>
   ggplot(aes(x = value)) +
-  geom_histogram(binwidth = 1) +
+  geom_histogram(bins = 30) +
   facet_wrap(~ variable, scales = "free")
 
 # Create table
 t1_v0 <- CreateTableOne(
-  vars = names(t1_v0_vars)[names(t1_v0_vars) != "low_ffmi_v0"],
-  strata = "low_ffmi_v0",
+  vars = names(t1_v0_vars)[names(t1_v0_vars) != "FFMI group"],
+  strata = "FFMI group",
   data = t1_v0_vars, 
-  factorVars = c("sex", "prediab_v0", "t2d_v0"),
+  factorVars = c("Sex", "Prediabetes", "T2D"),
   test = TRUE
 )
 
@@ -48,19 +65,21 @@ t1_v0 <- CreateTableOne(
 t1_v0_matrix <- print(
   t1_v0,
   nonnormal = c(
-    "fasting_glucose_mmoll_mmt_v0", 
-    "fasting_insulin_pmoll_mmt_v0",
-    "hba1c_percent_v0",
-    "homa_ir_v0",
-    "homa_b_v0"
-    ),
-    showAllLevels = TRUE,
-    quote = FALSE,
-    noSpaces = TRUE,
-    printToggle = FALSE,
-    contDigits = 1,
-    catDigits = 1,
-    pDigitsw = 3
-)
+    "Fasting glucose (mmol/L)", 
+    "Fasting insulin (pmol/L)",
+    "HbA1c%",
+    "HOMA-IR",
+    "HOMA-B"
+  ),
+  showAllLevels = TRUE,
+  quote = FALSE,
+  noSpaces = TRUE,
+  printToggle = FALSE,
+  contDigits = 1,
+  catDigits = 1,
+  pDigits = 3
+  )
 
+# Write table
 write.csv(t1_v0_matrix, file = "tables/t1_v0_matrix.csv", row.names = TRUE)
+write.csv(t1_v0_matrix, file = "tables/t1_v0_matrix.html", row.names = TRUE)
