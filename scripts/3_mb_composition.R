@@ -68,6 +68,32 @@ theme_Publication <- function(base_size=14, base_family="sans") {
     ))
 } 
 
+theme_minimal_composition <- function(base_size = 14, base_family = "sans") {
+
+  theme_minimal(base_size = base_size, base_family = base_family) +
+    theme(
+      plot.title = element_text(face = "bold", size = rel(1), hjust = 0.5),
+      axis.title = element_text(face = "bold", size = rel(1)),
+      axis.title.y = element_text(angle = 90, vjust = 2),
+      axis.text = element_text(colour = "black"),
+      axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+      axis.line.x.bottom = element_line(colour = "black", linewidth = 0.5),
+      axis.line.y.left = element_line(colour = "black", linewidth = 0.5),
+      axis.ticks = element_line(colour = "black", linewidth = 0.4),
+      panel.grid.major.y = element_line(colour = "#dddddd", linewidth = 0.4, linetype = "22"),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.background = element_rect(fill = "white", colour = NA),
+      plot.background = element_rect(fill = "white", colour = NA),
+      legend.position = "right",
+      legend.key.height = unit(0.4, "cm"),
+      legend.key.width = unit(0.4, "cm"),
+      legend.spacing.y = unit(0, "cm"),
+      legend.text = element_text(size = rel(0.7)),
+      plot.margin = unit(c(10, 5, 5, 5), "mm")
+    )
+}
+
 # Data
 baria_muscle <- read_rds("data/20260624_BARIA_muscle_clinical.RDS") # metadata/clinical data CHECK FOR MOST RECENT VERSION
 baria_mb <- read_rds("data/ps.BARIA.metaphlan.706.2548.RDS")
@@ -170,9 +196,9 @@ species_comp_ffmi_v0 <- species_ffmi_v0 |>
   labs(y = "Relative abundance (%)", x = "Low baseline FFMI", title = "Species", fill = "") +
   scale_x_discrete(labels = c("yes" = "Low FFMI", "no" = "High/moderate FFMI")) +
   scale_y_continuous(expand = c(0, 0)) +
-  theme_composition() +
   theme(
     axis.title.x = element_blank(),
     axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
-  )
+  ) +
+  theme_minimal_composition()
 ggsave(plot = species_comp_ffmi_v0, "graphs/composition/species_comp_ffmi_v0.pdf", width = 14, height = 8)
