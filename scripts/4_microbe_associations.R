@@ -237,12 +237,53 @@ dagitty::adjustmentSets(
   effect = "total"
 )
 
-# Model 3: ADD HERE
+# Model 3: Extensive / sensitivity DAG 
+# Additional adjustment for T2D and antidiabetic medication
+dag_ffmi_v0_3s <- dagitty::dagitty("
+dag {
+microbiome [exposure]
+FFMI [outcome]
 
+age -> microbiome
+age -> FFMI
+age -> T2D
+
+sex -> microbiome
+sex -> FFMI
+sex -> T2D
+
+adiposity -> microbiome
+adiposity -> FFMI
+adiposity -> T2D
+adiposity -> inflammation
+adiposity -> insulin_resistance
+
+T2D -> microbiome
+T2D -> FFMI
+T2D -> metformin
+
+metformin -> microbiome
+metformin -> FFMI
+
+microbiome -> inflammation
+inflammation -> FFMI
+
+microbiome -> FFMI
+
+FFMI -> insulin_resistance
+}")
+
+dagitty::adjustmentSets(
+  dag_ffmi_v0_3s,
+  exposure = "microbiome",
+  outcome = "FFMI",
+  type = "minimal",
+  effect = "total"
+)
 
 # Prepare data for linear models
 model_data_ffmi_v0 <- mb_v0 |> 
-  select(id, age_v0, sex, ffmi_v0, fmi_v0, low_ffmi_v0, all_of(species_v0_keep))
+  select(id, age_v0, sex, t2d_v0, dm_meds_v0, metformin_v0, ffmi_v0, fmi_v0, low_ffmi_v0, all_of(species_v0_keep))
 
 # Pivot longer -> reshape to one row per participant-species combination
 model_data_ffmi_v0_long <- model_data_ffmi_v0 |> 
@@ -268,7 +309,7 @@ model_data_ffmi_v0_nested <- model_data_ffmi_v0_long_log |>
   group_by(species) |> 
   nest()
 
-#### Model  1: Adjusted for age and sex #####
+#### Model 1: Adjusted for age and sex #####
 # Fit one lm per species
 model_ffmi_v0_1 <- model_data_ffmi_v0_nested |> 
   mutate( # add model as a new col to the (nested) df
@@ -345,6 +386,7 @@ model_ffmi_v0_2_signif <- model_ffmi_v0_2_results |>
   relocate(species_label, .after = species) |> 
   ungroup()
 
+# Prepare data and labels to plot models 1 & 2 together
 # Species significant after FDR correction in at least one model (1 and/or 2)
 models_ffmi_1_2_signif <- union(model_ffmi_v0_1_signif$species, model_ffmi_v0_2_signif$species)
 
@@ -396,33 +438,77 @@ forest_model_ffmi_1_2 <- models_ffmi_v0_1_2_results |>
   theme_minimal_custom() +
   theme(legend.position = "bottom", axis.text.y = element_text(face = "italic"))
 
-  
-  
-  
-  
-  
+#### Model 3: Extensive/Sensitivity model; adjusted for age, sex adiposity, dm, antidiabetic medication
+# Check numbers for T2D and antidiabetic medication
+model_data_ffmi_v0 |> 
+  count(t2d_v0, dm_meds_v0)
 
-  
-  
-  
-# Keep for model 3
+#### Model 3: Adjusted for age, sex, adiposity, T2D and antidiabetic medication ####
+# Fit one lm per species
+model_ffmi_v0_3 <- model_data_ffmi_v0_nested |> 
+  mutate(
+    model = map(
+      data,
+      \(x) lm(ffmi_v0 ~ log10_abundance + age_v0 + sex + fmi_v0 + t2d_v0 + metformin_v0, data = x)
+    )
+  )
 
-  forest_model_ffmi_v0_2 <- model_ffmi_v0_2_signif |> 
-  mutate(species_label = fct_reorder(species_label, estimate)) |> 
-  ggplot(aes(x = estimate, y = species_label)) +
+# Extract coefficient tables for all species models
+model_ffmi_v0_3_tidy <- model_ffmi_v0_3 |> 
+  mutate(results = map(model, broom::tidy, conf.int = TRUE))
+
+# Keep abundance coefficient and calculate FDR-adjusted p-values
+model_ffmi_v0_3_results <- model_ffmi_v0_3_tidy |> 
+  select(species, results) |> 
+  unnest(results) |> 
+  filter(term == "log10_abundance") |> 
+  mutate(
+    p_fdr = p.adjust(p.value, method = "BH"),
+    signif = if_else(
+      p_fdr < 0.05,
+      "significant",
+      "not significant"
+    )
+  ) |> 
+  left_join(species_labels, by = "species") |> 
+  mutate(posneg = if_else(estimate > 0, "positive", "negative"))
+
+# Species significantly associated with baseline FFMI after FDR correction
+model_ffmi_v0_3_signif <- model_ffmi_v0_3_results |> 
+  filter(p_fdr < 0.05) |> 
+  arrange(p_fdr) |> 
+  relocate(species_label, .after = species) |> 
+  ungroup()
+
+# Create unique labels among species significant in Model 3
+model_ffmi_v0_3_species_labels <- model_ffmi_v0_3_signif |> 
+  select(species, species_label) |> 
+  arrange(species_label, species) |> 
+  mutate(species_label_unique = make.unique(species_label)) |> 
+  select(species, species_label_unique)
+
+
+# Forest plot model 3
+forest_model_ffmi_v0_3 <- model_ffmi_v0_3_signif |>
+  select(-species_label) |> 
+  left_join(model_ffmi_v0_3_species_labels, by = "species") |> 
+  arrange(estimate) |> 
+  mutate(species_label_unique = factor(species_label_unique, levels = species_label_unique)) |> 
+  ggplot(aes(x = estimate, y = species_label_unique, color = posneg)) +
   geom_vline(xintercept = 0, linetype = "dashed") +
-  geom_point(aes(color = posneg), size = 2.5) +
   geom_errorbarh(aes(xmin = conf.low, xmax = conf.high, color = posneg), height = 0.5) +
+  geom_point(size = 2.5) +
+  scale_color_manual(values = c("positive" = renoir_15[14], "negative" = renoir_15[6])) +
   labs(
-    x = "Estimate (95% CI)",
+    x = "kg/m² change in baseline FFMI per 1-unit increase in log10 abundance",
     y = NULL,
     title = "Species associated with baseline FFMI",
-    subtitle = "Linear models adjusted for age, sex and FMI; FDR < 0.05"
+    subtitle = "Adjusted for age, sex, FMI, T2D and metformin; FDR < 0.05",
+    color = "Association"
   ) +
   theme_minimal_custom() +
   theme(
     legend.position = "none",
     axis.text.y = element_text(face = "italic")
-  ) +
-  scale_color_manual(values = c("positive" = renoir_15[14], "negative" = renoir_15[6]))
-ggsave(plot = forest_model_ffmi_v0_2, filename = "graphs/microbe_associations/forest_model_ffmi_v0_2.pdf", width = 8, height = 6)
+  )
+ggsave(plot = forest_model_ffmi_v0_3, filename = "graphs/microbe_associations/forest_model_ffmi_v0_3.pdf", width = 8, height = 6)
