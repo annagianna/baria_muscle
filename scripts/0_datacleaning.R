@@ -678,8 +678,35 @@ psychiatric_meds_any_pattern <- str_c("\\b(", str_c(unlist(psychiatric_meds), co
 ppi <- c("omeprazole", "pantoprazole", "esomeprazole")
 ppi_pattern <- str_c("\\b(", str_c(ppi, collapse = "|"), ")\\b")
 
-# Use regex patterns to create clean medication columns for all medication categories and subcategories
+# Antibiotics
+antibiotics <- c(
+  #Penicillins
+  "amoxicilline", "amoxicillin", "augmentin", "co-amoxiclav", "flucloxacilline", "flucloxacillin", "penicilline", "penicillin",
 
+  # Tetracyclines
+  "doxycycline", "minocycline",
+
+  # Macrolides
+  "azitromycine", "azithromycin", "claritromycine", "clarithromycin", "erytromycine", "erythromycin",
+
+  # Fluoroquinolones
+  "ciprofloxacine", "ciprofloxacin", "levofloxacine", "levofloxacin", "moxifloxacine", "moxifloxacin",
+
+  # Lincosamides
+  "clindamycine", "clindamycin",
+
+  # Nitroimidazoles
+  "metronidazol", "metronidazole",
+
+  # Urinary tract antibiotics
+  "nitrofurantoine", "nitrofurantoin", "fosfomycine", "fosfomycin",
+
+  # Sulfonamides
+  "co-trimoxazol", "cotrimoxazol", "trimethoprim", "sulfamethoxazol", "sulfamethoxazole"
+)
+antibiotics_pattern <- str_c("\\b(", str_c(antibiotics, collapse = "|"), ")\\b")
+
+# Use regex patterns to create clean medication columns for all medication categories and subcategories
 baria_muscle_clean <- baria_muscle_clinical_with_medication_notypos |> 
   mutate(
     # Diabetes medication classes
@@ -725,12 +752,14 @@ baria_muscle_clean <- baria_muscle_clinical_with_medication_notypos |>
     psychiatric_meds_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_any_pattern), "yes", "no"),
 
     # PPIs
-    ppi_v0 = if_else(str_detect(medication_list_v0, ppi_pattern), "yes", "no")
+    ppi_v0 = if_else(str_detect(medication_list_v0, ppi_pattern), "yes", "no"),
+
+    # Antibiotics
+    abx_v0 = if_else(str_detect(medication_list_v0, antibiotics_pattern), "yes", "no")
   ) |> 
   select(-medication_list_v0) |> 
   arrange(date_v0)
 
-
 # then save as both RDS and csv files
-write.csv(baria_muscle_clean, "data/20260624_BARIA_muscle_clinical.csv")
-saveRDS(baria_muscle_clean, "data/20260624_BARIA_muscle_clinical.RDS")
+write.csv(baria_muscle_clean, "data/20260720_BARIA_muscle_clinical.csv")
+saveRDS(baria_muscle_clean, "data/20260720_BARIA_muscle_clinical.RDS")
