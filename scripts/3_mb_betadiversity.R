@@ -14,16 +14,18 @@ library(ggsci)
 
 # Theme
 renoir_cols_20 <- met.brewer("Renoir", n = 20)
+
 fill_cols_2 <- scale_fill_manual(
   values = c("yes" = renoir_cols_20[18], "no" = renoir_cols_20[5]),
   labels = c("yes" = "Low FFMI", "no" = "High/moderate FFMI")
 )
+
 color_cols_2 <- scale_color_manual(
   values = c("yes" = renoir_cols_20[18], "no" = renoir_cols_20[5]),
   labels = c("yes" = "Low FFMI", "no" = "High/moderate FFMI")
 )
 
-theme_Publication <- function(base_size=14, base_family="sans") {
+theme_Publication <- function(base_size = 14, base_family = "sans") {
   
   (theme_foundation(base_size = base_size, base_family = base_family) + 
     theme(
@@ -51,8 +53,12 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 } 
 
 # Data
-baria_muscle <- read_rds("data/20260624_BARIA_muscle_clinical.RDS") # clinical data
+baria_muscle_ab <- read_rds("data/20260720_BARIA_muscle_clinical.RDS") # clinical data
 baria_mb <- read_rds("data/ps.BARIA.metaphlan.706.2548.RDS")
+
+# Filter out participants taking antibiotics
+baria_muscle <- baria_muscle_ab |> 
+  filter(abx_v0 == "no")
 
 # qc
 sample_sums(baria_mb) |>
@@ -139,7 +145,7 @@ anova(disp_v0)
 bray_ffmi_v0 <- bray_2_v0 |> 
   mutate(low_ffmi_v0 = factor(low_ffmi_v0, levels = c("yes", "no"))) |> 
   ggplot(aes(Axis.1, Axis.2)) +
-  geom_point(aes(color = low_ffmi_v0), size = 3, alpha = 0.9) +
+  geom_point(aes(color = low_ffmi_v0), size = 2.5, alpha = 0.9) +
   xlab(paste0("PCo1 (", round(expl_variance_bray_v0[1], digits = 1),"%)")) +
   ylab(paste0("PCo2 (", round(expl_variance_bray_v0[2], digits = 1),"%)")) +
   labs(color = "", fill = "", title = "PCoA Bray-Curtis Distance") +
@@ -153,8 +159,8 @@ bray_ffmi_v0 <- bray_2_v0 |>
     "text",
     x = Inf, y = Inf,
     label = paste0(
-      "PERMANOVA p = ", round(p_adonis_v0, 3),
-      "\nR² = ", round(r2_adonis_v0, 3)
+      "PERMANOVA R² = ", formatC(r2_adonis_v0, format = "f", digits = 3),
+      "\np = ", formatC(p_adonis_v0, format = "f", digits = 3)
   ),
   hjust = 1.0, vjust = 1.2,
   size = 3
