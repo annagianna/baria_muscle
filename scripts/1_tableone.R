@@ -7,8 +7,12 @@ library(phyloseq)
 library(tableone)
 
 # Data
-baria_muscle <- readRDS("data/20260624_BARIA_muscle_clinical.RDS")
+baria_muscle_ab <- readRDS("data/20260720_BARIA_muscle_clinical.RDS")
 baria_mb <- readRDS("data/ps.BARIA.metaphlan.706.2548.RDS")
+
+# Remove participants taking antibiotics
+baria_muscle <- baria_muscle_ab |> 
+  filter(abx_v0 == "no")
 
 #### Table 1 grouped by FFMI status at baseline (clinical cohort) ####
 # Choose vars
@@ -84,8 +88,6 @@ t1_v0_matrix <- print(
 
 # Write table
 write.csv(t1_v0_matrix, file = "tables/t1_v0_matrix.csv", row.names = TRUE)
-write.csv(t1_v0_matrix, file = "tables/t1_v0_matrix.html", row.names = TRUE)
-
 
 #### Table 1 grouped by FFMI status at baseline (participants with available shotgun data) ####
 # Filter patient IDs out of phyloseq object
@@ -147,9 +149,9 @@ t1_v0_mb_vars |>
 
 # Create table
 t1_v0_mb <- CreateTableOne(
-  vars = names(t1_v0_vars)[names(t1_v0_vars) != "FFMI group"],
+  vars = names(t1_v0_mb_vars)[names(t1_v0_mb_vars) != "FFMI group"],
   strata = "FFMI group",
-  data = t1_v0_vars, 
+  data = t1_v0_mb_vars, 
   factorVars = c("Sex", "Prediabetes", "T2D"),
   test = TRUE
 )
@@ -174,5 +176,4 @@ t1_v0_mb_matrix <- print(
   )
 
 # Write table
-write.csv(t1_v0_mb_matrix, file = "tables/t1_v0_matrix.csv", row.names = TRUE)
-write.csv(t1_v0_mb_matrix, file = "tables/t1_v0_matrix.html", row.names = TRUE)
+write.csv(t1_v0_mb_matrix, file = "tables/t1_v0_mb_matrix.csv", row.names = TRUE)
