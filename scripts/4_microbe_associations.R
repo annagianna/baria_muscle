@@ -470,8 +470,8 @@ model_ffmi_v0_3_results <- model_ffmi_v0_3_tidy |>
       "not significant"
     )
   ) |> 
-  left_join(species_labels, by = "species") |> 
-  mutate(posneg = if_else(estimate > 0, "positive", "negative"))
+  left_join(species_labels, by = "species") #|> 
+ # mutate(posneg = if_else(estimate > 0, "positive", "negative"))
 
 # Species significantly associated with baseline FFMI after FDR correction
 model_ffmi_v0_3_signif <- model_ffmi_v0_3_results |> 
@@ -494,17 +494,15 @@ forest_model_ffmi_v0_3 <- model_ffmi_v0_3_signif |>
   left_join(model_ffmi_v0_3_species_labels, by = "species") |> 
   arrange(estimate) |> 
   mutate(species_label_unique = factor(species_label_unique, levels = species_label_unique)) |> 
-  ggplot(aes(x = estimate, y = species_label_unique, color = posneg)) +
+  ggplot(aes(x = estimate, y = species_label_unique)) +
   geom_vline(xintercept = 0, linetype = "dashed") +
-  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high, color = posneg), height = 0.5) +
-  geom_point(size = 2.5) +
-  scale_color_manual(values = c("positive" = renoir_15[14], "negative" = renoir_15[6])) +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high, color = renoir_15[8]), height = 0.5) +
+  geom_point(size = 2.5, color = renoir_15[8]) +
   labs(
     x = "kg/m² change in baseline FFMI per 1-unit increase in log10 abundance",
     y = NULL,
     title = "Species associated with baseline FFMI",
-    subtitle = "Adjusted for age, sex, FMI, T2D and metformin; FDR < 0.05",
-    color = "Association"
+    subtitle = "Adjusted for age, sex, FMI, T2D and metformin; FDR < 0.05"
   ) +
   theme_minimal_custom() +
   theme(
