@@ -64,12 +64,16 @@ theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
 }
 
 # Data
-baria_muscle <- read_rds("data/20260624_BARIA_muscle_clinical.RDS") # clinical data
+baria_muscle_ab <- read_rds("data/20260720_BARIA_muscle_clinical.RDS") # clinical data
 baria_mb <- read_rds("data/ps.BARIA.metaphlan.706.2548.RDS")
 
 # qc
 sample_sums(baria_mb) |>
   summary() # adds up to 100
+
+# Filter out participants taking antibiotics
+baria_muscle <- baria_muscle_ab |> 
+  filter(abx_v0 == "no")
 
 # Keep only samples with one run or first run of samples with duplicates (same approach as in previous scripts)
 run1_mb <- prune_samples(
@@ -155,10 +159,10 @@ species_v0_fltr_check <- tibble(
 )
 
 ### Filter
-# Keep species detected in at least 10% of baseline samples, with mean relative abundance >= 0.01%
+# Keep species detected in at least 20% of baseline samples, with mean relative abundance >= 0.01%
 species_v0_keep <- species_v0_fltr_check |>
   filter(
-    prevalence >= 0.10,
+    prevalence >= 0.20,
     mean_abundance >= 0.01
   ) |>
   pull(species)
@@ -176,7 +180,7 @@ rowSums(species_v0_fltr, na.rm = TRUE) |>
 ##### FFMI #####
 ## Associations with baseline FFMI ##
 ### Draw DAG ###
-# Primary DAG
+# Model 1: Primary DAG
 dag_ffmi_v0_1 <- dagitty::dagitty("
 dag {
 microbiome [exposure]
@@ -206,7 +210,7 @@ dagitty::paths(
   to = "FFMI"
 )
 
-# Sensitivity DAG (with adjustment for adiposity/FMI)
+# Model 2: Sensitivity DAG (with adjustment for adiposity/FMI)
 dag_ffmi_v0_2s <- dagitty::dagitty("
 dag {
 microbiome [exposure]
@@ -233,21 +237,34 @@ dagitty::adjustmentSets(
   effect = "total"
 )
 
+# Model 3: ADD HERE
+
+
 # Prepare data for linear models
 model_data_ffmi_v0 <- mb_v0 |> 
   select(id, age_v0, sex, ffmi_v0, fmi_v0, low_ffmi_v0, all_of(species_v0_keep))
 
-# Pivot longer
+# Pivot longer -> reshape to one row per participant-species combination
 model_data_ffmi_v0_long <- model_data_ffmi_v0 |> 
   pivot_longer(
     cols = all_of(species_v0_keep),
     names_to = "species",
     values_to = "abundance"
   ) |> 
-  arrange(species) # to make the order deterministic before make.unique()
+  arrange(species) # ensure consistent order before make.unique()
 
-# Create one nested df per species to fit the same model repeatedly
-model_data_ffmi_v0_nested <- model_data_ffmi_v0_long |> 
+# Find the smallest non-zero relative abundance
+min_abundance <- model_data_ffmi_v0_long |> 
+  filter(abundance > 0) |> 
+  summarize(min_abundance = min(abundance)) |> 
+  pull(min_abundance)
+
+# Log10-transform abundance using half the minimum non-zero abundance as pseudocount
+model_data_ffmi_v0_long_log <- model_data_ffmi_v0_long |> 
+  mutate(abundance_log10 = log10(abundance + (min_abundance/2)))
+
+# Nest participant-level data separately for each species
+model_data_ffmi_v0_nested <- model_data_ffmi_v0_long_log |> 
   group_by(species) |> 
   nest()
 
@@ -289,6 +306,8 @@ model_ffmi_v0_1_signif <- model_ffmi_v0_1_results |>
   arrange(p_fdr) |>
   relocate(species_label, .after = species) |> 
   ungroup()
+model_ffmi_v0_2_signif |> 
+  select(species_label, posneg)
 
 ### Forest plot
 forest_model_ffmi_v0_1 <- model_ffmi_v0_1_signif |> 
