@@ -1,4 +1,4 @@
-# Baria muscle mass & gut microbiota project: Per-microbe associations
+# Baria muscle mass & gut microbiota project: Cross-sectional per-microbe associations
 # Anna Giannakogeorgou, a.gianna@amsterdamumc.nl
 
 # Packages
@@ -510,3 +510,4 @@ forest_model_ffmi_v0_3 <- model_ffmi_v0_3_signif |>
     axis.text.y = element_text(face = "italic")
   )
 ggsave(plot = forest_model_ffmi_v0_3, filename = "graphs/microbe_associations/forest_model_ffmi_v0_3.pdf", width = 8, height = 6)
+
