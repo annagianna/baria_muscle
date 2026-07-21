@@ -437,6 +437,7 @@ forest_model_ffmi_1_2 <- models_ffmi_v0_1_2_results |>
   ) +
   theme_minimal_custom() +
   theme(legend.position = "bottom", axis.text.y = element_text(face = "italic"))
+ggsave(plot = forest_model_ffmi_1_2, filename = "graphs/microbe_associations/forest_model_ffmi_1_2.pdf", width = 8, height = 6)
 
 #### Model 3: Extensive/Sensitivity model; adjusted for age, sex adiposity, dm, antidiabetic medication
 # Check numbers for T2D and antidiabetic medication
