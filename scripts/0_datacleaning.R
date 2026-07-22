@@ -1,4 +1,4 @@
-# Data cleaning for BARIA Project on muscle mass & weight trajectories
+# Data cleaning for BARIA Project on muscle mass loss and gut microbiota
 # Anna Giannakogeorgou, a.gianna@amsterdamumc.nl
 
 # Libraries
@@ -512,8 +512,7 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
   relocate(c(asm_kg_v5, delta_asm_v5, asm_height2_v5, smm_kg_v5, smm_by_weight_v5, perc_asm_change_v5, asm_change_v5_tertile, asm_change_v5_group, delta_ffmi_v5, perc_ffmi_change_v5, ffmi_change_v5_tertile, ffmi_change_v5_group), .after = upperleg_cm_v5) |>
   relocate(c(asm_kg_v6, delta_asm_v6, asm_height2_v6, smm_kg_v6, smm_by_weight_v6, low_smm_by_weight_v6, perc_asm_change_v6, asm_change_v6_tertile, asm_change_v6_group, delta_ffmi_v6, perc_ffmi_change_v6, ffmi_change_v6_tertile, ffmi_change_v6_group), .after = upperleg_cm_v6) |>
   relocate(asm_kg_v7, asm_height2_v7, .after = upperleg_cm_v7) |>
-  mutate(across(where(is.character) & !id, as.factor)) |> 
-  print()
+  mutate(across(where(is.character) & !id, as.factor))
 
 ## Formulas used:
 # Hba1c(%) = (0,0915 * HbA1c (mmol/mol) + 2,15 (from diabetesfonds.nl)
@@ -619,30 +618,54 @@ aht_meds <- list(
   combi_aht_meds = c("losartan/hydrochloorthiazide", "lodoz", "preterax", "moduretic")
 )
 
-aht_meds_pattern <- lapply(aht_meds, function(x) {
+aht_meds_patterns <- lapply(aht_meds, function(x) {
   str_c("\\b(", str_c(x, collapse = "|"),")\\b")
 })
 aht_meds_any_pattern <- str_c("\\b(", str_c(unlist(aht_meds), collapse = "|"),")\\b")
 
 # Lipid lowering
+lipidlowering_meds <- list(
+  # Statins (HMG-CoA reductase inhibitors)
+  statins = c(
+  "simvastatine", "atorvastatine", "pravastatine", "rosuvastatine", "fluvastatine", 
+  "crestor", "lipitor", "zocor", "pravachol", "lescol"),
 
-lipidlowering_meds <- c("simvastatine", "atorvastatine", "pravastatine", "rosuvastatine", "bezalip", "fibraat",
-                        "crestor", "lipitor", "zocor", "pravachol", "fluvastatine", "lescol", "ezetimib", "ezetrol",
-                        "alirocumab", "praluent", "evolocumab", "repatha", "inclisiran", "leqvio", "bempedoïnezuur", "nexletol", 
-                        "nustendi", "colestyramine", "questran","fenofibraat", "lipanthyl", "tricor",
-                        "gemfibrozil", "lopid","omega-3-vetzuren", "omacor", "epanova","nicotinezuur", "niaspan" 
+  # Cholesterol absorption inhibitors
+  ezetimibe = c("ezetimib", "ezetrol"),
+
+  # PCSK9 inhibitors
+  pcsk9is = c("alirocumab", "praluent", "evolocumab", "repatha"),
+
+  # siRNA against PCSK9
+  inclisiran = c("inclisiran", "leqvio"),
+
+  # ATP citrate lyase inhibitors
+  bempedoic_acid = c("bempedoïnezuur", "nexletol", "nustendi"),
+
+  # Bile acid sequestrants
+  bile_acid_sequestrants = c("colestyramine", "questran"),
+
+  # Fibrates (PPAR-α agonists)
+  fibrates = c("bezalip", "fibraat", "fenofibraat", "lipanthyl", "tricor", "gemfibrozil", "lopid"),
+
+  # Omega-3 fatty acids
+  omega3 = c("omega-3-vetzuren", "omacor", "epanova"),
+
+  # Nicotinic acid
+  niacin = c("nicotinezuur", "niaspan")
 )
 
-str_c(lipidlowering_meds, collapse = "|") # inner
-lipidlowering_meds_pattern <- str_c("\\b(", str_c(lipidlowering_meds, collapse = "|"),")\\b")
+# create regex patterns for each class of lipid-lowering medication
+lipidlowering_meds_patterns <- lapply(lipidlowering_meds, function(x) {
+  str_c("\\b(", str_c(x, collapse = "|"), ")\\b")
+})
+lipidlowering_meds_any_pattern <- str_c("\\b(", str_c((unlist(lipidlowering_meds)), collapse = "|"), ")\\b")
 
 # Thyroid medication
-  
 thyroid_meds <- c("levothyroxine", "thyrax", "euthyrox")
 thyroid_meds_pattern <- str_c("\\b(", str_c(thyroid_meds, collapse = "|"),")\\b")
 
 # Psychiatric medication (that may cause weight loss/gain)
-  
 psychiatric_meds <- list(
   # SSRIS
   ssris = c("escitalopram", "citalopram", "cipramil", "sertraline", "paroxetine", "fluoxetine", "fluvoxamine"),
@@ -669,7 +692,7 @@ psychiatric_meds <- list(
   hypnotics = c("zopiclone", "zolpidem")
 )
 
-psychiatric_meds_pattern <- lapply(psychiatric_meds, function(x) {
+psychiatric_meds_patterns <- lapply(psychiatric_meds, function(x) {
   str_c("\\b(", str_c(x, collapse = "|"),")\\b")
 })
 psychiatric_meds_any_pattern <- str_c("\\b(", str_c(unlist(psychiatric_meds), collapse = "|"), ")\\b")
@@ -722,32 +745,35 @@ baria_muscle_clean <- baria_muscle_clinical_with_medication_notypos |>
     dm_meds_v0 = if_else(str_detect(medication_list_v0, dm_meds_any_pattern), "yes", "no"),
 
     # Antihypertensive medication classes
-    ace_inhibitors_v0 = if_else(str_detect(medication_list_v0, aht_meds_pattern$ace_inhibitors), "yes", "no"),
-    arbs_v0 = if_else(str_detect(medication_list_v0, aht_meds_pattern$arbs), "yes", "no"),
-    ccbs_v0 = if_else(str_detect(medication_list_v0, aht_meds_pattern$ccbs), "yes", "no"),
-    bblockers_v0 = if_else(str_detect(medication_list_v0, aht_meds_pattern$bblockers), "yes", "no"),
-    a2_agonists_v0 = if_else(str_detect(medication_list_v0, aht_meds_pattern$a2_agonists), "yes", "no"),
-    diuretics_v0 = if_else(str_detect(medication_list_v0, aht_meds_pattern$diuretics), "yes", "no"),
-    combi_aht_meds_v0 = if_else(str_detect(medication_list_v0, aht_meds_pattern$combi_aht_meds), "yes", "no"),
+    ace_inhibitors_v0 = if_else(str_detect(medication_list_v0, aht_meds_patterns$ace_inhibitors), "yes", "no"),
+    arbs_v0 = if_else(str_detect(medication_list_v0, aht_meds_patterns$arbs), "yes", "no"),
+    ccbs_v0 = if_else(str_detect(medication_list_v0, aht_meds_patterns$ccbs), "yes", "no"),
+    bblockers_v0 = if_else(str_detect(medication_list_v0, aht_meds_patterns$bblockers), "yes", "no"),
+    a2_agonists_v0 = if_else(str_detect(medication_list_v0, aht_meds_patterns$a2_agonists), "yes", "no"),
+    diuretics_v0 = if_else(str_detect(medication_list_v0, aht_meds_patterns$diuretics), "yes", "no"),
+    combi_aht_meds_v0 = if_else(str_detect(medication_list_v0, aht_meds_patterns$combi_aht_meds), "yes", "no"),
 
     # general antihypertensive medication
     aht_meds_v0 = if_else(str_detect(medication_list_v0, aht_meds_any_pattern), "yes", "no"),
 
-    # lipid lowering
-    lipidlowering_meds_v0 = if_else(str_detect(medication_list_v0, lipidlowering_meds_pattern), "yes", "no"),
+    # Statins
+    statins_v0 = if_else(str_detect(medication_list_v0, lipidlowering_meds_patterns$statins), "yes", "no"),
+
+    # Use of any lipid-lowering medication
+    lipidlowering_meds_v0 = if_else(str_detect(medication_list_v0, lipidlowering_meds_any_pattern), "yes", "no"),
 
     # thyroid medication
     thyroid_meds_v0 = if_else(str_detect(medication_list_v0, thyroid_meds_pattern), "yes", "no"),
 
-    # psychiartric medication
-    ssris_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_pattern$ssris), "yes", "no"),
-    tcas_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_pattern$tcas), "yes", "no"),
-    snris_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_pattern$snris), "yes", "no"),
-    ndris_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_pattern$ndris), "yes", "no"),
-    antipsychotics_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_pattern$antipsychotics), "yes", "no"),
-    moods_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_pattern$moods), "yes", "no"),
-    adhd_meds_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_pattern$adhd_meds), "yes", "no"),
-    hypnotics_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_pattern$hypnotics), "yes", "no"),
+    # psychiatric medication
+    ssris_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_patterns$ssris), "yes", "no"),
+    tcas_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_patterns$tcas), "yes", "no"),
+    snris_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_patterns$snris), "yes", "no"),
+    ndris_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_patterns$ndris), "yes", "no"),
+    antipsychotics_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_patterns$antipsychotics), "yes", "no"),
+    moods_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_patterns$moods), "yes", "no"),
+    adhd_meds_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_patterns$adhd_meds), "yes", "no"),
+    hypnotics_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_patterns$hypnotics), "yes", "no"),
 
     psychiatric_meds_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_any_pattern), "yes", "no"),
 
@@ -761,5 +787,5 @@ baria_muscle_clean <- baria_muscle_clinical_with_medication_notypos |>
   arrange(date_v0)
 
 # then save as both RDS and csv files
-write.csv(baria_muscle_clean, "data/20260720_BARIA_muscle_clinical.csv")
-saveRDS(baria_muscle_clean, "data/20260720_BARIA_muscle_clinical.RDS")
+write.csv(baria_muscle_clean, "data/20260722_BARIA_muscle_clinical.csv")
+saveRDS(baria_muscle_clean, "data/20260722_BARIA_muscle_clinical.RDS")
