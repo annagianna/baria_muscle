@@ -284,7 +284,7 @@ dagitty::adjustmentSets(
 
 # Prepare data for linear models
 model_data_ffmi_v0 <- mb_v0 |> 
-  select(id, age_v0, sex, t2d_v0, dm_meds_v0, metformin_v0, ffmi_v0, fmi_v0, low_ffmi_v0, all_of(species_v0_keep))
+  select(id, age_v0, sex, t2d_v0, dm_meds_v0, metformin_v0, statins_v0, ffmi_v0, fmi_v0, low_ffmi_v0, all_of(species_v0_keep))
 
 # Pivot longer -> reshape to one row per participant-species combination
 model_data_ffmi_v0_long <- model_data_ffmi_v0 |> 
@@ -351,8 +351,7 @@ model_ffmi_v0_1_results <- model_ffmi_v0_1_tidy |>
 model_ffmi_v0_1_signif <- model_ffmi_v0_1_results |> 
   filter(p_fdr < 0.05) |> 
   arrange(p_fdr) |>
-  relocate(species_label, .after = species) |> 
-  ungroup()
+  relocate(species_label, .after = species)
 
 #### Model  2: Adjusted for age, sex and adiposity (FMI) ####
 # Fit one lm per species
@@ -384,21 +383,15 @@ model_ffmi_v0_2_results <- model_ffmi_v0_2_tidy |>
 model_ffmi_v0_2_signif <- model_ffmi_v0_2_results |> 
   filter(p_fdr < 0.05) |> 
   arrange(p_fdr) |>
-  relocate(species_label, .after = species) |> 
-  ungroup()
+  relocate(species_label, .after = species)
 
-#### Model 3: Extensive/Sensitivity model; adjusted for age, sex adiposity, dm, antidiabetic medication
-# Check numbers for T2D and antidiabetic medication
-model_data_ffmi_v0 |> 
-  count(t2d_v0, dm_meds_v0)
-
-#### Model 3: Adjusted for age, sex, adiposity, T2D and antidiabetic medication ####
+#### Model 3: Extensive/Sensitivity model; adjusted for age, sex, adiposity/FMI, T2D, antidiabetic medication, statins
 # Fit one lm per species
 model_ffmi_v0_3 <- model_data_ffmi_v0_nested |> 
   mutate(
     model = map(
       data,
-      \(x) lm(ffmi_v0 ~ log10_abundance + age_v0 + sex + fmi_v0 + t2d_v0 + metformin_v0, data = x)
+      \(x) lm(ffmi_v0 ~ log10_abundance + age_v0 + sex + fmi_v0 + t2d_v0 + metformin_v0 + statins_v0, data = x)
     )
   )
 
@@ -419,15 +412,14 @@ model_ffmi_v0_3_results <- model_ffmi_v0_3_tidy |>
       "not significant"
     )
   ) |> 
-  left_join(species_labels, by = "species") #|> 
- # mutate(posneg = if_else(estimate > 0, "positive", "negative"))
+  left_join(species_labels, by = "species") |> 
+  mutate(model = "model3")
 
 # Species significantly associated with baseline FFMI after FDR correction
 model_ffmi_v0_3_signif <- model_ffmi_v0_3_results |> 
   filter(p_fdr < 0.05) |> 
   arrange(p_fdr) |> 
-  relocate(species_label, .after = species) |> 
-  ungroup()
+  relocate(species_label, .after = species)
 
 # Create unique labels among species significant in Model 3
 model_ffmi_v0_3_species_labels <- model_ffmi_v0_3_signif |> 
@@ -438,34 +430,41 @@ model_ffmi_v0_3_species_labels <- model_ffmi_v0_3_signif |>
 
 
 #### Prep model 1-3 results for a combined forest plot ####
-# Prepare data and labels to plot models 1-2 together
+# Prepare data and labels to plot models 1-3 together
 # Species significant after FDR correction in at least one model (1 and/or 2)
 models_ffmi_1_2_signif <- union(model_ffmi_v0_1_signif$species, model_ffmi_v0_2_signif$species)
+models_ffmi_123_signif <- union(models_ffmi_1_2_signif, model_ffmi_v0_3_signif$species)
 
 # Create unique labels only among (significant) species included in the combined figure
-models_ffmi_1_2_species_labels <- species_labels |> 
-  filter(species %in% models_ffmi_1_2_signif) |> 
+models_ffmi_123_species_labels <- species_labels |> 
+  filter(species %in% models_ffmi_123_signif) |> 
   arrange(species_label, species) |> 
   mutate(
     species_label_unique = make.unique(species_label)
   ) |> 
   select(species, species_label_unique)
 
-# Combine estimates from both models for species significant in at least one model
-models_ffmi_v0_1_2_results <- bind_rows(model_ffmi_v0_1_results, model_ffmi_v0_2_results) |> 
-  filter(species %in% models_ffmi_1_2_signif) |> 
+# Combine estimates from all 3 models for species significant in at least one model
+models_ffmi_v0_123_results <- bind_rows(model_ffmi_v0_1_results, model_ffmi_v0_2_results, model_ffmi_v0_3_results) |> 
+  filter(species %in% models_ffmi_123_signif) |> 
   select(-species_label) |> 
-  left_join(models_ffmi_1_2_species_labels, by = "species") |> # use unique labels
-  mutate(model = factor(model, levels = c("model1", "model2"), labels = c("Age and sex", "Age, sex and FMI")))
+  left_join(models_ffmi_123_species_labels, by = "species") |> # use unique labels
+  mutate(
+    model = factor(
+      model, 
+      levels = c("model1", "model2", "model3"), 
+      labels = c("Age and sex", "Age, sex and FMI", "Age, sex, FMI, T2D, antidiabetic medication and statin use"))
+  )
 
 # Order species according to model 1 estimates
-species_order_model1 <- models_ffmi_v0_1_2_results |> 
+species_order_model1 <- models_ffmi_v0_123_results |> 
   filter(model == "Age and sex") |> 
   arrange(estimate) |> 
   pull(species_label_unique)
 
-### Combined forest plot for models 1 and 2 
-forest_model_ffmi_1_2 <- models_ffmi_v0_1_2_results |> 
+
+#### Combined forest plot for models 1-3 ####
+forest_model_ffmi_123 <- models_ffmi_v0_123_results |> 
   mutate(
     species_label_unique = factor(species_label_unique, levels = species_order_model1),
     signif = factor(signif, levels = c("significant", "not significant"))
@@ -479,7 +478,13 @@ forest_model_ffmi_1_2 <- models_ffmi_v0_1_2_results |>
     show.legend = FALSE
   ) +
   geom_point(size = 2.5, position = position_dodge(width = 0.6)) +
-  scale_color_manual(values = c("Age and sex" = renoir_15[14], "Age, sex and FMI" = renoir_15[6])) +
+  scale_color_manual(
+    values = c(
+      "Age and sex" = renoir_15[14],
+      "Age, sex and FMI" = renoir_15[6],
+      "Age, sex, FMI, T2D, antidiabetic medication and statin use" = renoir_15[2]
+  )
+) +
   scale_shape_manual(
     values = c("significant" = 16, "not significant" = 1), 
     labels = c("significant" = "< 0.05", "not significant" = "≥ 0.05")
@@ -492,9 +497,5 @@ forest_model_ffmi_1_2 <- models_ffmi_v0_1_2_results |>
   ) +
   theme_minimal_custom() +
   theme(legend.position = "bottom", axis.text.y = element_text(face = "italic"))
-ggsave(plot = forest_model_ffmi_1_2, filename = "graphs/microbe_associations/forest_model_ffmi_1_2.pdf", width = 10, height = 6)
-
-
-baria_muscle |> 
-  count(lipidlowering_meds_v0)
+ggsave(plot = forest_model_ffmi_123, filename = "graphs/microbe_associations/forest_model_ffmi_123.pdf", width = 10, height = 6)
 
