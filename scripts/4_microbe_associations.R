@@ -284,7 +284,7 @@ dagitty::adjustmentSets(
 
 # Prepare data for linear models
 model_data_ffmi_v0 <- mb_v0 |> 
-  select(id, age_v0, sex, t2d_v0, dm_meds_v0, metformin_v0, statins_v0, ffmi_v0, fmi_v0, low_ffmi_v0, all_of(species_v0_keep))
+  select(id, age_v0, sex, t2d_v0, dm_meds_v0, dm_meds_v0, statins_v0, ffmi_v0, fmi_v0, low_ffmi_v0, all_of(species_v0_keep))
 
 # Pivot longer -> reshape to one row per participant-species combination
 model_data_ffmi_v0_long <- model_data_ffmi_v0 |> 
@@ -391,7 +391,7 @@ model_ffmi_v0_3 <- model_data_ffmi_v0_nested |>
   mutate(
     model = map(
       data,
-      \(x) lm(ffmi_v0 ~ log10_abundance + age_v0 + sex + fmi_v0 + t2d_v0 + metformin_v0 + statins_v0, data = x)
+      \(x) lm(ffmi_v0 ~ log10_abundance + age_v0 + sex + fmi_v0 + t2d_v0 + dm_meds_v0 + statins_v0, data = x)
     )
   )
 
