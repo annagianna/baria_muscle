@@ -313,7 +313,10 @@ species_labels <- tibble(
     species_label = str_extract(species, "s__[^|]+"),
     species_label = str_remove(species_label, "^s__"),
     #species_label = str_remove(species_label, "_SGB\\d+$"),
-    species_label = str_replace_all(species_label, "_", " ")
+    species_label = str_replace_all(species_label, "_", " "),
+
+    sgb = str_extract(species, "t__SGB\\d+"),
+    sgb = str_remove(sgb, "^t__")
   )
 
 # Nest participant-level data separately for each species
@@ -439,9 +442,15 @@ models_ffmi_123_signif <- union(models_ffmi_1_2_signif, model_ffmi_v0_3_signif$s
 models_ffmi_123_species_labels <- species_labels |> 
   filter(species %in% models_ffmi_123_signif) |> 
   arrange(species_label, species) |> 
+  group_by(species_label) |> 
   mutate(
-    species_label_unique = make.unique(species_label)
+    species_label_unique = if (n() > 1) {
+      paste(species_label, sgb, sep = " ")
+    } else {
+      species_label
+    }
   ) |> 
+  ungroup() |> 
   select(species, species_label_unique)
 
 # Combine estimates from all 3 models for species significant in at least one model
@@ -474,10 +483,10 @@ forest_model_ffmi_123 <- models_ffmi_v0_123_results |>
   geom_errorbarh(
     aes(xmin = conf.low, xmax = conf.high), 
     height = 0.5, 
-    position = position_dodge(width = 0.6),
+    position = position_dodge(width = 0.8, reverse = TRUE),
     show.legend = FALSE
   ) +
-  geom_point(size = 2.5, position = position_dodge(width = 0.6)) +
+  geom_point(size = 2.5, position = position_dodge(width = 0.8, reverse = TRUE)) +
   scale_color_manual(
     values = c(
       "Age and sex" = renoir_15[14],
@@ -487,7 +496,7 @@ forest_model_ffmi_123 <- models_ffmi_v0_123_results |>
 ) +
   scale_shape_manual(
     values = c("significant" = 16, "not significant" = 1), 
-    labels = c("significant" = "< 0.05", "not significant" = "≥ 0.05")
+    labels = c("significant" = "< 0.05", "not significant" = "\u2265 0.05")
   ) +
   labs(
     x = "kg/m² change in baseline FFMI per 1-unit increase in log10 abundance",
@@ -497,5 +506,5 @@ forest_model_ffmi_123 <- models_ffmi_v0_123_results |>
   ) +
   theme_minimal_custom() +
   theme(legend.position = "bottom", axis.text.y = element_text(face = "italic"))
-ggsave(plot = forest_model_ffmi_123, filename = "graphs/microbe_associations/forest_model_ffmi_123.pdf", width = 10, height = 6)
+ggsave(plot = forest_model_ffmi_123, filename = "graphs/microbe_associations/forest_model_ffmi_123.pdf", width = 12, height = 8)
 
