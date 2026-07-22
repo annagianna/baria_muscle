@@ -499,7 +499,7 @@ forest_model_ffmi_123 <- models_ffmi_v0_123_results |>
     labels = c("significant" = "< 0.05", "not significant" = "\u2265 0.05")
   ) +
   labs(
-    x = "kg/m² change in baseline FFMI per 1-unit increase in log10 abundance",
+    x = "Difference in baseline FFMI (kg/m²) per 1-unit increase in log10 abundance",
     y = NULL,
     colour = NULL,
     shape = "FDR p-value"
