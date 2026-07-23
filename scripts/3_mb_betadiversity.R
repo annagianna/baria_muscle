@@ -167,4 +167,4 @@ bray_ffmi_v0 <- bray_2_v0 |>
   color_cols_2 +
   theme_minimal_custom() +
   theme(legend.position = "left") 
-ggsave(bray_ffmi_v0, filename = "graphs/betadiversity/bray_ffmi_v0.pdf", width = 8, height = 7)
+ggsave(bray_ffmi_v0, filename = "graphs/betadiversity/bray_ffmi_v0.pdf", width = 10, height = 7)
