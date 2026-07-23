@@ -223,4 +223,4 @@ alpha_panel_ffmi_v0_vertical <-
   richness_violin_ffmi_v0 +
   plot_layout(guides = "collect") &
   theme(legend.position = "none", plot.title = element_blank())
-ggsave(alpha_panel_ffmi_v0_vertical, filename = "graphs/alphadiversity/alpha_panel_ffmi_v0_vertical.pdf", width = 5, height = 8)
+ggsave(alpha_panel_ffmi_v0_vertical, filename = "graphs/alphadiversity/alpha_panel_ffmi_v0_vertical.pdf", width = 3.8, height = 8)
