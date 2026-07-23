@@ -14,33 +14,6 @@ library(MetBrewer)
 # Theme
 renoir_15 <- met.brewer("Renoir", n = 15)
 
-theme_Publication <- function(base_size = 14, base_family = "sans") {
-  
-  (theme_foundation(base_size = base_size, base_family = base_family) + 
-    theme(
-      plot.title = element_text(face = "bold", size = rel(0.8), hjust = 0.5),
-      text = element_text(),
-      panel.background = element_rect(colour = NA, fill = NA),
-      plot.background = element_rect(colour = NA, fill = NA),
-      panel.border = element_rect(colour = NA),
-      axis.title = element_text(face = "bold", size = rel(0.8)),
-      axis.title.y = element_text(angle = 90, vjust = 2),
-      axis.title.x = element_text(vjust = -0.2),
-      axis.text = element_text(), 
-      axis.line = element_line(colour = "black"),
-      axis.ticks = element_line(),
-      panel.grid.major = element_line(colour = "#f0f0f0"),
-      panel.grid.minor = element_blank(),
-      legend.key = element_rect(colour = NA),
-      legend.position = "bottom",
-      legend.key.size = unit(0.2, "cm"),
-      legend.spacing = unit(0, "cm"),
-      plot.margin = unit(c(10,5,5,5),"mm"),
-      strip.background = element_rect(colour = "#f0f0f0", fill = "#f0f0f0"),
-      strip.text = element_text(face = "bold")
-    ))
-}
-
 theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
 
   theme_minimal(base_size = base_size, base_family = base_family) +
@@ -502,9 +475,9 @@ forest_model_ffmi_123 <- models_ffmi_v0_123_results |>
     x = "Difference in baseline FFMI (kg/m²) per 1-unit increase in log10 abundance",
     y = NULL,
     colour = NULL,
-    shape = "FDR p-value"
+    shape = "FDR p"
   ) +
   theme_minimal_custom() +
   theme(legend.position = "bottom", axis.text.y = element_text(face = "italic"))
-ggsave(plot = forest_model_ffmi_123, filename = "graphs/microbe_associations/forest_model_ffmi_123.pdf", width = 12, height = 8)
+ggsave(plot = forest_model_ffmi_123, filename = "graphs/microbe_associations/forest_model_ffmi_123.pdf", width = 13, height = 8)
 
