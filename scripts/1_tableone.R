@@ -114,7 +114,7 @@ t1_v0_mb_vars <- baria_muscle_mb |>
     low_ffmi_v0 = factor(
       low_ffmi_v0,
       levels = c("yes", "no"),
-      labels = c("Low FFMI", "High/moderate FFMI")
+      labels = c("Low FFMI", "Moderate/high FFMI")
     )
   ) |> 
   rename(
