@@ -7,7 +7,7 @@ library(phyloseq)
 library(tableone)
 
 # Data
-baria_muscle_ab <- readRDS("data/20260720_BARIA_muscle_clinical.RDS")
+baria_muscle_ab <- readRDS("data/20260722_BARIA_muscle_clinical.RDS")
 baria_mb <- readRDS("data/ps.BARIA.metaphlan.706.2548.RDS")
 
 # Remove participants taking antibiotics
