@@ -17,43 +17,38 @@ renoir_cols_20 <- met.brewer("Renoir", n = 20)
 
 fill_cols_2 <- scale_fill_manual(
   values = c("yes" = renoir_cols_20[18], "no" = renoir_cols_20[5]),
-  labels = c("yes" = "Low FFMI", "no" = "High/moderate FFMI")
+  labels = c("yes" = "Low FFMI", "no" = "Moderate/high FFMI")
 )
 
 color_cols_2 <- scale_color_manual(
   values = c("yes" = renoir_cols_20[18], "no" = renoir_cols_20[5]),
-  labels = c("yes" = "Low FFMI", "no" = "High/moderate FFMI")
+  labels = c("yes" = "Low FFMI", "no" = "Moderate/high FFMI")
 )
 
-theme_Publication <- function(base_size = 14, base_family = "sans") {
-  
-  (theme_foundation(base_size = base_size, base_family = base_family) + 
+theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
+
+  theme_minimal(base_size = base_size, base_family = base_family) +
     theme(
       plot.title = element_text(face = "bold", size = rel(0.8), hjust = 0.5),
-      text = element_text(),
-      panel.background = element_rect(colour = NA, fill = NA),
-      plot.background = element_rect(colour = NA, fill = NA),
-      panel.border = element_rect(colour = NA),
       axis.title = element_text(face = "bold", size = rel(0.8)),
       axis.title.y = element_text(angle = 90, vjust = 2),
       axis.title.x = element_text(vjust = -0.2),
-      axis.text = element_text(), 
-      axis.line = element_line(colour = "black"),
-      axis.ticks = element_line(),
-      panel.grid.major = element_line(colour = "#f0f0f0"),
+      axis.text = element_text(colour = "black"),
+      axis.line.x.bottom = element_line(colour = "black", linewidth = 0.5),
+      axis.line.y.left = element_line(colour = "black", linewidth = 0.5),
+      axis.ticks = element_line(colour = "black", linewidth = 0.4),
+      panel.grid.major = element_line(colour = "#dddddd", linewidth = 0.4, linetype = "22"),
       panel.grid.minor = element_blank(),
-      legend.key = element_rect(colour = NA),
+      panel.background = element_rect(fill = "white", colour = NA),
+      plot.background = element_rect(fill = "white", colour = NA),
       legend.position = "bottom",
-      legend.key.size = unit(0.2, "cm"),
-      legend.spacing = unit(0, "cm"),
-      plot.margin = unit(c(10,5,5,5),"mm"),
-      strip.background=element_rect(colour = "#f0f0f0", fill = "#f0f0f0"),
-      strip.text = element_text(face = "bold")
-    ))
-} 
+      plot.margin = unit(c(10, 5, 5, 5), "mm")
+    )
+
+}
 
 # Data
-baria_muscle_ab <- read_rds("data/20260720_BARIA_muscle_clinical.RDS") # clinical data
+baria_muscle_ab <- read_rds("data/20260722_BARIA_muscle_clinical.RDS") # clinical data
 baria_mb <- read_rds("data/ps.BARIA.metaphlan.706.2548.RDS")
 
 # Filter out participants taking antibiotics
@@ -137,17 +132,18 @@ adonis_v0 <- vegan::adonis2(bray_v0 ~ low_ffmi_v0, data = mb_meta_v0, permutatio
 p_adonis_v0 <- adonis_v0$`Pr(>F)`[1]
 r2_adonis_v0 <- adonis_v0$R2[1]
 
-# Check homogeneity of dispertion (variances)
+# Check homogeneity of dispersion (variances)
 disp_v0 <- vegan::betadisper(bray_v0, group = mb_meta_v0$low_ffmi_v0)
-anova(disp_v0)
+disp_anova_v0 <- anova(disp_v0)
+p_disp_anova_v0 <- disp_anova_v0$`Pr(>F)`[1]
 
 ## Plots ##
 bray_ffmi_v0 <- bray_2_v0 |> 
   mutate(low_ffmi_v0 = factor(low_ffmi_v0, levels = c("yes", "no"))) |> 
   ggplot(aes(Axis.1, Axis.2)) +
-  geom_point(aes(color = low_ffmi_v0), size = 2.5, alpha = 0.9) +
-  xlab(paste0("PCo1 (", round(expl_variance_bray_v0[1], digits = 1),"%)")) +
-  ylab(paste0("PCo2 (", round(expl_variance_bray_v0[2], digits = 1),"%)")) +
+  geom_point(aes(color = low_ffmi_v0), size = 2.5, alpha = 0.8) +
+  xlab(paste0("PCoA1 (", round(expl_variance_bray_v0[1], digits = 1),"%)")) +
+  ylab(paste0("PCoA2 (", round(expl_variance_bray_v0[2], digits = 1),"%)")) +
   labs(color = "", fill = "", title = "PCoA Bray-Curtis Distance") +
   stat_ellipse(
     geom = "polygon", 
@@ -159,8 +155,10 @@ bray_ffmi_v0 <- bray_2_v0 |>
     "text",
     x = Inf, y = Inf,
     label = paste0(
-      "PERMANOVA R² = ", formatC(r2_adonis_v0, format = "f", digits = 3),
-      "\np = ", formatC(p_adonis_v0, format = "f", digits = 3)
+      "PERMANOVA",
+      "\nR² = ", formatC(r2_adonis_v0, format = "f", digits = 3),
+      ", p = ", formatC(p_adonis_v0, format = "f", digits = 3),
+      "\nDispersion p = ", formatC(p_disp_anova_v0, format = "f", digits = 3)
   ),
   hjust = 1.0, vjust = 1.2,
   size = 3
@@ -168,5 +166,5 @@ bray_ffmi_v0 <- bray_2_v0 |>
   fill_cols_2 +
   color_cols_2 +
   theme_minimal_custom() +
-  theme(legend.position = "top") 
-ggsave(bray_ffmi_v0, filename = "graphs/betadiversity/bray_ffmi_v0.pdf", width = 10, height = 7)
+  theme(legend.position = "left") 
+ggsave(bray_ffmi_v0, filename = "graphs/betadiversity/bray_ffmi_v0.pdf", width = 8, height = 7)
