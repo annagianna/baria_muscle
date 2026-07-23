@@ -15,33 +15,6 @@ library(patchwork)
 renoir_cols_20 <- met.brewer("Renoir", n = 20)
 fill_cols_2 <- scale_fill_manual(values = c("yes" = renoir_cols_20[18], "no" = renoir_cols_20[5]))
 
-theme_Publication <- function(base_size = 14, base_family = "sans") {
-  
-  (theme_foundation(base_size = base_size, base_family = base_family) + 
-    theme(
-      plot.title = element_text(face = "bold", size = rel(0.8), hjust = 0.5),
-      text = element_text(),
-      panel.background = element_rect(colour = NA, fill = NA),
-      plot.background = element_rect(colour = NA, fill = NA),
-      panel.border = element_rect(colour = NA),
-      axis.title = element_text(face = "bold", size = rel(0.8)),
-      axis.title.y = element_text(angle = 90, vjust = 2),
-      axis.title.x = element_text(vjust = -0.2),
-      axis.text = element_text(), 
-      axis.line = element_line(colour = "black"),
-      axis.ticks = element_line(),
-      panel.grid.major = element_line(colour = "#f0f0f0"),
-      panel.grid.minor = element_blank(),
-      legend.key = element_rect(colour = NA),
-      legend.position = "bottom",
-      legend.key.size = unit(0.2, "cm"),
-      legend.spacing = unit(0, "cm"),
-      plot.margin = unit(c(10,5,5,5),"mm"),
-      strip.background = element_rect(colour = "#f0f0f0", fill = "#f0f0f0"),
-      strip.text = element_text(face = "bold")
-    ))
-} 
-
 theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
 
   theme_minimal(base_size = base_size, base_family = base_family) +
@@ -65,7 +38,7 @@ theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
 }
 
 # Data
-baria_muscle_ab <- readRDS("data/20260720_BARIA_muscle_clinical.RDS") # metadata/clinical data
+baria_muscle_ab <- readRDS("data/20260722_BARIA_muscle_clinical.RDS") # metadata/clinical data
 baria_mb <- readRDS("data/ps.BARIA.metaphlan.706.2548.RDS")
 
 # Filter out participants taking antibiotics
@@ -157,7 +130,7 @@ shannon_violin_ffmi_v0 <- alpha_v0 |>
   ) + 
   fill_cols_2 +
   scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
-  scale_x_discrete(labels = c("yes" = "Low FFMI", "no" = "High/moderate FFMI")) +
+  scale_x_discrete(labels = c("yes" = "Low FFMI", "no" = "Moderate/high FFMI")) +
   theme_minimal_custom() +
   theme(legend.position = "none")
 ggsave(shannon_violin_ffmi_v0, filename = "graphs/alphadiversity/shannon_violin_ffmi_v0.pdf", width = 6, height = 5)
@@ -192,7 +165,7 @@ simpson_violin_ffmi_v0 <- alpha_v0 |>
   ) + 
   fill_cols_2 +
   scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
-  scale_x_discrete(labels = c("yes" = "Low FFMI", "no" = "High/moderate FFMI")) +
+  scale_x_discrete(labels = c("yes" = "Low FFMI", "no" = "Moderate/high FFMI")) +
   theme_minimal_custom() +
   theme(legend.position = "none")
 ggsave(simpson_violin_ffmi_v0, filename = "graphs/alphadiversity/simpson_violin_ffmi_v0.pdf", width = 6, height = 5)
@@ -227,12 +200,13 @@ richness_violin_ffmi_v0 <- alpha_v0 |>
   ) + 
   fill_cols_2 +
   scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
-  scale_x_discrete(labels = c("yes" = "Low FFMI", "no" = "High/moderate FFMI")) +
+  scale_x_discrete(labels = c("yes" = "Low FFMI", "no" = "Moderate/high FFMI")) +
   theme_minimal_custom() +
   theme(legend.position = "none")
 ggsave(richness_violin_ffmi_v0, filename = "graphs/alphadiversity/richness_violin_ffmi_v0.pdf", width = 6, height = 5)
 
-## Combine into a panel
+## Combine into a panel 
+# Horizontal
 # Baseline (Shannon, Simpson, Richness)
 # Violins
 alpha_panel_ffmi_v0 <- 
@@ -241,3 +215,12 @@ alpha_panel_ffmi_v0 <-
   # theme(legend.position = "bottom") &
   theme(aspect.ratio = 0.8)
 ggsave(alpha_panel_ffmi_v0, filename = "graphs/alphadiversity/alpha_panel_ffmi_v0.pdf", width = 12, height = 8)
+
+# Vertical (for pptx)
+alpha_panel_ffmi_v0_vertical <-
+  shannon_violin_ffmi_v0 /
+  simpson_violin_ffmi_v0 /
+  richness_violin_ffmi_v0 +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "none", plot.title = element_blank())
+ggsave(alpha_panel_ffmi_v0_vertical, filename = "graphs/alphadiversity/alpha_panel_ffmi_v0_vertical.pdf", width = 5, height = 8)
