@@ -12,62 +12,6 @@ library(patchwork)
 # Theme
 renoir_20 <- met.brewer("Renoir", n = 20)
 
-theme_composition <- function(base_size = 14, base_family = "sans") {
-  
-  (theme_foundation(base_size=base_size, base_family=base_family) + 
-    theme(
-      plot.title = element_text(face = "bold",size = rel(1.0), hjust = 0.5), 
-      text = element_text(),
-      panel.background = element_rect(colour = NA, fill = NA),
-      plot.background = element_rect(colour = NA, fill = NA),
-      panel.border = element_rect(colour = NA),
-      axis.title = element_text(face = "bold",size = rel(1)),
-      axis.title.y = element_text(angle = 90,vjust = 2),
-      axis.title.x = element_text(vjust = -0.2),
-      #axis.text.x =  element_text(angle = 45, hjust = 1),
-      axis.text = element_text(), 
-      axis.line = element_line(colour="black"),
-      axis.ticks = element_line(),
-      panel.grid.major = element_line(colour="#f0f0f0"),
-      panel.grid.minor = element_blank(),
-      legend.key = element_rect(colour = NA),
-      legend.position = "right",
-      legend.key.size= unit(0.4, "cm"),
-      legend.spacing  = unit(0, "cm"),
-      legend.text = element_text(size = rel(0.7)),
-      plot.margin = unit(c(10,5,5,5),"mm"),
-      strip.background = element_rect(colour="#f0f0f0",fill="#f0f0f0"),
-      strip.text = element_text(face="bold")
-  ))
-}
-
-theme_Publication <- function(base_size=14, base_family="sans") {
-  
-  (theme_foundation(base_size = base_size, base_family = base_family) + 
-    theme(
-      plot.title = element_text(face = "bold", size = rel(0.8), hjust = 0.5),
-      text = element_text(),
-      panel.background = element_rect(colour = NA, fill = NA),
-      plot.background = element_rect(colour = NA, fill = NA),
-      panel.border = element_rect(colour = NA),
-      axis.title = element_text(face = "bold", size = rel(0.8)),
-      axis.title.y = element_text(angle = 90, vjust = 2),
-      axis.title.x = element_text(vjust = -0.2),
-      axis.text = element_text(), 
-      axis.line = element_line(colour = "black"),
-      axis.ticks = element_line(),
-      panel.grid.major = element_line(colour = "#f0f0f0"),
-      panel.grid.minor = element_blank(),
-      legend.key = element_rect(colour = NA),
-      legend.position = "bottom",
-      legend.key.size = unit(0.2, "cm"),
-      legend.spacing = unit(0, "cm"),
-      plot.margin = unit(c(10,5,5,5),"mm"),
-      strip.background=element_rect(colour = "#f0f0f0", fill = "#f0f0f0"),
-      strip.text = element_text(face = "bold")
-    ))
-} 
-
 theme_minimal_composition <- function(base_size = 14, base_family = "sans") {
 
   theme_minimal(base_size = base_size, base_family = base_family) +
@@ -95,7 +39,7 @@ theme_minimal_composition <- function(base_size = 14, base_family = "sans") {
 }
 
 # Data
-baria_muscle_ab <- read_rds("data/20260720_BARIA_muscle_clinical.RDS") # metadata/clinical data CHECK FOR MOST RECENT VERSION
+baria_muscle_ab <- read_rds("data/20260722_BARIA_muscle_clinical.RDS") # metadata/clinical data CHECK FOR MOST RECENT VERSION
 baria_mb <- read_rds("data/ps.BARIA.metaphlan.706.2548.RDS")
 
 # Filter out participants taking antibiotics
@@ -149,18 +93,12 @@ mb |>
 top20_species_v0 <- mb |> 
   filter(visit == "0") |>
   group_by(Sample, Species) |> 
-  dplyr::summarize(Abundance = sum(Abundance), .groups = "drop") |> 
+  summarize(Abundance = sum(Abundance), .groups = "drop") |> 
   group_by(Species) |> 
-  dplyr::summarize(Abundance = mean(Abundance)) |> 
+  summarize(Abundance = mean(Abundance)) |> 
   arrange(-Abundance) |> 
   select(Species) |> 
-  head(20) |> 
-  print()
-
-# assign fixed color to each one of the top20 species
-top20_species_v0_vector <- top20_species_v0$Species # top 20 species names as vector
-set.seed(13)
-top20_species_v0_colours <- c("Other species" = "grey75", setNames(sample(renoir_20), top20_species_v0_vector))
+  head(20)
 
 ### Baseline composition ###
 species_ffmi_v0 <- mb |> 
@@ -173,32 +111,53 @@ species_ffmi_v0 <- mb |>
         Species %in% top20_species_v0$Species,
         Species,
         "Other species" # collapse other species
-        ),
-    Species2 = as.factor(Species2)
+        )
   ) |> 
   group_by(Species2, Sample, low_ffmi_v0) |> # species abundance per sample
-  dplyr::summarize(Abundance = sum(Abundance)) |> 
+  summarize(Abundance = sum(Abundance)) |> 
   group_by(Species2, low_ffmi_v0) |> # species per muscle mass group
-  dplyr::summarize(Abundance = mean(Abundance), .groups = "drop") |> # avg abundance per species per FFMI group
-  mutate(
-    Species2 = fct_reorder(Species2, Abundance),
-    Species2 = fct_relevel(Species2, "Other species", after = 0L) # move other species to the front
-  )
-
+  summarize(Abundance = mean(Abundance), .groups = "drop") # avg abundance per species per FFMI group
+  
 # check sum
 species_ffmi_v0 |> # check
   group_by(low_ffmi_v0) |> 
   summarize(sum_Abundance = sum(Abundance)) # adds up to 100
 
+# Create order based on the abundance in the first (low FFMI) group
+species_order_low_ffmi_v0 <- species_ffmi_v0 |> 
+  filter(
+    low_ffmi_v0 == "yes",
+    Species2 != "Other species"
+  ) |> 
+  arrange(-Abundance) |> 
+  pull(Species2)
+
+# Apply levels to species
+species_ffmi_v0 <- species_ffmi_v0 |> 
+  mutate(
+    Species2 = factor(as.character(Species2),levels = c(species_order_low_ffmi_v0, "Other species"))
+  )
+  
+# Assign colors according to abundance order in the low FFMI group
+set.seed(13)
+top20_species_v0_low_colours <- c("Other species" = "grey75", setNames(sample(renoir_20), species_order_low_ffmi_v0))
+
 # Composition plot
 species_comp_ffmi_v0 <- species_ffmi_v0 |> 
-  mutate(low_ffmi_v0 = fct_relevel(low_ffmi_v0, "yes", after = 0L)) |> # low baseline FFMI first
+  mutate(
+    low_ffmi_v0 = fct_relevel(low_ffmi_v0, "yes", after = 0L) # low baseline FFMI first
+  ) |> 
   ggplot(aes(x = low_ffmi_v0, y = Abundance, fill = Species2)) +
-  geom_bar(stat = "identity", color = "black", width = 0.65) +
-  scale_fill_manual(values = top20_species_v0_colours) +
+  geom_bar(
+    stat = "identity",
+    color = "black",
+    width = 0.65,
+    position = position_stack(reverse = TRUE)
+  ) +
+  scale_fill_manual(values = top20_species_v0_low_colours) +
   guides(fill = guide_legend(ncol = 1)) +
   labs(x = NULL, y = "Relative abundance (%)", title = "Species", fill = "") +
-  scale_x_discrete(labels = c("yes" = "Low FFMI", "no" = "High/moderate FFMI")) +
+  scale_x_discrete(labels = c("yes" = "Low FFMI", "no" = "Moderate/high FFMI")) +
   scale_y_continuous(expand = c(0, 0)) +
   theme_minimal_composition() +
   theme(
@@ -207,3 +166,4 @@ species_comp_ffmi_v0 <- species_ffmi_v0 |>
     legend.text = element_text(size = rel(0.9))
   )
 ggsave(plot = species_comp_ffmi_v0, "graphs/composition/species_comp_ffmi_v0.pdf", width = 14, height = 8)
+
