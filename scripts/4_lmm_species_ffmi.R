@@ -6,7 +6,6 @@ library(tidyverse)
 library(phyloseq)
 library(dagitty)
 library(ggdag)
-library(broom)
 library(lme4)
 library(broom.mixed)
 library(ggrepel)
@@ -139,15 +138,14 @@ lmm_data_ffmi <- mb_v0 |>
   inner_join(baria_muscle_long, by = "id") |> 
   filter(!is.na(species))
 
-# Smallest non-zero abundance
-min_baseline_abundance <- lmm_data_ffmi |>
-  filter(baseline_abundance > 0) |>
-  summarize(min_baseline_abundance = min(baseline_abundance)) |>
-  pull()
-
-# Log10 transform abundance
+# Log10-transform abundance and calculate a species-specific pseudocount
 lmm_data_ffmi_log10 <- lmm_data_ffmi |>
-  mutate(log10_baseline_abundance = log10(baseline_abundance + min_baseline_abundance / 2))
+  group_by(species) |> 
+  mutate(
+    min_baseline_abundance = min(baseline_abundance[baseline_abundance > 0], na.rm = TRUE),
+    log10_baseline_abundance = log10(baseline_abundance + min_baseline_abundance / 2)
+  ) |> 
+  ungroup()
 
 # Create consistent species labels for use across all models
 species_labels <- tibble(species = sort(unique(lmm_data_ffmi_log10$species))) |>
@@ -170,7 +168,7 @@ lmm_data_ffmi_nested <- lmm_data_ffmi_log10 |>
 # Fit one mixed model per species
 lmm1_ffmi <- lmm_data_ffmi_nested |>
   mutate(
-    lmm = map(
+    model1 = map(
       data,
       ~ lmer(ffmi ~ log10_baseline_abundance * visit + age_v0 + sex + (1 | id), data = .x, REML = FALSE)
     )
@@ -178,5 +176,18 @@ lmm1_ffmi <- lmm_data_ffmi_nested |>
 
 # extract coeff tables for each model
 lmm1_ffmi_tidy <- lmm1_ffmi |> 
-  mutate(results = map(lmm, broom::tidy, conf.int = TRUE))
+  mutate(results = map(model1, broom.mixed::tidy, effects = "fixed", conf.int = TRUE))
+
+# Unnest; keep coeff and FDR-adj. p
+lmm1_ffmi_results <- lmm1_ffmi_tidy |> 
+  select(species, results) |> 
+  unnest(results) |> 
+  filter(str_detect(term, "log10_baseline_abundance:visit")) |> 
+  group_by(term) |> # separately for v4 and v5
+  mutate(
+    p_fdr = p.adjust(p.value, method = "BH"), # add FDR-adjusted p-values
+    signif = if_else(p_fdr < 0.05, "significant", "not significant") # for plots
+  ) |> 
+  ungroup() |> 
+  left_join(species_labels, by = "species")
 
