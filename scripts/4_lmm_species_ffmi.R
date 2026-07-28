@@ -90,7 +90,7 @@ mb_v0 <- matrix_mb |>
   relocate(id, visit, .before = everything()) |> 
   filter(
     visit == "0",
-    id %in% baria_muscle$id # before calculating prevalence and abundance -> only for those ids with ffmi_v0 available
+    id %in% baria_muscle$id # already filtered for !is.na(ffmi_v0) in cleaning script + abx use above
   )
 
 species_v0 <- mb_v0 |> 
@@ -163,11 +163,12 @@ lmm_data_ffmi_nested <- lmm_data_ffmi_log10 |>
   group_by(species) |>
   nest()
 
+
 #### Model 1: Age, sex ####
 # Fit one mixed model per species
 lmm1_ffmi <- lmm_data_ffmi_nested |>
   mutate(
-    model1 = map(
+    model = map(
       data,
       ~ lmerTest::lmer(ffmi ~ log10_baseline_abundance * visit + age_v0 + sex + (1 | id), data = .x, REML = FALSE)
     )
@@ -175,9 +176,9 @@ lmm1_ffmi <- lmm_data_ffmi_nested |>
 
 # extract coeff tables for each model
 lmm1_ffmi_tidy <- lmm1_ffmi |> 
-  mutate(results = map(model1, broom.mixed::tidy, effects = "fixed", conf.int = TRUE))
+  mutate(results = map(model, broom.mixed::tidy, effects = "fixed", conf.int = TRUE))
 
-# Unnest; keep coeff and FDR-adj. p
+
 lmm1_ffmi_results <- lmm1_ffmi_tidy |> 
   select(species, results) |> 
   unnest(results) |> 
@@ -188,5 +189,13 @@ lmm1_ffmi_results <- lmm1_ffmi_tidy |>
     signif = if_else(p_fdr < 0.05, "significant", "not significant") # for plots
   ) |> 
   ungroup() |> 
+  mutate(follow_up = case_when(term == "log10_baseline_abundance:visit4" ~ "1 year", term == "log10_baseline_abundance:visit5" ~ "2 years")) |> 
   left_join(species_labels, by = "species")
 
+# Signif. results for 1y (v4)
+lmm1_ffmi_v4_signif <- lmm1_ffmi_results |> 
+  filter(term == "log10_baseline_abundance:visit4", signif == "significant")
+
+# Signif. results for 2y (v5)
+lmm1_ffmi_v5_signif <- lmm1_ffmi_results |> 
+  filter(term == "log10_baseline_abundance:visit5", signif == "significant")
