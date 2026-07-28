@@ -4,9 +4,8 @@
 # Packages
 library(tidyverse)
 library(phyloseq)
-library(dagitty)
 library(ggdag)
-library(lme4)
+library(lmerTest)
 library(broom.mixed)
 library(ggrepel)
 library(ggthemes)
@@ -170,7 +169,7 @@ lmm1_ffmi <- lmm_data_ffmi_nested |>
   mutate(
     model1 = map(
       data,
-      ~ lmer(ffmi ~ log10_baseline_abundance * visit + age_v0 + sex + (1 | id), data = .x, REML = FALSE)
+      ~ lmerTest::lmer(ffmi ~ log10_baseline_abundance * visit + age_v0 + sex + (1 | id), data = .x, REML = FALSE)
     )
   )
 
