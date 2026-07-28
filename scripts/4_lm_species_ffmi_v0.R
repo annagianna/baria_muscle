@@ -102,7 +102,10 @@ mb_df <- matrix_mb |> # abundance matrix
 
 # Keep baseline samples only for cross-sectional associations (baseline species abundance with FFMI)
 mb_v0 <- mb_df |> 
-  filter(visit == "0")
+  filter(
+    visit == "0",
+    id %in% baria_muscle$id
+  )
 
 # Check baseline sample size and availability of FFMI vars
 mb_v0 |> 
