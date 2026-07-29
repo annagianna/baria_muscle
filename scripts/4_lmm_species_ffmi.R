@@ -158,21 +158,47 @@ species_labels <- tibble(species = sort(unique(lmm_data_ffmi_log10$species))) |>
     sgb = str_remove(sgb, "^t__")
   )
 
+# 1 year model data
+lmm_data_ffmi_v4 <- lmm_data_ffmi_log10 |> 
+  filter(visit %in% c("0", "4")) |> 
+  droplevels()
+
+# 2 years model data
+lmm_data_ffmi_v5 <- lmm_data_ffmi_log10 |> 
+  filter(visit %in% c("0", "5")) |> 
+  droplevels()
+
 # Nest by species
-lmm_data_ffmi_nested <- lmm_data_ffmi_log10 |>
+# 1 year
+lmm_data_ffmi_v4_nested <- lmm_data_ffmi_v4 |>
   group_by(species) |>
   nest()
 
+# 2 years
+lmm_data_ffmi_v5_nested <- lmm_data_ffmi_v5 |>
+  group_by(species) |>
+  nest()
 
 #### Model 1: Age, sex ####
-# Fit one mixed model per species
-lmm1_ffmi <- lmm_data_ffmi_nested |>
+# Fit one mixed model per species per interval
+# Baseline -> 1 year (v0-v4)
+lmm1_ffmi_v4 <- lmm_data_ffmi_v4_nested |>
   mutate(
     model = map(
       data,
       ~ lmerTest::lmer(ffmi ~ log10_baseline_abundance * visit + age_v0 + sex + (1 | id), data = .x, REML = FALSE)
     )
   )
+
+# Baseline -> 2 year (v0-v5)
+  lmm1_ffmi_v5 <- lmm_data_ffmi_v5_nested |>
+  mutate(
+    model = map(
+      data,
+      ~ lmerTest::lmer(ffmi ~ log10_baseline_abundance * visit + age_v0 + sex + (1 | id), data = .x, REML = FALSE)
+    )
+  )
+
 
 # extract coeff tables for each model
 lmm1_ffmi_tidy <- lmm1_ffmi |> 
@@ -199,3 +225,6 @@ lmm1_ffmi_v4_signif <- lmm1_ffmi_results |>
 # Signif. results for 2y (v5)
 lmm1_ffmi_v5_signif <- lmm1_ffmi_results |> 
   filter(term == "log10_baseline_abundance:visit5", signif == "significant")
+
+lmm1_ffmi_results |>
+  count(follow_up, signif)
