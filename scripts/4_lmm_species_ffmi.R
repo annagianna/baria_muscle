@@ -237,7 +237,7 @@ lmm1_ffmi_v5_results <- lmm1_ffmi_v5_tidy |>
   left_join(species_labels, by = "species")
 
 # Species significantly associated with FFMI trajectory from baseline to year 1
-lmm1_ffmi_v5_signif <- lmm1_ffmi_v4_results |> 
+lmm1_ffmi_v5_signif <- lmm1_ffmi_v5_results |> 
   filter(signif == "significant") |> 
   arrange(p_fdr) |> 
   relocate(species_label, .after = species)
