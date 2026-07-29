@@ -158,30 +158,29 @@ species_labels <- tibble(species = sort(unique(lmm_data_ffmi_log10$species))) |>
     sgb = str_remove(sgb, "^t__")
   )
 
-# 1 year model data
+# 1y model data
 lmm_data_ffmi_v4 <- lmm_data_ffmi_log10 |> 
   filter(visit %in% c("0", "4")) |> 
   droplevels()
 
-# 2 years model data
+# 2y model data
 lmm_data_ffmi_v5 <- lmm_data_ffmi_log10 |> 
   filter(visit %in% c("0", "5")) |> 
   droplevels()
 
 # Nest by species
-# 1 year
+# 1y
 lmm_data_ffmi_v4_nested <- lmm_data_ffmi_v4 |>
   group_by(species) |>
   nest()
 
-# 2 years
+# 2y
 lmm_data_ffmi_v5_nested <- lmm_data_ffmi_v5 |>
   group_by(species) |>
   nest()
 
 #### Model 1: Age, sex ####
-# Fit one mixed model per species per interval
-# Baseline -> 1 year (v0-v4)
+### Baseline -> 1y (v0-v4) ###
 lmm1_ffmi_v4 <- lmm_data_ffmi_v4_nested |>
   mutate(
     model = map(
@@ -190,8 +189,31 @@ lmm1_ffmi_v4 <- lmm_data_ffmi_v4_nested |>
     )
   )
 
-# Baseline -> 2 year (v0-v5)
-  lmm1_ffmi_v5 <- lmm_data_ffmi_v5_nested |>
+# extract coeff tables for each model
+lmm1_ffmi_v4_tidy <- lmm1_ffmi_v4 |> 
+  mutate(results = map(model, broom.mixed::tidy, effects = "fixed", conf.int = TRUE))
+
+lmm1_ffmi_v4_results <- lmm1_ffmi_v4_tidy |> 
+  select(species, results) |> 
+  unnest(results) |> 
+  filter(str_detect(term, "log10_baseline_abundance:visit")) |> 
+  mutate(
+    p_fdr = p.adjust(p.value, method = "BH"), # add FDR-adjusted p-values
+    signif = if_else(p_fdr < 0.05, "significant", "not significant") # for plots
+  ) |> 
+  mutate(follow_up = case_when(term == "log10_baseline_abundance:visit4" ~ "1 year")) |> 
+  left_join(species_labels, by = "species")
+
+# Species significantly associated with FFMI trajectory from baseline to year 1
+lmm1_ffmi_v4_signif <- lmm1_ffmi_v4_results |> 
+  filter(signif == "significant") |> 
+  arrange(p_fdr) |> 
+  relocate(species_label, .after = species)
+
+
+
+### Baseline -> 2y (v0-v5) ###
+lmm1_ffmi_v5 <- lmm_data_ffmi_v5_nested |>
   mutate(
     model = map(
       data,
@@ -199,32 +221,23 @@ lmm1_ffmi_v4 <- lmm_data_ffmi_v4_nested |>
     )
   )
 
-
 # extract coeff tables for each model
-lmm1_ffmi_tidy <- lmm1_ffmi |> 
+lmm1_ffmi_v5_tidy <- lmm1_ffmi_v5 |> 
   mutate(results = map(model, broom.mixed::tidy, effects = "fixed", conf.int = TRUE))
 
-
-lmm1_ffmi_results <- lmm1_ffmi_tidy |> 
+lmm1_ffmi_v5_results <- lmm1_ffmi_v5_tidy |> 
   select(species, results) |> 
   unnest(results) |> 
   filter(str_detect(term, "log10_baseline_abundance:visit")) |> 
-  group_by(term) |> # separately for v4 and v5
   mutate(
     p_fdr = p.adjust(p.value, method = "BH"), # add FDR-adjusted p-values
     signif = if_else(p_fdr < 0.05, "significant", "not significant") # for plots
   ) |> 
-  ungroup() |> 
-  mutate(follow_up = case_when(term == "log10_baseline_abundance:visit4" ~ "1 year", term == "log10_baseline_abundance:visit5" ~ "2 years")) |> 
+  mutate(follow_up = case_when(term == "log10_baseline_abundance:visit5" ~ "2 years")) |> 
   left_join(species_labels, by = "species")
 
-# Signif. results for 1y (v4)
-lmm1_ffmi_v4_signif <- lmm1_ffmi_results |> 
-  filter(term == "log10_baseline_abundance:visit4", signif == "significant")
-
-# Signif. results for 2y (v5)
-lmm1_ffmi_v5_signif <- lmm1_ffmi_results |> 
-  filter(term == "log10_baseline_abundance:visit5", signif == "significant")
-
-lmm1_ffmi_results |>
-  count(follow_up, signif)
+# Species significantly associated with FFMI trajectory from baseline to year 1
+lmm1_ffmi_v5_signif <- lmm1_ffmi_v4_results |> 
+  filter(signif == "significant") |> 
+  arrange(p_fdr) |> 
+  relocate(species_label, .after = species)
