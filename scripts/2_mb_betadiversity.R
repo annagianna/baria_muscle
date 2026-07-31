@@ -48,12 +48,8 @@ theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
 }
 
 # Data
-baria_muscle_ab <- read_rds("data/20260722_BARIA_muscle_clinical.RDS") # clinical data
+baria_muscle <- read_rds("data/20260731_BARIA_muscle_clinical.RDS") # clinical data
 baria_mb <- read_rds("data/ps.BARIA.metaphlan.706.2548.RDS")
-
-# Filter out participants taking antibiotics
-baria_muscle <- baria_muscle_ab |> 
-  filter(abx_v0 == "no")
 
 # qc
 sample_sums(baria_mb) |>
