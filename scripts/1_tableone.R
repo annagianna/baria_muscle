@@ -7,12 +7,8 @@ library(phyloseq)
 library(tableone)
 
 # Data
-baria_muscle_ab <- readRDS("data/20260722_BARIA_muscle_clinical.RDS")
+baria_muscle <- readRDS("data/20260731_BARIA_muscle_clinical.RDS")
 baria_mb <- readRDS("data/ps.BARIA.metaphlan.706.2548.RDS")
-
-# Remove participants taking antibiotics
-baria_muscle <- baria_muscle_ab |> 
-  filter(abx_v0 == "no")
 
 #### Table 1 grouped by FFMI status at baseline (clinical cohort) ####
 # Choose vars
@@ -96,13 +92,6 @@ shotgun_ids <- sample_data(baria_mb)$Subject_ID
 # Filter metadata only to include ids that also appear in the phyloseq object
 baria_muscle_mb <- baria_muscle |> 
   filter(id %in% shotgun_ids)
-
-# Checks
-nrow(baria_muscle)
-nrow(baria_muscle_mb)
-
-n_distinct(baria_muscle$id)
-n_distinct(baria_muscle_mb$id)
 
 # Choose vars
 t1_v0_mb_vars <- baria_muscle_mb |> 
