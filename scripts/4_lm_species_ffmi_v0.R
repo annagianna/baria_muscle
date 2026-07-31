@@ -37,16 +37,12 @@ theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
 }
 
 # Data
-baria_muscle_ab <- read_rds("data/20260722_BARIA_muscle_clinical.RDS") # clinical data
+baria_muscle <- read_rds("data/20260731_BARIA_muscle_clinical.RDS") # clinical data
 baria_mb <- read_rds("data/ps.BARIA.metaphlan.706.2548.RDS")
 
 # qc
 sample_sums(baria_mb) |>
   summary() # adds up to 100
-
-# Filter out participants taking antibiotics
-baria_muscle <- baria_muscle_ab |> 
-  filter(abx_v0 == "no")
 
 # Keep only samples with one run or first run of samples with duplicates (same approach as in previous scripts)
 run1_mb <- prune_samples(
@@ -269,7 +265,7 @@ model_data_ffmi_v0_long <- model_data_ffmi_v0 |>
     names_to = "species",
     values_to = "abundance"
   ) |> 
-  arrange(species) # ensure consistent order before make.unique()
+  arrange(species)
 
 # Find the smallest non-zero relative abundance
 min_abundance <- model_data_ffmi_v0_long |> 
@@ -399,14 +395,6 @@ model_ffmi_v0_3_signif <- model_ffmi_v0_3_results |>
   filter(p_fdr < 0.05) |> 
   arrange(p_fdr) |> 
   relocate(species_label, .after = species)
-
-# Create unique labels among species significant in Model 3
-model_ffmi_v0_3_species_labels <- model_ffmi_v0_3_signif |> 
-  select(species, species_label) |> 
-  arrange(species_label, species) |> 
-  mutate(species_label_unique = make.unique(species_label)) |> 
-  select(species, species_label_unique)
-
 
 #### Prep model 1-3 results for a combined forest plot ####
 # Prepare data and labels to plot models 1-3 together
