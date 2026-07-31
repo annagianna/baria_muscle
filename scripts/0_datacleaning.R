@@ -783,9 +783,10 @@ baria_muscle_clean <- baria_muscle_clinical_with_medication_notypos |>
     # Antibiotics
     abx_v0 = if_else(str_detect(medication_list_v0, antibiotics_pattern), "yes", "no")
   ) |> 
+  filter(abx_v0 == "no") |> # exclude participants on antibiotics
   select(-medication_list_v0) |> 
   arrange(date_v0)
 
 # then save as both RDS and csv files
-write.csv(baria_muscle_clean, "data/20260722_BARIA_muscle_clinical.csv")
-saveRDS(baria_muscle_clean, "data/20260722_BARIA_muscle_clinical.RDS")
+write.csv(baria_muscle_clean, "data/20260731_BARIA_muscle_clinical.csv")
+saveRDS(baria_muscle_clean, "data/20260731_BARIA_muscle_clinical.RDS")
