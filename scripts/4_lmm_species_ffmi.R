@@ -4,11 +4,11 @@
 # Packages
 library(tidyverse)
 library(phyloseq)
-library(ggdag)
 library(lmerTest)
 library(broom.mixed)
 library(ggrepel)
 library(ggthemes)
+library(ggpubr)
 library(MetBrewer)
 
 # Theme
@@ -37,12 +37,8 @@ theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
 }
 
 # Data
-baria_muscle_ab <- read_rds("data/20260722_BARIA_muscle_clinical.RDS") # clinical data
+baria_muscle <- read_rds("data/20260731_BARIA_muscle_clinical.RDS") # clinical data
 baria_mb <- read_rds("data/ps.BARIA.metaphlan.706.2548.RDS")
-
-# Filter out participants taking antibiotics
-baria_muscle <- baria_muscle_ab |> 
-  filter(abx_v0 == "no")
 
 # Keep only samples with one run or first run of samples with duplicates (same approach as in previous scripts)
 run1_mb <- prune_samples(
@@ -59,7 +55,7 @@ run1_mb_clean <- prune_taxa(
 # Extract abundance matrix
 matrix_mb <- as(otu_table(run1_mb_clean), "matrix")
 
-# Transponse samples as rows, taxa as cols
+# Transpose samples as rows, taxa as cols
 if (taxa_are_rows(run1_mb_clean)) {
   matrix_mb <- t(matrix_mb)
 }
@@ -96,7 +92,7 @@ mb_v0 <- matrix_mb |>
 species_v0 <- mb_v0 |> 
   select(all_of(colnames(matrix_mb)))
 
-# Compute revalence and mean abundance
+# Compute prevalence and mean abundance
 species_v0_prevalence <- colMeans(species_v0 > 0, na.rm = FALSE) # (= proportion of patients/samples where species is detected)
 species_v0_abundance <- colMeans(species_v0, na.rm = FALSE) # mean relative abundance per species
 
@@ -116,6 +112,7 @@ species_v0_keep <- tibble(
 # Pivot clinical data longer
 baria_muscle_long <- baria_muscle |>
   select(id, age_v0, sex, ffmi_v0, ffmi_v4, ffmi_v5, fmi_v0, t2d_v0, dm_meds_v0, statins_v0) |>
+  mutate(age_centered_v0 = age_v0 - mean(age_v0, na.rm = TRUE)) |> 
   #filter(!is.na(ffmi_v4), !is.na(ffmi_v5)) |> 
   pivot_longer(
     cols = c(ffmi_v0, ffmi_v4, ffmi_v5),
@@ -185,7 +182,7 @@ lmm1_ffmi_v4 <- lmm_data_ffmi_v4_nested |>
   mutate(
     model = map(
       data,
-      ~ lmerTest::lmer(ffmi ~ log10_baseline_abundance * visit + age_v0 + sex + (1 | id), data = .x, REML = FALSE)
+      ~ lmerTest::lmer(ffmi ~ log10_baseline_abundance * visit + age_centered_v0 + sex + (1 | id), data = .x, REML = FALSE)
     )
   )
 
@@ -200,24 +197,15 @@ lmm1_ffmi_v4_results <- lmm1_ffmi_v4_tidy |>
   mutate(
     p_fdr = p.adjust(p.value, method = "BH"), # add FDR-adjusted p-values
     signif = if_else(p_fdr < 0.05, "significant", "not significant") # for plots
-  ) |> 
-  mutate(follow_up = case_when(term == "log10_baseline_abundance:visit4" ~ "1 year")) |> 
+  ) |>  
   left_join(species_labels, by = "species")
-
-# Species significantly associated with FFMI trajectory from baseline to year 1
-lmm1_ffmi_v4_signif <- lmm1_ffmi_v4_results |> 
-  filter(signif == "significant") |> 
-  arrange(p_fdr) |> 
-  relocate(species_label, .after = species)
-
-
 
 ### Baseline -> 2y (v0-v5) ###
 lmm1_ffmi_v5 <- lmm_data_ffmi_v5_nested |>
   mutate(
     model = map(
       data,
-      ~ lmerTest::lmer(ffmi ~ log10_baseline_abundance * visit + age_v0 + sex + (1 | id), data = .x, REML = FALSE)
+      ~ lmerTest::lmer(ffmi ~ log10_baseline_abundance * visit + age_centered_v0 + sex + (1 | id), data = .x, REML = FALSE)
     )
   )
 
@@ -232,12 +220,149 @@ lmm1_ffmi_v5_results <- lmm1_ffmi_v5_tidy |>
   mutate(
     p_fdr = p.adjust(p.value, method = "BH"), # add FDR-adjusted p-values
     signif = if_else(p_fdr < 0.05, "significant", "not significant") # for plots
-  ) |> 
-  mutate(follow_up = case_when(term == "log10_baseline_abundance:visit5" ~ "2 years")) |> 
+  ) |>
   left_join(species_labels, by = "species")
 
+# Combine v4 and v5 results
+lmm1_ffmi_results <- bind_rows(lmm1_ffmi_v4_results, lmm1_ffmi_v5_results) |> 
+  mutate(
+    follow_up = case_when(
+      term == "log10_baseline_abundance:visit4" ~ "Baseline -> 1 year", 
+      term == "log10_baseline_abundance:visit5" ~ "Baseline -> 2 years"
+    )
+  )
+
+# Significant species in model 1
+lmm1_ffmi_signif_species <- lmm1_ffmi_results |> 
+  filter(signif == "significant") |> 
+  distinct(species) |> 
+  pull(species)
+
+# Create unique species labels for significant species in model 1
+lmm1_ffmi_species_labels <- species_labels |> 
+  filter(species %in% lmm1_ffmi_signif_species) |> 
+  arrange(species_label, species) |> 
+  group_by(species_label) |> 
+  mutate(
+    species_label_unique = if(n() > 1) {
+      paste(species_label, sgb, sep = " ")
+    } else {
+      species_label
+    }
+  ) |> 
+  ungroup() |> 
+  select(species, species_label_unique)
+
+# Add labels to signif results for each interval
 # Species significantly associated with FFMI trajectory from baseline to year 1
+lmm1_ffmi_v4_signif <- lmm1_ffmi_v4_results |> 
+  filter(signif == "significant") |> 
+  arrange(p_fdr)
+  
+# Species significantly associated with FFMI trajectory from baseline to year 2
 lmm1_ffmi_v5_signif <- lmm1_ffmi_v5_results |> 
   filter(signif == "significant") |> 
-  arrange(p_fdr) |> 
-  relocate(species_label, .after = species)
+  arrange(p_fdr)
+
+# Overlap of significant species between y1 & y2 in model1 (age, sex)
+lmm1_ffmi_overlap <- lmm1_ffmi_v4_signif |> 
+  select(
+    species, 
+    term_v4 = term, 
+    estimate_v4 = estimate,
+    p.value_v4 = p.value,
+    p_fdr_v4 = p_fdr
+  ) |> 
+  inner_join(
+    lmm1_ffmi_v5_signif |> 
+      select(
+        species, 
+        term_v5 = term, 
+        estimate_v5 = estimate,
+        p.value_v5 = p.value,
+        p_fdr_v5 = p_fdr
+      ),
+      by = "species"
+  ) |> 
+  left_join(lmm1_ffmi_species_labels, by = "species") |> 
+  relocate(species_label_unique, .after = species) |> 
+  mutate(
+    posneg_v4 = if_else(estimate_v4 > 0, "positive", "negative"),
+    posneg_v5 = if_else(estimate_v5 > 0, "positive", "negative"),
+    consistent_direction = posneg_v4 == posneg_v5
+  ) |> 
+  arrange(p_fdr_v4, p_fdr_v5)
+
+lmm1_ffmi_overlap_species <- lmm1_ffmi_overlap |> 
+  pull(species)
+
+# Species-specific abundance percentiles (for plotting)
+lmm1_ffmi_percentiles <- lmm_data_ffmi_log10 |> 
+  filter(species %in% lmm1_ffmi_overlap_species) |> 
+  distinct(species, id, .keep_all = TRUE) |> 
+  group_by(species) |> 
+  summarize(
+    log10_baseline_abundance_p25 = quantile(log10_baseline_abundance, probs = 0.25, na.rm = TRUE),
+    log10_baseline_abundance_p75 = quantile(log10_baseline_abundance, probs = 0.75, na.rm = TRUE),
+    .groups = "drop"
+  ) |> 
+  left_join(
+    lmm1_ffmi_overlap |> 
+      select(species, species_label_unique),
+    by = "species"
+  )
+
+## One species test
+# pull species
+test_species <- lmm1_ffmi_overlap_species[1]
+
+# observed data
+test_species_plot_data <- lmm_data_ffmi_v4 |> 
+  filter(species == test_species) |> 
+  mutate(visit = factor(visit, levels = c("0", "4"))) |> 
+  left_join(lmm1_ffmi_percentiles, by = "species")
+
+# predicted data
+test_species_predicted <- test_species_plot_data |> 
+  distinct(visit, log10_baseline_abundance_p25, log10_baseline_abundance_p75) |> 
+  pivot_longer(
+    cols = c(log10_baseline_abundance_p25, log10_baseline_abundance_p75),
+    names_to = "percentile",
+    values_to = "log10_baseline_abundance"
+  ) |> 
+  mutate(
+    percentile = str_extract(percentile, "p\\d+"),
+    age_centered_v0 = mean(test_species_plot_data$age_centered_v0, na.rm = TRUE),
+    sex = factor("male", )
+  )
+
+
+
+
+
+test_species_plot <- test_species_plot_data |> 
+  ggplot(aes(x = visit, y = ffmi, group = id)) +
+  geom_line(color = "grey60", alpha = 0.2, linewidth = 0.6) +
+  geom_point(color = "grey60", alpha = 0.2, size = 0.6) +
+  labs(
+    title = unique(test_species_plot_data$species_label_unique),
+    x = NULL,
+    y = "FFMI (kg/m²)") +
+  scale_x_discrete(expand = expansion(mult = c(0, 0.01))) +
+  theme_minimal_custom() +
+  theme(plot.title = element_text(face = "italic", hjust = 0.5)) +
+  stat_summary(
+    aes(group = 1), # treat all ids as one group -> one mean per visit
+    fun = mean,
+    geom = "line",
+    linewidth = 0.8,
+    color = "black"
+  ) +
+  stat_summary(
+    aes(group = 1),
+    fun = mean,
+    geom = "point",
+    size = 1,
+    color = "black"
+  )
+
