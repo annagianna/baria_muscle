@@ -384,13 +384,19 @@ plot_lmm1_ffmi <- function(species_name, model_df, model_data) {
     ) +
     
     # Observed data (population average)
-    stat_summary(aes(group = 1), fun = mean, geom = "line", linewidth = 1, color = "black", linetype = "13", alpha = 0.8) +
-    stat_summary(aes(group = 1), fun = mean, geom = "point", size = 0.6, color = "black") +
+    # stat_summary(aes(group = 1), fun = mean, geom = "line", linewidth = 1, color = "black", linetype = "13", alpha = 0.8) +
+    # stat_summary(aes(group = 1), fun = mean, geom = "point", size = 0.6, color = "black") +
+    
     labs(
       title = unique(species_data$species_label_unique),
-      subtitle = paste0("βinteraction = ", round(interaction_beta, 2)),
       x = NULL,
       y = "FFMI (kg/m²)"
+    ) +
+    annotate(
+      "text",
+      x = Inf, y = Inf,
+      label = paste0("βinteraction = ", round(interaction_beta, 2)), 
+      hjust = 1, vjust = 1.4, size = 3
     ) +
     scale_x_discrete(expand = expansion(mult = c(0, 0.01))) +
     theme_minimal_custom() +
@@ -425,3 +431,25 @@ panel_lmm1_ffmi_v5 <- ggarrange(
   align = "hv"
 )
 ggsave(plot = panel_lmm1_ffmi_v5, filename = "graphs/lmm_species_ffmi/panel_lmm1_ffmi_v5.pdf", width = 14, height = 8)
+
+#### Plot observed FFMI trajectories ####
+plot_ffmi_observed <- baria_muscle_long |> 
+  select(id, visit, ffmi) |>
+  mutate(visit = factor(visit, levels = c("0", "4", "5"), labels = c("Baseline", "1 year", "2 years"))) |> 
+  ggplot(aes(x = visit, y = ffmi, group = id)) +
+
+  # individual observed trajectories
+  geom_line(color = "grey70", alpha = 0.2, linewidth = 0.6) +
+  geom_point(color = "grey70", alpha = 0.2, size = 0.6) +
+
+  # group mean trajectories
+  stat_summary(aes(group = 1), fun = mean, geom = "line", color = "black", linewidth = 1) +
+  stat_summary(aes(group = 1), fun = mean, geom = "point", color = "black", size = 1.5) +
+  labs(
+    title = "Observed FFMI trajectories",
+    x = NULL,
+    y = "FFMI (kg/m²)"
+  ) +
+  scale_x_discrete(expand = expansion(mult = c(0, 0.01))) +
+  theme_minimal_custom()
+ggsave(plot = plot_ffmi_observed, filename = "graphs/lmm_species_ffmi/plot_ffmi_observed.pdf", width = 10, height = 8)
