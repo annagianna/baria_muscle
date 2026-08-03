@@ -334,6 +334,12 @@ plot_lmm1_ffmi <- function(species_name, model_df, model_data) {
     TRUE ~ NA_character_
   )
 
+  # Interaction terms for individual species plot titles
+  interaction_term <- paste0("log10_baseline_abundance:visit", follow_up)
+  interaction_beta <- broom.mixed::tidy(species_model, effects = "fixed") |> 
+    filter(term == interaction_term) |> 
+    pull(estimate)
+
   # Observed species data
   species_data <- model_data |> 
     filter(species == species_name) |>
@@ -380,7 +386,12 @@ plot_lmm1_ffmi <- function(species_name, model_df, model_data) {
     # Observed data (population average)
     stat_summary(aes(group = 1), fun = mean, geom = "line", linewidth = 1, color = "black", linetype = "13", alpha = 0.8) +
     stat_summary(aes(group = 1), fun = mean, geom = "point", size = 0.6, color = "black") +
-    labs(title = unique(species_data$species_label_unique), x = NULL, y = "FFMI (kg/m²)") +
+    labs(
+      title = unique(species_data$species_label_unique),
+      subtitle = paste0("βinteraction = ", round(interaction_beta, 2)),
+      x = NULL,
+      y = "FFMI (kg/m²)"
+    ) +
     scale_x_discrete(expand = expansion(mult = c(0, 0.01))) +
     theme_minimal_custom() +
     theme(plot.title = element_text(face = "italic", hjust = 0.5))
