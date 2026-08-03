@@ -312,23 +312,23 @@ lmm1_ffmi_percentiles <- lmm_data_ffmi_log10 |>
     by = "species"
   )
 
-## One species test
-# pull species
+### Test for one species ###
+# Species name
 test_species <- lmm1_ffmi_overlap_species[1]
 
-# model for first species
+# Extract model for first species
 test_species_model <- lmm1_ffmi_v4 |> 
   filter(species == test_species) |> 
   pull(model) |> 
   first()
 
-# observed data
+# Observed data for first species
 test_species_plot_data <- lmm_data_ffmi_v4 |> 
   filter(species == test_species) |> 
   mutate(visit = factor(visit, levels = c("0", "4"))) |> 
   left_join(lmm1_ffmi_percentiles, by = "species")
 
-# predicted data
+# Predicted data for first species
 test_species_predicted_p25_p75 <- test_species_plot_data |> 
   select(id, visit, age_centered_v0, sex, log10_baseline_abundance_p25, log10_baseline_abundance_p75) |> # retain only cols needed for model
   pivot_longer(
@@ -341,7 +341,7 @@ test_species_predicted_p25_p75 <- test_species_plot_data |>
     predicted_ffmi = predict(
       test_species_model, 
       newdata = pick(everything()), 
-      re.form = NA # use fixed effects only; exclude id-specific random interdcepts
+      re.form = NA # use fixed effects only; exclude id-specific random intercepts
     )
   ) |> 
   group_by(visit, percentile) |> 
@@ -357,10 +357,10 @@ test_species_plot <- test_species_plot_data |>
   geom_line(
     data = test_species_predicted_p25_p75,
     aes(x = visit, y = predicted_ffmi, group = percentile, color = percentile),
-    linewidth = 1
+    linewidth = 1.6
   ) +
   scale_colour_manual(
-    values = c("p25" = renoir_15[5], "p75" = renoir_15[14]),
+    values = c("p25" = renoir_15[6], "p75" = renoir_15[14]),
     labels = c("p25" = "Lower abundance (P25)", "p75" = "Higher abundance (P75)"),
     name = "Baseline abundance"
   ) +
@@ -387,3 +387,82 @@ test_species_plot <- test_species_plot_data |>
   theme_minimal_custom() +
   theme(plot.title = element_text(face = "italic", hjust = 0.5))
 
+#### Plot function #####
+plot_lmm1_ffmi <- function(species_name, model_df, model_data) {
+  
+  # Extract the model for one species
+  species_model <- model_df |> 
+    filter(species == species_name) |> 
+    pull(model) |> 
+    first()
+
+  # Identify whether supplied data are v4 or v5
+  follow_up <- model_data |> 
+    filter(visit != "0") |> 
+    distinct(visit) |> 
+    pull() |> 
+    as.character()
+
+  follow_up_label <- case_when(
+    follow_up == "4" ~ "1 year",
+    follow_up == "5" ~ "2 years",
+    TRUE ~ NA_character_
+  )
+
+  # Observed species data
+  species_data <- model_data |> 
+    filter(species == species_name) |>
+    left_join(lmm1_ffmi_percentiles, by = "species")
+
+  # Population-averaged predictions for P25 & P75
+  species_predicted_p25_p75 <- species_data |> 
+    select(id, visit, age_centered_v0, sex, log10_baseline_abundance_p25, log10_baseline_abundance_p75) |> # retain only cols needed for model
+    pivot_longer(
+      cols = c(log10_baseline_abundance_p25, log10_baseline_abundance_p75),
+      names_to = "percentile",
+      values_to = "log10_baseline_abundance"
+    ) |> 
+    mutate(
+      percentile = str_extract(percentile, "p\\d+"),
+      predicted_ffmi = predict(species_model, newdata = pick(everything()), re.form = NA)
+    ) |> 
+    group_by(visit, percentile) |> 
+    summarize(predicted_ffmi = mean(predicted_ffmi, na.rm = TRUE), .groups = "drop") |> 
+    mutate(visit = factor(visit, levels = c("0", follow_up), labels = c("Baseline", follow_up_label))
+  )
+  
+  species_data |> 
+    mutate(visit = factor(visit, levels = c("0", follow_up), labels = c("Baseline", follow_up_label))) |> 
+    ggplot(aes(x = visit, y = ffmi, group = id)) +
+
+    # observed data (individual ids)
+    geom_line(color = "grey60", alpha = 0.2, linewidth = 0.6) +
+    geom_point(color = "grey60", alpha = 0.2, size = 0.6) +
+
+    # predicted data for P25 & P75
+    geom_line(
+      data = species_predicted_p25_p75,
+      aes(x = visit, y = predicted_ffmi, group = percentile, color = percentile),
+      linewidth = 1.6
+    ) +
+    scale_colour_manual(
+      values = c("p25" = renoir_15[6], "p75" = renoir_15[14]),
+      labels = c("p25" = "Lower abundance (P25)", "p75" = "Higher abundance (P75)"),
+      name = "Baseline abundance"
+    ) +
+    
+    # Observed data (population average)
+    stat_summary(aes(group = 1), fun = mean, geom = "line", linewidth = 0.6, color = "black", linetype = "dashed") +
+    stat_summary(aes(group = 1), fun = mean, geom = "point", size = 1, color = "black") +
+    labs(title = unique(species_data$species_label_unique), x = NULL, y = "FFMI (kg/m²)") +
+    scale_x_discrete(expand = expansion(mult = c(0, 0.01))) +
+    theme_minimal_custom() +
+    theme(plot.title = element_text(face = "italic", hjust = 0.5))
+  
+}
+
+plot_lmm1_ffmi(
+  species_name = lmm1_ffmi_overlap_species[1],
+  model_df = lmm1_ffmi_v4,
+  model_data = lmm_data_ffmi_v4
+)
