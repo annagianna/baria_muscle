@@ -302,8 +302,8 @@ lmm1_ffmi_percentiles <- lmm_data_ffmi_log10 |>
   distinct(species, id, .keep_all = TRUE) |> 
   group_by(species) |> 
   summarize(
-    log10_baseline_abundance_p25 = quantile(log10_baseline_abundance, probs = 0.25, na.rm = TRUE),
-    log10_baseline_abundance_p75 = quantile(log10_baseline_abundance, probs = 0.75, na.rm = TRUE),
+    log10_baseline_abundance_p10 = quantile(log10_baseline_abundance, probs = 0.1, na.rm = TRUE),
+    log10_baseline_abundance_p90 = quantile(log10_baseline_abundance, probs = 0.9, na.rm = TRUE),
     .groups = "drop"
   ) |> 
   left_join(
@@ -339,11 +339,11 @@ plot_lmm1_ffmi <- function(species_name, model_df, model_data) {
     filter(species == species_name) |>
     left_join(lmm1_ffmi_percentiles, by = "species")
 
-  # Population-averaged predictions for P25 & P75
-  species_predicted_p25_p75 <- species_data |> 
-    select(id, visit, age_centered_v0, sex, log10_baseline_abundance_p25, log10_baseline_abundance_p75) |> # retain only cols needed for model
+  # Population-averaged predictions for P10 & P90
+  species_predicted_p10_p90 <- species_data |> 
+    select(id, visit, age_centered_v0, sex, log10_baseline_abundance_p10, log10_baseline_abundance_p90) |> # retain only cols needed for model
     pivot_longer(
-      cols = c(log10_baseline_abundance_p25, log10_baseline_abundance_p75),
+      cols = c(log10_baseline_abundance_p10, log10_baseline_abundance_p90),
       names_to = "percentile",
       values_to = "log10_baseline_abundance"
     ) |> 
@@ -356,7 +356,7 @@ plot_lmm1_ffmi <- function(species_name, model_df, model_data) {
     mutate(visit = factor(visit, levels = c("0", follow_up), labels = c("Baseline", follow_up_label)
     )
   )
-  
+
   species_data |> 
     mutate(visit = factor(visit, levels = c("0", follow_up), labels = c("Baseline", follow_up_label))) |> 
     ggplot(aes(x = visit, y = ffmi, group = id)) +
@@ -365,15 +365,15 @@ plot_lmm1_ffmi <- function(species_name, model_df, model_data) {
     geom_line(color = "grey70", alpha = 0.2, linewidth = 0.6) +
     geom_point(color = "grey70", alpha = 0.2, size = 0.6) +
 
-    # predicted data for P25 & P75
+    # predicted data for P10 & P90
     geom_line(
-      data = species_predicted_p25_p75,
+     data = species_predicted_p10_p90,
       aes(x = visit, y = predicted_ffmi, group = percentile, color = percentile),
       linewidth = 1.4
     ) +
     scale_colour_manual(
-      values = c("p25" = renoir_15[6], "p75" = renoir_15[14]),
-      labels = c("p25" = "P25", "p75" = "P75"),
+      values = c("p10" = renoir_15[6], "p90" = renoir_15[14]),
+      labels = c("p10" = "P10", "p90" = "P90"),
       name = "Baseline abundance"
     ) +
     
@@ -414,4 +414,3 @@ panel_lmm1_ffmi_v5 <- ggarrange(
   align = "hv"
 )
 ggsave(plot = panel_lmm1_ffmi_v5, filename = "graphs/lmm_species_ffmi/panel_lmm1_ffmi_v5.pdf", width = 14, height = 8)
-
