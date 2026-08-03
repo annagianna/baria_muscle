@@ -316,6 +316,12 @@ lmm1_ffmi_percentiles <- lmm_data_ffmi_log10 |>
 # pull species
 test_species <- lmm1_ffmi_overlap_species[1]
 
+# model for first species
+test_species_model <- lmm1_ffmi_v4 |> 
+  filter(species == test_species) |> 
+  pull(model) |> 
+  first()
+
 # observed data
 test_species_plot_data <- lmm_data_ffmi_v4 |> 
   filter(species == test_species) |> 
@@ -323,8 +329,8 @@ test_species_plot_data <- lmm_data_ffmi_v4 |>
   left_join(lmm1_ffmi_percentiles, by = "species")
 
 # predicted data
-test_species_predicted <- test_species_plot_data |> 
-  distinct(visit, log10_baseline_abundance_p25, log10_baseline_abundance_p75) |> 
+test_species_predicted_p25_p75 <- test_species_plot_data |> 
+  select(id, visit, age_centered_v0, sex, log10_baseline_abundance_p25, log10_baseline_abundance_p75) |> # retain only cols needed for model
   pivot_longer(
     cols = c(log10_baseline_abundance_p25, log10_baseline_abundance_p75),
     names_to = "percentile",
@@ -332,31 +338,43 @@ test_species_predicted <- test_species_plot_data |>
   ) |> 
   mutate(
     percentile = str_extract(percentile, "p\\d+"),
-    age_centered_v0 = mean(test_species_plot_data$age_centered_v0, na.rm = TRUE),
-    sex = factor("male", )
-  )
+    predicted_ffmi = predict(
+      test_species_model, 
+      newdata = pick(everything()), 
+      re.form = NA # use fixed effects only; exclude id-specific random interdcepts
+    )
+  ) |> 
+  group_by(visit, percentile) |> 
+  summarize(predicted_ffmi = mean(predicted_ffmi, na.rm = TRUE), .groups = "drop")
 
-
-
-
-
+# Plot
 test_species_plot <- test_species_plot_data |> 
   ggplot(aes(x = visit, y = ffmi, group = id)) +
+  # observed data
   geom_line(color = "grey60", alpha = 0.2, linewidth = 0.6) +
   geom_point(color = "grey60", alpha = 0.2, size = 0.6) +
+  # predicted data
+  geom_line(
+    data = test_species_predicted_p25_p75,
+    aes(x = visit, y = predicted_ffmi, group = percentile, color = percentile),
+    linewidth = 1
+  ) +
+  scale_colour_manual(
+    values = c("p25" = renoir_15[5], "p75" = renoir_15[14]),
+    labels = c("p25" = "Lower abundance (P25)", "p75" = "Higher abundance (P75)"),
+    name = "Baseline abundance"
+  ) +
   labs(
     title = unique(test_species_plot_data$species_label_unique),
     x = NULL,
     y = "FFMI (kg/m²)") +
-  scale_x_discrete(expand = expansion(mult = c(0, 0.01))) +
-  theme_minimal_custom() +
-  theme(plot.title = element_text(face = "italic", hjust = 0.5)) +
   stat_summary(
     aes(group = 1), # treat all ids as one group -> one mean per visit
     fun = mean,
     geom = "line",
-    linewidth = 0.8,
-    color = "black"
+    linewidth = 0.6,
+    color = "black",
+    linetype = "dashed"
   ) +
   stat_summary(
     aes(group = 1),
@@ -364,5 +382,8 @@ test_species_plot <- test_species_plot_data |>
     geom = "point",
     size = 1,
     color = "black"
-  )
+  ) +
+  scale_x_discrete(expand = expansion(mult = c(0, 0.01))) +
+  theme_minimal_custom() +
+  theme(plot.title = element_text(face = "italic", hjust = 0.5))
 
