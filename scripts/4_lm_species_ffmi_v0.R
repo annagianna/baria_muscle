@@ -256,7 +256,7 @@ dagitty::adjustmentSets(
 
 # Prepare data for linear models
 model_data_ffmi_v0 <- mb_v0 |> 
-  select(id, age_v0, sex, t2d_v0, dm_meds_v0, dm_meds_v0, statins_v0, ffmi_v0, fmi_v0, low_ffmi_v0, all_of(species_v0_keep))
+  select(id, age_v0, sex, t2d_v0, dm_meds_v0, statins_v0, ffmi_v0, fmi_v0, low_ffmi_v0, all_of(species_v0_keep))
 
 # Pivot longer -> reshape to one row per participant-species combination
 model_data_ffmi_v0_long <- model_data_ffmi_v0 |> 
@@ -267,15 +267,14 @@ model_data_ffmi_v0_long <- model_data_ffmi_v0 |>
   ) |> 
   arrange(species)
 
-# Find the smallest non-zero relative abundance
-min_abundance <- model_data_ffmi_v0_long |> 
-  filter(abundance > 0) |> 
-  summarize(min_abundance = min(abundance)) |> 
-  pull(min_abundance)
-
-# log10-transform abundance using half the minimum non-zero abundance as pseudocount
-model_data_ffmi_v0_long_log <- model_data_ffmi_v0_long |> 
-  mutate(log10_abundance = log10(abundance + (min_abundance/2)))
+# Log10-transform abundance using a species-specific pseudocount
+model_data_ffmi_v0_long_log <- model_data_ffmi_v0_long |>
+  group_by(species) |>
+  mutate(
+    min_abundance = min(abundance[abundance > 0], na.rm = TRUE),
+    log10_abundance = log10(abundance + min_abundance / 2)
+  ) |>
+  ungroup()
 
 # Create consistent cleaned species labels for use across all models
 species_labels <- tibble(
@@ -327,6 +326,7 @@ model_ffmi_v0_1_signif <- model_ffmi_v0_1_results |>
   filter(p_fdr < 0.05) |> 
   arrange(p_fdr) |>
   relocate(species_label, .after = species)
+saveRDS(model_ffmi_v0_1_signif, "tables/260804_model_ffmi_v0_1_signif.RDS")
 
 #### Model  2: Adjusted for age, sex and adiposity (FMI) ####
 # Fit one lm per species
