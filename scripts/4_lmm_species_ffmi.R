@@ -460,23 +460,32 @@ ggsave(plot = panel_lmm1_ffmi_v5, filename = "graphs/lmm_species_ffmi/panel_lmm1
 # 1 year
 lmm1_ffmi_v4_only <- lmm1_ffmi_v4_signif |>
   anti_join(lmm1_ffmi_v5_signif, by = "species") |> 
-  arrange(-estimate)
+  ungroup() |> 
+  arrange(desc(estimate))
 
-llm1_ffmi_v4_top_pos <- lmm1_ffmi_v4_signif |> 
+# Highest pos and most neg estimates
+lmm1_ffmi_v4_top_pos <- lmm1_ffmi_v4_only |> 
   slice_head(n = 3)
 
-llm1_ffmi_v4_top_neg <- lmm1_ffmi_v4_signif |> 
+lmm1_ffmi_v4_top_neg <- lmm1_ffmi_v4_only |> 
   slice_tail(n = 3)
+
+lmm1_ffmi_v4_top <- bind_rows(lmm1_ffmi_v4_top_pos, lmm1_ffmi_v4_top_neg)
 
 # 2 years
 lmm1_ffmi_v5_only <- lmm1_ffmi_v5_signif |> 
   anti_join(lmm1_ffmi_v4_signif, by = "species") |> 
-  arrange(-estimate)
+  ungroup() |> 
+  arrange(desc(estimate))
 
-llm1_ffmi_v5_top_pos <- lmm1_ffmi_v5_signif |> 
+# Highest pos and most neg estimates
+lmm1_ffmi_v5_top_pos <- lmm1_ffmi_v5_only |> 
   slice_head(n = 3)
 
-llm1_ffmi_v5_top_neg <- lmm1_ffmi_v5_signif |> 
+lmm1_ffmi_v5_top_neg <- lmm1_ffmi_v5_only |> 
   slice_tail(n = 3)
+
+lmm1_ffmi_v5_top <- bind_rows(lmm1_ffmi_v5_top_pos, lmm1_ffmi_v5_top_neg)
+
 
 
