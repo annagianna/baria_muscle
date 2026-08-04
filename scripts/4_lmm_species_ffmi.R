@@ -264,8 +264,8 @@ lmm1_ffmi_v5_signif <- lmm1_ffmi_v5_results |>
   filter(signif == "significant") |> 
   arrange(p_fdr)
 
-# Overlap of significant species between y1 & y2 in model1 (age, sex)
-lmm1_ffmi_overlap <- lmm1_ffmi_v4_signif |> 
+## Overlap of significant species between y1 & y2 in model1 (age, sex) ##
+  lmm1_ffmi_overlap <- lmm1_ffmi_v4_signif |> 
   select(
     species, 
     term_v4 = term, 
@@ -296,9 +296,29 @@ lmm1_ffmi_overlap <- lmm1_ffmi_v4_signif |>
 lmm1_ffmi_overlap_species <- lmm1_ffmi_overlap |> 
   pull(species)
 
+## Species significant in only one time interval ##
+# 1 year
+lmm1_ffmi_v4_only <- lmm1_ffmi_v4_signif |>
+  anti_join(lmm1_ffmi_v5_signif, by = "species") |> 
+  ungroup() |> 
+  arrange(desc(abs(estimate))) |> 
+  slice_head(n = 6) |> 
+  pull(species)
+
+# 2 years
+lmm1_ffmi_v5_only <- lmm1_ffmi_v5_signif |> 
+  anti_join(lmm1_ffmi_v4_signif, by = "species") |> 
+  ungroup() |> 
+  arrange(desc(abs(estimate))) |> 
+  slice_head(n = 6) |> 
+  pull(species)
+
+lmm1_ffmi_plot_species <- c(lmm1_ffmi_overlap_species, lmm1_ffmi_v4_only, lmm1_ffmi_v5_only) |> 
+  unique()
+
 # Species-specific abundance percentiles (for plotting)
 lmm1_ffmi_percentiles <- lmm_data_ffmi_log10 |> 
-  filter(species %in% lmm1_ffmi_overlap_species) |> 
+  filter(species %in% lmm1_ffmi_plot_species) |> 
   distinct(species, id, .keep_all = TRUE) |> 
   group_by(species) |> 
   summarize(
@@ -306,12 +326,7 @@ lmm1_ffmi_percentiles <- lmm_data_ffmi_log10 |>
     log10_baseline_abundance_p90 = quantile(log10_baseline_abundance, probs = 0.9, na.rm = TRUE),
     .groups = "drop"
   ) |> 
-  left_join(
-    lmm1_ffmi_overlap |> 
-      select(species, species_label_unique),
-    by = "species"
-  )
-
+  left_join(lmm1_ffmi_species_labels, by = "species")
 
 #### Plot observed FFMI trajectories ####
 plot_ffmi_observed <- baria_muscle_long |> 
@@ -386,7 +401,7 @@ plot_lmm1_ffmi <- function(species_name, model_df, model_data) {
     mutate(visit = factor(visit, levels = c("0", follow_up), labels = c("Baseline", follow_up_label)
     )
   )
-
+  
   species_data |> 
     mutate(visit = factor(visit, levels = c("0", follow_up), labels = c("Baseline", follow_up_label))) |> 
     ggplot(aes(x = visit, y = ffmi, group = id)) +
@@ -397,14 +412,14 @@ plot_lmm1_ffmi <- function(species_name, model_df, model_data) {
 
     # predicted data for P10 & P90
     geom_line(
-     data = species_predicted_p10_p90,
+      data = species_predicted_p10_p90,
       aes(x = visit, y = predicted_ffmi, group = percentile, color = percentile),
       linewidth = 1.4
     ) +
     scale_colour_manual(
       values = c("p10" = renoir_15[6], "p90" = renoir_15[14]),
       labels = c("p10" = "P10", "p90" = "P90"),
-      name = "Baseline abundance"
+      name = "Baseline log10-abundance"
     ) +
     
     # Observed data (population average)
@@ -428,14 +443,14 @@ plot_lmm1_ffmi <- function(species_name, model_df, model_data) {
   
 }
 
-# Call plot function for each one of the overlap species
+## Call plot function for each one of the overlap species ##
 # 1 year
 plot_lmm1_ffmi_v4 <- map(lmm1_ffmi_overlap_species, ~ plot_lmm1_ffmi(species_name = .x, model_df = lmm1_ffmi_v4, model_data = lmm_data_ffmi_v4))
 
 # 2 years
 plot_lmm1_ffmi_v5 <- map(lmm1_ffmi_overlap_species, ~ plot_lmm1_ffmi(species_name = .x, model_df = lmm1_ffmi_v5, model_data = lmm_data_ffmi_v5))
 
-# Panels
+# Panels for overlap species
 # 1 year
 panel_lmm1_ffmi_v4 <- ggarrange(
   plotlist = plot_lmm1_ffmi_v4,
@@ -456,17 +471,32 @@ panel_lmm1_ffmi_v5 <- ggarrange(
 )
 ggsave(plot = panel_lmm1_ffmi_v5, filename = "graphs/lmm_species_ffmi/panel_lmm1_ffmi_v5.pdf", width = 14, height = 8)
 
-#### Species significant in only one time interval #####
+## Call plot function for each one of the top significant species only in one interval ##
 # 1 year
-lmm1_ffmi_v4_only <- lmm1_ffmi_v4_signif |>
-  anti_join(lmm1_ffmi_v5_signif, by = "species") |> 
-  ungroup() |> 
-  arrange(desc(abs(estimate))) |> 
-  slice_head(n = 6)
+plot_lmm1_ffmi_v4_only <- map(lmm1_ffmi_v4_only, ~ plot_lmm1_ffmi(species_name = .x, model_df = lmm1_ffmi_v4, model_data = lmm_data_ffmi_v4))
 
 # 2 years
-lmm1_ffmi_v5_only <- lmm1_ffmi_v5_signif |> 
-  anti_join(lmm1_ffmi_v4_signif, by = "species") |> 
-  ungroup() |> 
-  arrange(desc(abs(estimate))) |> 
-  slice_head(n = 6)
+plot_lmm1_ffmi_v5_only <- map(lmm1_ffmi_v5_only, ~ plot_lmm1_ffmi(species_name = .x, model_df = lmm1_ffmi_v5, model_data = lmm_data_ffmi_v5))
+
+# Panels for species with largest absolute estimate in one interval only
+# 1 year
+panel_lmm1_ffmi_v4_only <- ggarrange(
+  plotlist = plot_lmm1_ffmi_v4_only,
+  ncol = 3, nrow = 2,
+  common.legend = TRUE,
+  legend = "bottom",
+  align = "hv"
+)
+ggsave(plot = panel_lmm1_ffmi_v4_only, filename = "graphs/lmm_species_ffmi/panel_lmm1_ffmi_v4_only.pdf", width = 14, height = 8)
+
+# 2 years
+panel_lmm1_ffmi_v5_only <- ggarrange(
+  plotlist = plot_lmm1_ffmi_v5_only,
+  ncol = 3, nrow = 2,
+  common.legend = TRUE,
+  legend = "bottom",
+  align = "hv"
+)
+ggsave(plot = panel_lmm1_ffmi_v5_only, filename = "graphs/lmm_species_ffmi/panel_lmm1_ffmi_v5_only.pdf", width = 14, height = 8)
+
+# Continue with species overlapping with baseline associations ...
