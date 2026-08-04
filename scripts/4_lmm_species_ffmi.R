@@ -312,7 +312,31 @@ lmm1_ffmi_percentiles <- lmm_data_ffmi_log10 |>
     by = "species"
   )
 
-#### Plot function #####
+
+#### Plot observed FFMI trajectories ####
+plot_ffmi_observed <- baria_muscle_long |> 
+  select(id, visit, ffmi) |>
+  mutate(visit = factor(visit, levels = c("0", "4", "5"), labels = c("Baseline", "1 year", "2 years"))) |> 
+  ggplot(aes(x = visit, y = ffmi, group = id)) +
+
+  # individual observed trajectories
+  geom_line(color = "grey70", alpha = 0.2, linewidth = 0.6) +
+  geom_point(color = "grey70", alpha = 0.2, size = 0.6) +
+
+  # group mean trajectories
+  stat_summary(aes(group = 1), fun = mean, geom = "line", color = "black", linewidth = 1.2) +
+  stat_summary(aes(group = 1), fun = mean, geom = "point", color = "black", size = 1.5) +
+  labs(
+    title = "Observed FFMI trajectories",
+    x = NULL,
+    y = "FFMI (kg/m²)"
+  ) +
+  scale_x_discrete(expand = expansion(mult = c(0, 0.01))) +
+  theme_minimal_custom()
+ggsave(plot = plot_ffmi_observed, filename = "graphs/lmm_species_ffmi/plot_ffmi_observed.pdf", width = 10, height = 8)
+
+
+#### Plot function for significant species in 1y & 2y models #####
 plot_lmm1_ffmi <- function(species_name, model_df, model_data) {
   
   # Extract the model for one species
@@ -432,24 +456,27 @@ panel_lmm1_ffmi_v5 <- ggarrange(
 )
 ggsave(plot = panel_lmm1_ffmi_v5, filename = "graphs/lmm_species_ffmi/panel_lmm1_ffmi_v5.pdf", width = 14, height = 8)
 
-#### Plot observed FFMI trajectories ####
-plot_ffmi_observed <- baria_muscle_long |> 
-  select(id, visit, ffmi) |>
-  mutate(visit = factor(visit, levels = c("0", "4", "5"), labels = c("Baseline", "1 year", "2 years"))) |> 
-  ggplot(aes(x = visit, y = ffmi, group = id)) +
+#### Species significant in only one time interval #####
+# 1 year
+lmm1_ffmi_v4_only <- lmm1_ffmi_v4_signif |>
+  anti_join(lmm1_ffmi_v5_signif, by = "species") |> 
+  arrange(-estimate)
 
-  # individual observed trajectories
-  geom_line(color = "grey70", alpha = 0.2, linewidth = 0.6) +
-  geom_point(color = "grey70", alpha = 0.2, size = 0.6) +
+llm1_ffmi_v4_top_pos <- lmm1_ffmi_v4_signif |> 
+  slice_head(n = 3)
 
-  # group mean trajectories
-  stat_summary(aes(group = 1), fun = mean, geom = "line", color = "black", linewidth = 1) +
-  stat_summary(aes(group = 1), fun = mean, geom = "point", color = "black", size = 1.5) +
-  labs(
-    title = "Observed FFMI trajectories",
-    x = NULL,
-    y = "FFMI (kg/m²)"
-  ) +
-  scale_x_discrete(expand = expansion(mult = c(0, 0.01))) +
-  theme_minimal_custom()
-ggsave(plot = plot_ffmi_observed, filename = "graphs/lmm_species_ffmi/plot_ffmi_observed.pdf", width = 10, height = 8)
+llm1_ffmi_v4_top_neg <- lmm1_ffmi_v4_signif |> 
+  slice_tail(n = 3)
+
+# 2 years
+lmm1_ffmi_v5_only <- lmm1_ffmi_v5_signif |> 
+  anti_join(lmm1_ffmi_v4_signif, by = "species") |> 
+  arrange(-estimate)
+
+llm1_ffmi_v5_top_pos <- lmm1_ffmi_v5_signif |> 
+  slice_head(n = 3)
+
+llm1_ffmi_v5_top_neg <- lmm1_ffmi_v5_signif |> 
+  slice_tail(n = 3)
+
+
