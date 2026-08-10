@@ -10,8 +10,6 @@ library(phyloseq)
 baria_clinical_data_raw <- readRDS("./data/raw_data/BARIA.clinical.2024-12-09.723.2043.RDS")
 baria_mb <- readRDS("data/raw_data/ps.BARIA.metaphlan.706.2548.RDS")
 
-## Cut-offs used in this script (qc)
-
 ## Formulas used in this script
 # Hba1c(%) = (0,0915 * HbA1c (mmol/mol) + 2,15 (from diabetesfonds.nl)
 # Hba1c(mmol/mol) = (10,93 x Hba1c (%)) - 23,5
@@ -50,164 +48,58 @@ long_vars_pattern <- str_c("^(", str_c(long_vars, collapse = "|"), ")_(v\\d+)$")
 # Clinical data
 baria_muscle_vars <- baria_clinical_data_raw |>
   select(
-    id = Subject_ID,
+    # Baseline & static vars
+    id = Subject_ID, date_v0 = date, sg_type = type_surgery, age_v0 = Age, sex, t2d_v0 = dm, 
+    bmi_v0 = bmi, weight_kg_v0 = weight, height_cm = height, wc_cm_v0 = taille, upperleg_cm_v0 = upperleg,
+    fm_kg_v0 = tbf, fm_percent_v0 = tbf_percent, ffm_kg_v0 = ffm, ffm_percent_v0 = ffm_percent, bia_resistance_50khz_v0 = rawdata_50Khz_Resistance,
+    medication_binary_v0 = meds, medication_list_v0 = medication_v0_freetext, sport_v0 = scre_sport,
+    systolic_bp_mmhg_v0 = systolic_pressure_v0, diastolic_bp_mmhg_v0 = diastolic_pressure_v0, aht = hypertension,
+    glucose_mmoll_v0 = glucose, fasting_glucose_mmoll_mmt_v0 = min0gluc, fasting_insulin_pmoll_mmt_v0 = min0insulin, fasting_glucagon_ngl_mmt_v0 = min0glucagon, 
+    fasting_cpeptide_nmoll_mmt_v0 = min0cpept, hba1c_v0 = hba1c, hba1c_mmolmol_v0 = hba1c__IFCC_mmolmol,
+    gammagt_ul_v0 = ggt, alat_ul_v0 = alat, asat_ul_v0 = asat, triglycerides_mmoll_v0 = triglycerides,
+    crp_mgl_v0 = crp, tsh_miul_v0 = tsh, ft4_pmoll_v0 = ft4,
 
-    # Visits
-    date_v0 = date,
-    date_v2 = V2_date,
-    date_v3 = V3_date,
-    date_v4 = V4_date,
-    date_v5 = V5_date,
-    date_v6 = V6_date_1,
-    date_v7 = V7_date,
-    sg_type = type_surgery,
+    # v2-v5 (Repeated vars)
+    matches("^V[2-5]_(date|bmi|weight|taille|tbf|tbf_percent|ffm|ffm_percent|rawdata_50Khz_Resistance|upperleg|min0gluc|min0insulin|min0glucagon|min0cpept|hba1c|hba1c__IFCC_mmolmol|crp)$"),
 
-    # Baseline (v0)
-    age_v0 = Age,
-    sex,
-    t2d_v0 = dm,
-    bmi_v0 = bmi,
-    weight_kg_v0 = weight,
-    height_cm = height,
-    wc_cm_v0 = taille,
-    fm_kg_v0 = tbf,
-    fm_percent_v0 = tbf_percent,
-    ffm_kg_v0 = ffm,
-    ffm_percent_v0 = ffm_percent,
-    bia_resistance_50khz_v0 = rawdata_50Khz_Resistance,
-    upperleg_cm_v0 = upperleg,
-    aht = hypertension,
-    medication_binary_v0 = meds,
-    medication_list_v0 = medication_v0_freetext,
-    sport_v0 = scre_sport,
-    systolic_bp_mmhg_v0 = systolic_pressure_v0,
-    diastolic_bp_mmhg_v0 = diastolic_pressure_v0,
-    glucose_mmoll_v0 = glucose,
-    fasting_glucose_mmoll_mmt_v0 = min0gluc,
-    fasting_insulin_pmoll_mmt_v0 = min0insulin,
-    fasting_glucagon_ngl_mmt_v0 = min0glucagon,
-    fasting_cpeptide_nmoll_mmt_v0 = min0cpept,
-    hba1c_v0 = hba1c,
-    hba1c_mmolmol_v0 = hba1c__IFCC_mmolmol,
-    gammagt_ul_v0 = ggt,
-    alat_ul_v0 = alat,
-    asat_ul_v0 = asat,
-    triglycerides_mmoll_v0 = triglycerides,
-    crp_mgl_v0 = crp,
-    tsh_miul_v0 = tsh,
-    ft4_pmoll_v0 = ft4,
-    nexfin_hr_v0 = nexfin_hr_v0,
-    nexfin_dpdt_v0 = nexfin_dpdt_v0,
-    nexfin_sv_v0 = nexfin_sv_v0,
-    nexfin_svi_v0 = nexfin_svi_v0,
-    nexfin_co_v0 = nexfin_CO_v0,
-    nexfin_ci_v0 = nexfin_CI_v0,
-    nexfin_svr_v0 = nexfin_svr_v0,
-    nexfin_svri_v0 = nexfin_svri_v0,
+    # v6 (5 years)
+    date_v6 = V6_date, bmi_v6 = V6_bmi_1, weight_kg_v6 = V6_weight_1, wc_cm_v6 = V6_taille_1, fm_kg_v6 = V6_tbf_1, fm_percent_v6 = V6_tbf_percent_1,
+    ffm_kg_v6 = V6_ffm_1, ffm_percent_v6 = V6_ffm_percent_1, bia_resistance_50khz_v6 = V6_rawdata_1_50Khz_Resistance, upperleg_cm_v6 = V6_upperleg_1,
+    hba1c_v6 = V6_hba1c_1, hba1c_mmolmol_v6 = V6_hba1c_IFCC_mmolmol, crp_mgl_v6 = V6_crp_1,
 
-    # Follow-Up Data
-    # v2 = 6 weeks
-    bmi_v2 = V2_bmi,
-    weight_kg_v2 = V2_weight,
-    wc_cm_v2 = V2_taille,
-    upperleg_cm_v2 = V2_upperleg,
-    hba1c_v2 = V2_hba1c,
-    hba1c_mmolmol_v2 = V2_hba1c__IFCC_mmolmol,
-    crp_mgl_v2 = V2_crp,
-      
-    # v3 = 6 months
-    bmi_v3 = V3_bmi,
-    weight_kg_v3 = V3_weight,
-    wc_cm_v3 = V3_taille,
-    upperleg_cm_v3 = V3_upperleg,
-    hba1c_v3 = V3_hba1c,
-    hba1c_mmolmol_v3 = V3_hba1c__IFCC_mmolmol,
-    crp_mgl_v3 = V3_crp,
+    # v7 (10 years)
+    date_v7 = V7_date, bmi_v7 = V7_BMI, weight_kg_v7 = V7_weight, wc_cm_v7 = V7_taille, upperleg_cm_v7 = V7_upperleg, hba1c_v7 = V7_hba1c,
+    hba1c_mmolmol_v7 = V7_hba1c_IFCC_mmolmol, crp_mgl_v7 = V7_CRP,
 
-    # v4 = 1 year
-    bmi_v4 = V4_bmi,
-    weight_kg_v4 = V4_weight,
-    wc_cm_v4 = V4_taille,
-    fm_kg_v4 = V4_tbf,
-    fm_percent_v4 = V4_tbf_percent,
-    ffm_kg_v4 = V4_ffm,
-    ffm_percent_v4 = V4_ffm_percent,
-    bia_resistance_50khz_v4 = V4_rawdata_50Khz_Resistance,
-    upperleg_cm_v4 = V4_upperleg,
-    fasting_glucose_mmoll_mmt_v4 = V4_min0gluc,
-    fasting_insulin_pmoll_mmt_v4 = V4_min0insulin,
-    fasting_glucagon_ngl_mmt_v4 = V4_min0glucagon,
-    fasting_cpeptide_nmoll_mmt_v4 = V4_min0cpept,
-    hba1c_v4 = V4_hba1c,
-    hba1c_mmolmol_v4 = V4_hba1c__IFCC_mmolmol,
-    crp_mgl_v4 = V4_crp,
-    nexfin_hr_v4 = nexfin_hr_v4,
-    nexfin_dpdt_v4 = nexfin_dpdt_v4,
-    nexfin_sv_v4 = nexfin_sv_v4,
-    nexfin_svi_v4 = nexfin_svi_v4,
-    nexfin_co_v4 = nexfin_co_v4,
-    nexfin_ci_v4 = nexfin_ci_v4,
-    nexfin_svr_v4 = nexfin_svr_v4,
-    nexfin_svri_v4 = nexfin_svri_v4,
-
-    # v5 = 2 years
-    bmi_v5 = V5_bmi,
-    weight_kg_v5 = V5_weight,
-    wc_cm_v5 = V5_taille,
-    fm_kg_v5 = V5_tbf,
-    fm_percent_v5 = V5_tbf_percent,
-    ffm_kg_v5 = V5_ffm,
-    ffm_percent_v5 = V5_ffm_percent,
-    bia_resistance_50khz_v5 = V5_rawdata_50Khz_Resistance,
-    upperleg_cm_v5 = V5_upperleg,
-    fasting_glucose_mmoll_mmt_v5 = V5_min0gluc,
-    fasting_insulin_pmoll_mmt_v5 = V5_min0insulin,
-    fasting_glucagon_ngl_mmt_v5 = V5_min0glucagon,
-    fasting_cpeptide_nmoll_mmt_v5 = V5_min0cpept,
-    hba1c_v5 = V5_hba1c,
-    hba1c_mmolmol_v5 = V5_hba1c__IFCC_mmolmol,
-    crp_mgl_v5 = V5_crp,
-    nexfin_hr_v5 = nexfin_hr_v5,
-    nexfin_dpdt_v5 = nexfin_dpdt_v5,
-    nexfin_sv_v5 = nexfin_sv_v5,
-    nexfin_svi_v5 = nexfin_svi_v5,
-    nexfin_co_v5 = nexfin_co_v5,
-    nexfin_ci_v5 = nexfin_ci_v5,
-    nexfin_svr_v5 = nexfin_svr_v5,
-    nexfin_svri_v5 = nexfin_svri_v5,
-
-    # v6 = 5 years
-    bmi_v6 = V6_bmi_1,
-    weight_kg_v6 = V6_weight_1,
-    wc_cm_v6 = V6_taille_1,
-    fm_kg_v6 = V6_tbf_1,
-    fm_percent_v6 = V6_tbf_percent_1,
-    ffm_kg_v6 = V6_ffm_1,
-    ffm_percent_v6 = V6_ffm_percent_1,
-    bia_resistance_50khz_v6 = V6_rawdata_1_50Khz_Resistance,
-    upperleg_cm_v6 = V6_upperleg_1,
-    hba1c_v6 = V6_hba1c_1,
-    hba1c_mmolmol_v6 = V6_hba1c_IFCC_mmolmol,
-    crp_mgl_v6 = V6_crp_1,
-    nexfin_hr_v6 = nexfin_hr_v6_1,
-    nexfin_dpdt_v6 = nexfin_dpdt_v6_1,
-    nexfin_sv_v6 = nexfin_sv_v6_1,
-    nexfin_svi_v6 = nexfin_svi_v6_1,
-    nexfin_co_v6 = nexfin_co_v6_1,
-    nexfin_ci_v6 = nexfin_ci_v6_1,
-    nexfin_svr_v6 = nexfin_svr_v6_1,
-    nexfin_svri_v6 = nexfin_svri_v6_1,
-
-    # v7 = 10 years
-    bmi_v7 = V7_BMI,
-    weight_kg_v7 = V7_weight,
-    wc_cm_v7 = V7_taille,
-    upperleg_cm_v7 = V7_upperleg,
-    hba1c_v7 = V7_hba1c,
-    hba1c_mmolmol_v7 = V7_hba1c_IFCC_mmolmol,
-    crp_mgl_v7 = V7_CRP
+    # Nexfin data
+    matches("^nexfin_(hr|dpdt|sv|svi|co|ci|svr|svri)_", ignore.case = TRUE),
+    -nexfin_HR_v0
   ) |>
-   mutate(
+  rename_with(~ str_replace(.x, "^V([2-5])_(.+)$", "\\2_v\\1"), matches("^V[2-5]_")) |> 
+  rename_with(
+    ~ .x |>
+      str_replace("^weight_", "weight_kg_") |>
+      str_replace("^taille_", "wc_cm_") |>
+      str_replace("^tbf_percent_", "fm_percent_") |>
+      str_replace("^tbf_", "fm_kg_") |>
+      str_replace("^ffm_v", "ffm_kg_v") |>
+      str_replace("^rawdata_50Khz_Resistance_", "bia_resistance_50khz_") |>
+      str_replace("^upperleg_", "upperleg_cm_") |>
+      str_replace("^min0gluc_", "fasting_glucose_mmoll_mmt_") |>
+      str_replace("^min0insulin_", "fasting_insulin_pmoll_mmt_") |>
+      str_replace("^min0glucagon_", "fasting_glucagon_ngl_mmt_") |>
+      str_replace("^min0cpept_", "fasting_cpeptide_nmoll_mmt_") |>
+      str_replace("^hba1c__IFCC_mmolmol_", "hba1c_mmolmol_") |>
+      str_replace("^crp_", "crp_mgl_"),
+    matches("_v[2-5]$")
+  ) |> 
+  rename_with(
+    ~ .x |> 
+      str_to_lower() |> # inconsistencies in Nexfin data nomenclature
+      str_replace("_v6_1$", "_v6"),
+    matches("^nexfin_(hr|dpdt|sv|svi|co|ci|svr|svri)_", ignore.case = TRUE)
+  ) |> 
+  mutate(
     across(everything(), ~ replace(.x, .x %in% c(-99, -98, -97), NA)), # these values are NA for different reasons in the Baria dataset
     across(.cols = starts_with("date"), ~ if_else(.x %in% c("01-01-2999", "01-01-2997", "01-01-2995"), NA_character_, .x)),
     sex = case_when(sex == "1" ~ "male", sex == "2" ~ "female"),
