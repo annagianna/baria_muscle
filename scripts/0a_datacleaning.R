@@ -16,10 +16,19 @@ baria_mb <- readRDS("data/raw_data/ps.BARIA.metaphlan.706.2548.RDS")
 # Hba1c(%) = (0,0915 * HbA1c (mmol/mol) + 2,15 (from diabetesfonds.nl)
 # Hba1c(mmol/mol) = (10,93 x Hba1c (%)) - 23,5
 
+## T2D Definition
+# i. A1C ≥ 6.5% (≥ 48 mmol/mol) OR 
+# ii. FPG ≥ 126 mg/dL (≥ 7.0 mmol/L) 
+# (iii. 2h OGTT or random plasma glucose (not measured))
+
+## Prediabetes Definition (ADA SOC 2026)
+# i. A1C 5.7–6.4% (39–47 mmol/mol) OR
+# ii. FPG 100 mg/dL (5.6 mmol/L) to 125 mg/dL (6.9 mmol/L) (IFG) OR
+# (iii. 2h gluc (OGTT not available))
+
 # DOI: 10.2337/diacare.21.12.2191 for HOMA calculations
 # HOMA-IR = (Fasting insulin (µU/mL) × Fasting glucose (mmol/L)) / 22.5 (for glucose in mmol/L)
 # HOMA-B = (20 × Fasting insulin (µU/mL)) / (Fasting glucose (mmol/L) − 3.5)
-# Insulin was converted from pmol/l to μU/ml
 
 # Skeletal muscle mass (SMM) by Janssen: SMM [kg] = (height^2 [cm] / BIA-resistance [Ohms] X 0.401) + (gender x 3.825) + (age [years] x - 0.071)] + 5.102 (men = 1; women = 0)
 
@@ -469,7 +478,7 @@ antibiotics_pattern <- str_c("\\b(", str_c(antibiotics, collapse = "|"), ")\\b")
 # Use regex patterns to create clean medication columns for all medication categories and subcategories
 baria_muscle_vars_meds <- baria_muscle_vars_meds_notypos |> 
   mutate(
-    # Diabetes medication classes
+    # Diabetes medication
     metformin_v0 = if_else(str_detect(medication_list_v0, dm_meds_patterns$metformin), "yes", "no"),
     sus_v0 = if_else(str_detect(medication_list_v0, dm_meds_patterns$sus), "yes", "no"),
     dpp4is_v0 = if_else(str_detect(medication_list_v0, dm_meds_patterns$dpp4is), "yes", "no"),
@@ -477,11 +486,9 @@ baria_muscle_vars_meds <- baria_muscle_vars_meds_notypos |>
     sglt2is_v0 = if_else(str_detect(medication_list_v0, dm_meds_patterns$sglt2is), "yes", "no"),
     tzds_v0 = if_else(str_detect(medication_list_v0, dm_meds_patterns$tzds), "yes", "no"),
     insulin_v0 = if_else(str_detect(medication_list_v0, dm_meds_patterns$insulin), "yes", "no"),
-    
-    # Use of any diabetes medication
-    dm_meds_v0 = if_else(str_detect(medication_list_v0, dm_meds_any_pattern), "yes", "no"),
+    dm_meds_v0 = if_else(str_detect(medication_list_v0, dm_meds_any_pattern), "yes", "no"), # Use of any diabetes medication
 
-    # Antihypertensive medication classes
+    # Antihypertensive medication
     ace_inhibitors_v0 = if_else(str_detect(medication_list_v0, aht_meds_patterns$ace_inhibitors), "yes", "no"),
     arbs_v0 = if_else(str_detect(medication_list_v0, aht_meds_patterns$arbs), "yes", "no"),
     ccbs_v0 = if_else(str_detect(medication_list_v0, aht_meds_patterns$ccbs), "yes", "no"),
@@ -489,15 +496,11 @@ baria_muscle_vars_meds <- baria_muscle_vars_meds_notypos |>
     a2_agonists_v0 = if_else(str_detect(medication_list_v0, aht_meds_patterns$a2_agonists), "yes", "no"),
     diuretics_v0 = if_else(str_detect(medication_list_v0, aht_meds_patterns$diuretics), "yes", "no"),
     combi_aht_meds_v0 = if_else(str_detect(medication_list_v0, aht_meds_patterns$combi_aht_meds), "yes", "no"),
+    aht_meds_v0 = if_else(str_detect(medication_list_v0, aht_meds_any_pattern), "yes", "no"), # general antihypertensive medication
 
-    # general antihypertensive medication
-    aht_meds_v0 = if_else(str_detect(medication_list_v0, aht_meds_any_pattern), "yes", "no"),
-
-    # Statins
+    # Lipid-lowering medication
     statins_v0 = if_else(str_detect(medication_list_v0, lipidlowering_meds_patterns$statins), "yes", "no"),
-
-    # Use of any lipid-lowering medication
-    lipidlowering_meds_v0 = if_else(str_detect(medication_list_v0, lipidlowering_meds_any_pattern), "yes", "no"),
+    lipidlowering_meds_v0 = if_else(str_detect(medication_list_v0, lipidlowering_meds_any_pattern), "yes", "no"), # Use of any lipid-lowering medication
 
     # thyroid medication
     thyroid_meds_v0 = if_else(str_detect(medication_list_v0, thyroid_meds_pattern), "yes", "no"),
@@ -511,19 +514,14 @@ baria_muscle_vars_meds <- baria_muscle_vars_meds_notypos |>
     moods_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_patterns$moods), "yes", "no"),
     adhd_meds_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_patterns$adhd_meds), "yes", "no"),
     hypnotics_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_patterns$hypnotics), "yes", "no"),
-
     psychiatric_meds_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_any_pattern), "yes", "no"),
-
-    # PPIs
     ppi_v0 = if_else(str_detect(medication_list_v0, ppi_pattern), "yes", "no"),
-
-    # Antibiotics
     abx_v0 = if_else(str_detect(medication_list_v0, antibiotics_pattern), "yes", "no")
   ) |> 
   select(-medication_list_v0)
 
-# Define cohort: valid baseline BIA & available baseline shotgun data & not taking antibiotics
-# 1. Valid baseline BIA & no antibiotics
+### Define final analysis cohort: valid baseline BIA & available baseline shotgun data & not taking antibiotics
+# 1. Valid baseline BIA & 2. no antibiotics
 bia_abx_v0_ids <- baria_muscle_vars_meds |>
   filter(
     # Baseline BIA QC
@@ -539,7 +537,7 @@ bia_abx_v0_ids <- baria_muscle_vars_meds |>
   pull(id) |> 
   unique()
 
-# 2. Available baseline microbiome/shotgun data
+# 3. Available baseline microbiome/shotgun data
 mb_v0_ids <- sample_data(baria_mb) |> 
   data.frame() |> 
   filter(Time_Point == "V-1") |> 
@@ -550,21 +548,15 @@ mb_v0_ids <- sample_data(baria_mb) |>
 bia_abx_mb_ids <- intersect(bia_abx_v0_ids, mb_v0_ids)
 
 #### Stopped here #####
-baria_muscle_final_cohort <- baria_muscle_vars |> 
-  filter(id %in% bia_mb_ids) |> 
-  mutate(
-    ffmi = ffm_kg / ((height_cm / 100)^2),
-    smm_kg = ((height_cm^2) / bia_resistance_50khz * 0.401) + (age * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0),
-    smm_by_weight = smm_kg / weight_kg
-  ) |> 
-  group_by(sex, visit) |> # calculate sex-specific cut-offs
+baria_muscle_long <- baria_muscle_vars_meds |> 
+  filter(id %in% bia_abx_mb_ids) |> 
   mutate(date = dmy(date)) |> 
   group_by(id) |> 
   mutate(
     date_baseline = date[visit == "v0"],
     n_years_from_v0 = as.numeric(date - date_baseline) / 365.25,
     age = age_v0 + n_years_from_v0
-  )  |> 
+  ) |> 
   ungroup() |> 
   mutate(
     hba1c_percent = if_else(hba1c < 15, hba1c, hba1c * 0.0915 + 2.15),
@@ -574,30 +566,26 @@ baria_muscle_final_cohort <- baria_muscle_vars |>
     homa_ir = (fasting_insulin_pmoll_mmt / 6.945) * fasting_glucose_mmoll_mmt / 22.5,
     homa_b = (20 * (fasting_insulin_pmoll_mmt / 6.945)) / (fasting_glucose_mmoll_mmt - 3.5),
 
-    # T2D prevalence at follow-up: i. A1C ≥ 6.5% (≥ 48 mmol/mol) OR ii. FPG ≥ 126 mg/dL (≥ 7.0 mmol/L) (2h OGTT or random plasma glucose not measured)
+    # T2D incidence based on lab values at follow-up
     t2d_labs = case_when(
       is.na(hba1c_percent) & is.na(fasting_glucose_mmoll_mmt) ~ NA_character_,
       hba1c_percent >= 6.5 | fasting_glucose_mmoll_mmt >= 7.0 ~ "yes",
       TRUE ~ "no"
     ),
 
-    # Prediabetes (ADA SOC 2026): i. A1C 5.7–6.4% (39–47 mmol/mol) OR ii. FPG 100 mg/dL (5.6 mmol/L) to 125 mg/dL (6.9 mmol/L) (IFG) OR 2h gluc (OGTT not available)
+    # Prediabetes based on lab values
     prediab_labs = case_when(
       t2d_labs == "yes" ~ "no",
       is.na(hba1c_percent) & is.na(fasting_glucose_mmoll_mmt) ~ NA_character_,
       (hba1c_percent >= 5.7 & hba1c_percent <= 6.4) | (fasting_glucose_mmoll_mmt >= 5.6 & fasting_glucose_mmoll_mmt <= 6.9) ~ "yes",
       TRUE ~ "no"
     ),
-
-    # de novo occurence(1 & 2y post-surgery, if NGT at baseline/previous visits) 
-    # This I need to fix
-    # denovo_prediab = case_when(
-     # is.na(t2d_v0) | (is.na(prediab_labs) & visit == "v0") | (is.na(prediab_labs) & visit == "v0") ~ NA_character_,
-      #(t2d_v0 == "no" & prediab_v0 == "no" & prediab_v4 == "yes") ~ "yes",
-      #TRUE ~ "no")
+    ffmi = ffm_kg / ((height_cm / 100)^2),
+    smm_kg = ((height_cm^2) / bia_resistance_50khz * 0.401) + (age * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0),
+    smm_by_weight = smm_kg / weight_kg
   ) |>
-  mutate(
-    # Calculate tertiles for FFMI and SMM (raw and indexed)
+  group_by(sex, visit) |> 
+  mutate( # sex-specific tertiles
     ffmi_tertile = quantile(ffmi, probs = 1/3, na.rm = TRUE),
     smm_kg_tertile = quantile(smm_kg, probs = 1/3, na.rm = TRUE),
     smm_by_weight_tertile = quantile(smm_by_weight, probs = 1/3, na.rm = TRUE),
@@ -606,7 +594,10 @@ baria_muscle_final_cohort <- baria_muscle_vars |>
     low_smm_by_weight = if_else(smm_by_weight <= smm_by_weight_tertile, "yes", "no")
   ) |> 
   ungroup() 
-  #pivot_wider(# empty for now) |> 
+
+# Wide dataset
+baria_muscle_wide <- baria_muscle_long |> 
+  pivot_wider() |> 
   mutate(
     # %BW change from baseline to 1, 2 and 5 years
     perc_weight_change_v4 = (weight_kg_v4 - weight_kg_v0) / weight_kg_v0 * 100,
