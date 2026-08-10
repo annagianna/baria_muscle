@@ -303,34 +303,19 @@ baria_muscle_vars_meds_notypos <- baria_muscle_vars |>
 # Define medication categories
 # Diabetes medication
 dm_meds <- list(
-  # Metformin
   metformin = c("metformine", "glucophage"),
-  
-  # Sulfonylureas
-  sus = c("gliclazide", "diamicron", "glibenclamide", "daonil", "glimepiride", "amaryl", 
-  "glipizide", "minodiab", "tolbutamide"),
-  
-  # DPP-4 inhibitors
-  dpp4is = c("sitagliptine", "januvia", "vildagliptine", "galvus", "saxagliptine", 
-  "onglyza", "linagliptine", "trajenta", "alogliptine", "vipidia"),
-  
-  # GLP-1 receptor agonists
-  glp1ras = c("liraglutide", "victoza", "semaglutide", "ozempic", "rybelsus",
-  "exenatide", "byetta", "bydureon", "dulaglutide", "trulicity", "lyxumia", "lixisenatide"),
-  
-  # SGLT2-inhibitors
+  sus = c("gliclazide", "diamicron", "glibenclamide", "daonil", "glimepiride", "amaryl", "glipizide", "minodiab", "tolbutamide"), # Sulfonylureas
+  dpp4is = c("sitagliptine", "januvia", "vildagliptine", "galvus", "saxagliptine", "onglyza", "linagliptine", "trajenta", "alogliptine", "vipidia"), # DPP-4 inhibitors
+  glp1ras = c("liraglutide", "victoza", "semaglutide", "ozempic", "rybelsus", 
+  "exenatide", "byetta", "bydureon", "dulaglutide", "trulicity", "lyxumia", "lixisenatide"), # GLP-1RAs
   sglt2is = c("dapagliflozine", "forxiga", "empagliflozine", "jardiance",
-  "canagliflozine", "invokana", "ertugliflozine", "steglatro", "steeglatro"),
-
-  # thiazolidinediones
-  tzds = c("pioglitazon", "pioglitazone"),
-  
-  #insulins (short-, medium- and long-acting)
+  "canagliflozine", "invokana", "ertugliflozine", "steglatro", "steeglatro"), # SGLT2-inhibitors
+  tzds = c("pioglitazon", "pioglitazone"), # thiazolidinediones
   insulin = c("insuline", "lantus", "levemir", "novorapid", "apidra", "toujeo", "tresiba", "degludec",
-  "humalog", "novomix", "fiasp", "actrapid", "isofaan", "insulatard", "glargine", "aspart")
+  "humalog", "novomix", "fiasp", "actrapid", "isofaan", "insulatard", "glargine", "aspart") # insulins (short-, medium- and long-acting)
 )
 
-# create regex patterns for each class of diabetes medication
+# Create regex patterns for each class of diabetes medication
 dm_meds_patterns <- lapply(dm_meds, function(x) {
   str_c("\\b(", str_c(x, collapse = "|"), ")\\b")
 })
@@ -338,30 +323,16 @@ dm_meds_any_pattern <- str_c("\\b(", str_c((unlist(dm_meds)), collapse = "|"), "
 
 # Antihypertensive medication
 aht_meds <- list(
-  # ACE inhibitors
-  ace_inhibitors = c("perindopril", "candesartan", "enalapril", "ramipril", "lisinopril", "captopril", "fosinopril",
-  "quinapril"),
-
-  # angiotensin receptor blockers
-  arbs = c("losartan", "valsartan", "olmesartan", "irbesartan", "telmisartan", "eprosartan"),
-
-  # calcium channel blockers
+  ace_inhibitors = c("perindopril", "candesartan", "enalapril", "ramipril", "lisinopril", "captopril", "fosinopril", "quinapril"),
+  arbs = c("losartan", "valsartan", "olmesartan", "irbesartan", "telmisartan", "eprosartan"), # Angiotensin receptor blockers  
   ccbs = c("amlodipine", "lercandipine", "lerdip", "barnidipine", "cyress", "nifedipine", "adalat", "verapamil",
-  "felodipine", "nicardipine", "isradipine", "diltiazem"),
-
-  # bblockers
+  "felodipine", "nicardipine", "isradipine", "diltiazem"), # Calcium channel blockers
   bblockers = c("metoprolol", "metoprololtart", "metoprololsucc", "selokeen", "carvedilol", "labetalol", "bisoprolol",
-  "atenolol", "propanonol", "nebivolol", "solatol"),
-
-  # central a2 agonists
-  a2_agonists = c("clonidine", "moxonidine", "methyldopa"),     
-
-  # diuretics
+  "atenolol", "propanonol", "nebivolol", "solatol"), # Beta-blockers
+  a2_agonists = c("clonidine", "moxonidine", "methyldopa"), # Central a2 agonists
   diuretics = c("furosemide", "hct", "hydrochloorthiazide", "spironolacton", "triamteren", "amiloride",
-  "dytenzide", "bumetadine", "chloortalidon", "indapamide", "eplerenone"),
-
-  # combination/others
-  combi_aht_meds = c("losartan/hydrochloorthiazide", "lodoz", "preterax", "moduretic")
+  "dytenzide", "bumetadine", "chloortalidon", "indapamide", "eplerenone"), # diuretics
+  combi_aht_meds = c("losartan/hydrochloorthiazide", "lodoz", "preterax", "moduretic") # Combination/others
 )
 
 aht_meds_patterns <- lapply(aht_meds, function(x) {
@@ -371,34 +342,16 @@ aht_meds_any_pattern <- str_c("\\b(", str_c(unlist(aht_meds), collapse = "|"),")
 
 # Lipid lowering
 lipidlowering_meds <- list(
-  # Statins (HMG-CoA reductase inhibitors)
-  statins = c(
-  "simvastatine", "atorvastatine", "pravastatine", "rosuvastatine", "fluvastatine", 
-  "crestor", "lipitor", "zocor", "pravachol", "lescol"),
-
-  # Cholesterol absorption inhibitors
-  ezetimibe = c("ezetimib", "ezetrol"),
-
-  # PCSK9 inhibitors
-  pcsk9is = c("alirocumab", "praluent", "evolocumab", "repatha"),
-
-  # siRNA against PCSK9
-  inclisiran = c("inclisiran", "leqvio"),
-
-  # ATP citrate lyase inhibitors
-  bempedoic_acid = c("bempedoïnezuur", "nexletol", "nustendi"),
-
-  # Bile acid sequestrants
-  bile_acid_sequestrants = c("colestyramine", "questran"),
-
-  # Fibrates (PPAR-α agonists)
-  fibrates = c("bezalip", "fibraat", "fenofibraat", "lipanthyl", "tricor", "gemfibrozil", "lopid"),
-
-  # Omega-3 fatty acids
-  omega3 = c("omega-3-vetzuren", "omacor", "epanova"),
-
-  # Nicotinic acid
-  niacin = c("nicotinezuur", "niaspan")
+  statins = c("simvastatine", "atorvastatine", "pravastatine", "rosuvastatine", "fluvastatine", 
+  "crestor", "lipitor", "zocor", "pravachol", "lescol"), # Statins (HMG-CoA reductase inhibitors)
+  ezetimibe = c("ezetimib", "ezetrol"), # Cholesterol absorption inhibitors
+  pcsk9is = c("alirocumab", "praluent", "evolocumab", "repatha"), # PCSK9 inhibitors
+  inclisiran = c("inclisiran", "leqvio"), # siRNA against PCSK9
+  bempedoic_acid = c("bempedoïnezuur", "nexletol", "nustendi"), # ATP citrate lyase inhibitors
+  bile_acid_sequestrants = c("colestyramine", "questran"), # Bile acid sequestrants
+  fibrates = c("bezalip", "fibraat", "fenofibraat", "lipanthyl", "tricor", "gemfibrozil", "lopid"), # Fibrates (PPAR-α agonists)
+  omega3 = c("omega-3-vetzuren", "omacor", "epanova"), # Omega-3 fatty acids
+  niacin = c("nicotinezuur", "niaspan") # Nicotinic acid
 )
 
 # create regex patterns for each class of lipid-lowering medication
@@ -413,29 +366,14 @@ thyroid_meds_pattern <- str_c("\\b(", str_c(thyroid_meds, collapse = "|"),")\\b"
 
 # Psychiatric medication (that may cause weight loss/gain)
 psychiatric_meds <- list(
-  # SSRIS
-  ssris = c("escitalopram", "citalopram", "cipramil", "sertraline", "paroxetine", "fluoxetine", "fluvoxamine"),
-
-  # tricyclic antidepressants
-  tcas = c("amitriptyline", "nortriptyline", "clomipramine"),
-
-  # SNRIs
-  snris = c("venlafaxine", "efexor", "duloxetine"),
-
-  # NDRIs
-  ndris = c("bupropion"),
-
-  # atypical antipsychotics
-  antipsychotics = c("aripiprazol", "quetiapine", "olanzapine"),
-
-  # mood stabilizers (anticonvulsants)
-  moods = c("lamotrigine", "pregabalin"),
-
-  # ADHD medication/stimulants
-  adhd_meds = c("methylfenidaat", "concerta", "elvanse"),
-
-  # sleep medication / hypnotics
-  hypnotics = c("zopiclone", "zolpidem")
+  ssris = c("escitalopram", "citalopram", "cipramil", "sertraline", "paroxetine", "fluoxetine", "fluvoxamine"), # SSRIS
+  tcas = c("amitriptyline", "nortriptyline", "clomipramine"), # Tricyclic antidepressants
+  snris = c("venlafaxine", "efexor", "duloxetine"), # SNRIs
+  ndris = c("bupropion"), # NDRIs
+  antipsychotics = c("aripiprazol", "quetiapine", "olanzapine"), # Atypical antipsychotics
+  moods = c("lamotrigine", "pregabalin"), # Mood stabilizers (anticonvulsants)
+  adhd_meds = c("methylfenidaat", "concerta", "elvanse"), # ADHD medication/stimulants
+  hypnotics = c("zopiclone", "zolpidem") # Sleep medication / hypnotics
 )
 
 psychiatric_meds_patterns <- lapply(psychiatric_meds, function(x) {
@@ -451,25 +389,18 @@ ppi_pattern <- str_c("\\b(", str_c(ppi, collapse = "|"), ")\\b")
 antibiotics <- c(
   #Penicillins
   "amoxicilline", "amoxicillin", "augmentin", "co-amoxiclav", "flucloxacilline", "flucloxacillin", "penicilline", "penicillin",
-
   # Tetracyclines
   "doxycycline", "minocycline",
-
   # Macrolides
   "azitromycine", "azithromycin", "claritromycine", "clarithromycin", "erytromycine", "erythromycin",
-
   # Fluoroquinolones
   "ciprofloxacine", "ciprofloxacin", "levofloxacine", "levofloxacin", "moxifloxacine", "moxifloxacin",
-
   # Lincosamides
   "clindamycine", "clindamycin",
-
   # Nitroimidazoles
   "metronidazol", "metronidazole",
-
   # Urinary tract antibiotics
   "nitrofurantoine", "nitrofurantoin", "fosfomycine", "fosfomycin",
-
   # Sulfonamides
   "co-trimoxazol", "cotrimoxazol", "trimethoprim", "sulfamethoxazol", "sulfamethoxazole"
 )
@@ -530,6 +461,7 @@ bia_abx_v0_ids <- baria_muscle_vars_meds |>
     !is.na(fm_kg),
     bia_perc_diff <= 5,
     bia_kg_diff <= 5,
+    bia_resistance_valid == TRUE,
 
     # No antibiotics
     abx_v0 == "no"
@@ -547,7 +479,7 @@ mb_v0_ids <- sample_data(baria_mb) |>
 
 bia_abx_mb_ids <- intersect(bia_abx_v0_ids, mb_v0_ids)
 
-#### Stopped here #####
+## Long dataset ##
 baria_muscle_long <- baria_muscle_vars_meds |> 
   filter(id %in% bia_abx_mb_ids) |> 
   mutate(date = dmy(date)) |> 
@@ -581,7 +513,9 @@ baria_muscle_long <- baria_muscle_vars_meds |>
       TRUE ~ "no"
     ),
     ffmi = ffm_kg / ((height_cm / 100)^2),
-    smm_kg = ((height_cm^2) / bia_resistance_50khz * 0.401) + (age * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0),
+    smm_kg = if_else(
+      bia_resistance_valid == TRUE, 
+      ((height_cm^2) / bia_resistance_50khz * 0.401) + (age * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0), NA_real_),
     smm_by_weight = smm_kg / weight_kg
   ) |>
   group_by(sex, visit) |> 
@@ -595,68 +529,63 @@ baria_muscle_long <- baria_muscle_vars_meds |>
   ) |> 
   ungroup() 
 
-# Wide dataset
+## Wide dataset ##
 baria_muscle_wide <- baria_muscle_long |> 
-  pivot_wider() |> 
+  select(-age_v0) |> # to avoid collision
+  pivot_wider(
+    names_from = visit,
+    values_from =  c(
+      all_of(long_vars), "n_years_from_v0", "age", "hba1c_percent", "homa_ir", "homa_b", "t2d_labs", "prediab_labs",
+      contains("ffmi"), contains("smm"), contains("bia_")
+    ),
+    names_glue = "{.value}_{visit}"
+  ) |> 
   mutate(
-    # %BW change from baseline to 1, 2 and 5 years
-    perc_weight_change_v4 = (weight_kg_v4 - weight_kg_v0) / weight_kg_v0 * 100,
-    perc_weight_change_v5 = (weight_kg_v5 - weight_kg_v0) / weight_kg_v0 * 100,
-    perc_weight_change_v6 = (weight_kg_v6 - weight_kg_v0) / weight_kg_v0 * 100,
+    across(c(weight_kg_v4, weight_kg_v5, weight_kg_v6), ~ (.x - weight_kg_v0) / weight_kg_v0 * 100, .names = "perc_change_{.col}"),
+    across(c(ffm_kg_v4, ffm_kg_v5), ~ (.x - ffm_kg_v0) / ffm_kg_v0 * 100, .names = "perc_change_{.col}"),
+    across(c(fm_kg_v4, fm_kg_v5), ~ (.x - fm_kg_v0) / fm_kg_v0 * 100, .names = "perc_change_{.col}"),
+    across(c(ffmi_v4, ffmi_v5), ~ (.x - ffmi_v0), .names = "delta_{.col}"),
+    across(c(ffmi_v4, ffmi_v5), ~ (.x - ffmi_v0) / ffmi_v0 * 100, .names = "perc_change_{.col}"),
 
-    # %FFM change from baseline to 1, 2 and 5 years
-    perc_ffm_change_v4 = (ffm_kg_v4 - ffm_kg_v0) / ffm_kg_v0 * 100,
-    perc_ffm_change_v5 = (ffm_kg_v5 - ffm_kg_v0) / ffm_kg_v0 * 100,
-    perc_ffm_change_v6 = (ffm_kg_v6 - ffm_kg_v0) / ffm_kg_v0 * 100,
-
-    # ΔFFMI and %FFMI change from baseline to 1, 2 and 5 years
-    delta_ffmi_v4 = ffmi_v4 - ffmi_v0, # 1y
-    delta_ffmi_v5 = ffmi_v5 - ffmi_v0, # 2y
-    delta_ffmi_v6 = ffmi_v6 - ffmi_v0, # 5y
-
-    perc_ffmi_change_v4 = (ffmi_v4 - ffmi_v0) / ffmi_v0 * 100,
-    perc_ffmi_change_v5 = (ffmi_v5 - ffmi_v0) / ffmi_v0 * 100,
-    perc_ffmi_change_v6 = (ffmi_v6 - ffmi_v0) / ffmi_v0 * 100,
-
-    # %FM change from baseline to 1, 2 and 5 years
-    perc_fm_change_v4 = (fm_kg_v4 - fm_kg_v0) / fm_kg_v0 * 100,
-    perc_fm_change_v5 = (fm_kg_v5 - fm_kg_v0) / fm_kg_v0 * 100,
-    perc_fm_change_v6 = (fm_kg_v6 - fm_kg_v0) / fm_kg_v0 * 100,
-
-    # Calculate ΔASM and %ASM change from baseline to 1, 2 and 5 years
-    delta_asm_v4 = asm_kg_v4 - asm_kg_v0, # 1y
-    delta_asm_v5 = asm_kg_v5 - asm_kg_v0, # 2y
-    delta_asm_v6 = asm_kg_v6 - asm_kg_v0, # 5y
-    
-    perc_asm_change_v4 = (asm_kg_v4 - asm_kg_v0) / asm_kg_v0 * 100, 
-    perc_asm_change_v5 = (asm_kg_v5 - asm_kg_v0) / asm_kg_v0 * 100,
-    perc_asm_change_v6 = (asm_kg_v6 - asm_kg_v0) / asm_kg_v0 * 100) |> 
+    # New prediabetes occurence at follow-up in participants with NGT at baseline
+    across(
+      c(prediab_labs_v4, prediab_labs_v5),
+      ~ case_when(
+        t2d_v0 == "no" & t2d_labs_v0 == "no" & prediab_labs_v0 == "no" & .x == "yes" ~ "yes",
+        t2d_v0 == "no" & t2d_labs_v0 == "no" & prediab_labs_v0 == "no" & .x == "no" ~ "no",
+        TRUE ~ NA_character_
+      ),
+      .names = "new_{.col}"
+    ),
+    # New T2D occurence at follow-up in participants with NGT at baseline
+    across(
+      c(t2d_labs_v4, t2d_labs_v5),
+      ~ case_when(
+        t2d_v0 == "no" & t2d_labs_v0 == "no" & prediab_labs_v0 == "no" & .x == "yes" ~ "yes",
+        t2d_v0 == "no" & t2d_labs_v0 == "no" & prediab_labs_v0 == "no" & .x == "no" ~ "no",
+        TRUE ~ NA_character_
+      ),
+      .names = "new_{.col}"
+    )
+  )|> 
   group_by(sex) |> 
-  mutate(
-    # Calculate tertiles for %FFMI change
-    ffmi_change_v4_tertile = quantile(perc_ffmi_change_v4, probs = 1/3, na.rm = TRUE),
-    ffmi_change_v5_tertile = quantile(perc_ffmi_change_v5, probs = 1/3, na.rm = TRUE),
-    ffmi_change_v6_tertile = quantile(perc_ffmi_change_v6, probs = 1/3, na.rm = TRUE),
-
-    # Grouping based on %FFMI change tertile
-    ffmi_change_v4_group = if_else(perc_ffmi_change_v4 <= ffmi_change_v4_tertile, "high", "low/modest"),
-    ffmi_change_v5_group = if_else(perc_ffmi_change_v5 <= ffmi_change_v5_tertile, "high", "low/modest"),
-    ffmi_change_v6_group = if_else(perc_ffmi_change_v6 <= ffmi_change_v6_tertile, "high", "low/modest"), 
-   
-    # Calculate tertiles for %ASM change
-    asm_change_v4_tertile = quantile(perc_asm_change_v4, probs = 1/3, na.rm = TRUE),
-    asm_change_v5_tertile = quantile(perc_asm_change_v5, probs = 1/3, na.rm = TRUE),
-    asm_change_v6_tertile = quantile(perc_asm_change_v6, probs = 1/3, na.rm = TRUE),
-
-    # pool low/modest together
-    asm_change_v4_group = if_else(perc_asm_change_v4 <= asm_change_v4_tertile, "high", "low/modest"), 
-    asm_change_v5_group = if_else(perc_asm_change_v5 <= asm_change_v5_tertile, "high", "low/modest"),
-    asm_change_v6_group = if_else(perc_asm_change_v6 <= asm_change_v6_tertile, "high", "low/modest")
+  mutate( # Tertiles for %FFMI change
+    across(starts_with("perc_change_ffmi_v"), ~ quantile(.x, probs = 1/3, na.rm = TRUE), .names = "{.col}_tertile"),
+    across(
+      starts_with("perc_change_ffmi_v") & !contains("tertile"), 
+      ~ if_else(.x <= .data[[str_c(cur_column(), "_tertile")]],
+        "high", "low/modest"
+      ))
   ) |> 
   ungroup() |> 
-  mutate(across(where(is.character) & !id, as.factor))
+  mutate(across(where(is.character) & !matches("^id$"), as.factor))
 
 
-# then save as both RDS and csv files
-write.csv(baria_muscle_clean, "data/processed_data/260810_BARIA_muscle_clinical.csv")
-saveRDS(baria_muscle_clean, "data/processed_data/260810_BARIA_muscle_clinical.RDS")
+# Save as both RDS and csv files
+# Long data
+write.csv(baria_muscle_long, "data/processed_data/260810_BARIA_muscle_long.csv")
+saveRDS(baria_muscle_long, "data/processed_data/260810_BARIA_muscle_long.RDS")
+
+# Wide data
+write.csv(baria_muscle_wide, "data/processed_data/260810_BARIA_muscle_wide.csv")
+saveRDS(baria_muscle_wide, "data/processed_data/260810_BARIA_muscle_wide.RDS")
