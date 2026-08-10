@@ -569,14 +569,17 @@ baria_muscle_wide <- baria_muscle_long |>
     )
   )|> 
   group_by(sex) |> 
-  mutate( # Tertiles for %FFMI change
+  mutate(
     across(starts_with("perc_change_ffmi_v"), ~ quantile(.x, probs = 1/3, na.rm = TRUE), .names = "{.col}_tertile"),
     across(
-      starts_with("perc_change_ffmi_v") & !contains("tertile"), 
-      ~ if_else(.x <= .data[[str_c(cur_column(), "_tertile")]],
+      starts_with("perc_change_ffmi_v") & !ends_with("_tertile"), 
+      ~ if_else(
+        .x <= quantile(.x, probs = 1/3, na.rm = TRUE),
         "high", "low/modest"
-      ))
-  ) |> 
+      ),
+      .names = "{.col}_group"
+    )
+  )  |> 
   ungroup() |> 
   mutate(across(where(is.character) & !matches("^id$"), as.factor))
 
