@@ -1,33 +1,49 @@
-# BARIA Project on muscle mass trajectories and gut microbiota following bariatric surgery: Data cleaning
+# Baria project: Muscle mass trajectories and gut microbiota following bariatric surgery - Data cleaning
 # Anna Giannakogeorgou, a.gianna@amsterdamumc.nl
 
 # Libraries
 library(tidyverse)
 library(ggpubr)
+library(phyloseq)
 
 # Open Data and see properties
 baria_clinical_data_raw <- readRDS("./data/raw_data/BARIA.clinical.2024-12-09.723.2043.RDS")
+baria_mb <- readRDS("data/raw_data/ps.BARIA.metaphlan.706.2548.RDS")
 
-# roughly check for incorrect data entries of BIA data (repeat for v0, v4-v6)
-baria_clinical_data_raw |> 
-  select(Subject_ID, tbf, ffm, weight) |> 
-  filter(!is.na(tbf)) |> 
-  mutate(
-    sum = tbf + ffm,
-    nomatch = if_else((abs((tbf + ffm) - weight) > 1), "nomatch", "match")
-  ) |> 
-  filter(nomatch == "nomatch")
+## Cut-offs used in this script (qc)
 
-# to explore the range of hba1c in the population (solve mixed variable containing different units)
-ggplot(baria_clinical_data_raw, aes(hba1c)) +
-  geom_histogram(binwidth = 1.2) # no values between ~15-25
+## Formulas used in this script
+# Hba1c(%) = (0,0915 * HbA1c (mmol/mol) + 2,15 (from diabetesfonds.nl)
+# Hba1c(mmol/mol) = (10,93 x Hba1c (%)) - 23,5
 
-# clinical data
-# Need: clinical data, anthropometry, body composition, medication, basic lab and cardiometabolic risk factors, diabetes, medication
-baria_muscle_clinical <- baria_clinical_data_raw |>
-  select(id = Subject_ID,
+# DOI: 10.2337/diacare.21.12.2191 for HOMA calculations
+# HOMA-IR = (Fasting insulin (µU/mL) × Fasting glucose (mmol/L)) / 22.5 (for glucose in mmol/L)
+# HOMA-B = (20 × Fasting insulin (µU/mL)) / (Fasting glucose (mmol/L) − 3.5)
+# Insulin was converted from pmol/l to μU/ml
 
-    # visits
+# Skeletal muscle mass (SMM) by Janssen: SMM [kg] = (height^2 [cm] / BIA-resistance [Ohms] X 0.401) + (gender x 3.825) + (age [years] x - 0.071)] + 5.102 (men = 1; women = 0)
+
+# Longitudinal vars
+long_vars <- c("date",
+  # Body composition
+  "bmi", "weight_kg", "wc_cm", "fm_kg", "fm_percent", "ffm_kg", "ffm_percent", "bia_resistance_50khz", "upperleg_cm",
+
+  # Lab/glycemia parameters
+  "fasting_glucose_mmoll_mmt", "fasting_insulin_pmoll_mmt", "fasting_glucagon_ngl_mmt", "fasting_cpeptide_nmoll_mmt",
+  "hba1c", "hba1c_mmolmol", "crp_mgl",
+
+  # Nexfin
+  "nexfin_hr", "nexfin_dpdt", "nexfin_sv", "nexfin_svi", "nexfin_co", "nexfin_ci", "nexfin_svr", "nexfin_svri"
+)
+
+long_vars_pattern <- str_c("^(", str_c(long_vars, collapse = "|"), ")_(v\\d+)$")
+
+# Clinical data
+baria_muscle_vars <- baria_clinical_data_raw |>
+  select(
+    id = Subject_ID,
+
+    # Visits
     date_v0 = date,
     date_v2 = V2_date,
     date_v3 = V3_date,
@@ -40,7 +56,6 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     # Baseline (v0)
     age_v0 = Age,
     sex,
-    contains("race"),
     t2d_v0 = dm,
     bmi_v0 = bmi,
     weight_kg_v0 = weight,
@@ -72,11 +87,11 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     crp_mgl_v0 = crp,
     tsh_miul_v0 = tsh,
     ft4_pmoll_v0 = ft4,
-    nexfin_hr_v0 = nexfin_hr_v0, # Nexfin
+    nexfin_hr_v0 = nexfin_hr_v0,
     nexfin_dpdt_v0 = nexfin_dpdt_v0,
     nexfin_sv_v0 = nexfin_sv_v0,
     nexfin_svi_v0 = nexfin_svi_v0,
-    nexfin_co_n0 = nexfin_CO_v0,
+    nexfin_co_v0 = nexfin_CO_v0,
     nexfin_ci_v0 = nexfin_CI_v0,
     nexfin_svr_v0 = nexfin_svr_v0,
     nexfin_svri_v0 = nexfin_svri_v0,
@@ -117,11 +132,11 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     hba1c_v4 = V4_hba1c,
     hba1c_mmolmol_v4 = V4_hba1c__IFCC_mmolmol,
     crp_mgl_v4 = V4_crp,
-    nexfin_hr_v4 = nexfin_hr_v4, # Nexfin
+    nexfin_hr_v4 = nexfin_hr_v4,
     nexfin_dpdt_v4 = nexfin_dpdt_v4,
     nexfin_sv_v4 = nexfin_sv_v4,
     nexfin_svi_v4 = nexfin_svi_v4,
-    nexfin_co_n4 = nexfin_co_v4,
+    nexfin_co_v4 = nexfin_co_v4,
     nexfin_ci_v4 = nexfin_ci_v4,
     nexfin_svr_v4 = nexfin_svr_v4,
     nexfin_svri_v4 = nexfin_svri_v4,
@@ -143,11 +158,11 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     hba1c_v5 = V5_hba1c,
     hba1c_mmolmol_v5 = V5_hba1c__IFCC_mmolmol,
     crp_mgl_v5 = V5_crp,
-    nexfin_hr_v5 = nexfin_hr_v5, # Nexfin
+    nexfin_hr_v5 = nexfin_hr_v5,
     nexfin_dpdt_v5 = nexfin_dpdt_v5,
     nexfin_sv_v5 = nexfin_sv_v5,
     nexfin_svi_v5 = nexfin_svi_v5,
-    nexfin_co_n5 = nexfin_co_v5,
+    nexfin_co_v5 = nexfin_co_v5,
     nexfin_ci_v5 = nexfin_ci_v5,
     nexfin_svr_v5 = nexfin_svr_v5,
     nexfin_svri_v5 = nexfin_svri_v5,
@@ -165,11 +180,11 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     hba1c_v6 = V6_hba1c_1,
     hba1c_mmolmol_v6 = V6_hba1c_IFCC_mmolmol,
     crp_mgl_v6 = V6_crp_1,
-    nexfin_hr_v6 = nexfin_hr_v6_1, # Nexfin
+    nexfin_hr_v6 = nexfin_hr_v6_1,
     nexfin_dpdt_v6 = nexfin_dpdt_v6_1,
     nexfin_sv_v6 = nexfin_sv_v6_1,
     nexfin_svi_v6 = nexfin_svi_v6_1,
-    nexfin_co_n6 = nexfin_co_v6_1,
+    nexfin_co_v6 = nexfin_co_v6_1,
     nexfin_ci_v6 = nexfin_ci_v6_1,
     nexfin_svr_v6 = nexfin_svr_v6_1,
     nexfin_svri_v6 = nexfin_svri_v6_1,
@@ -185,249 +200,149 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
   ) |>
    mutate(
     across(everything(), ~ replace(.x, .x %in% c(-99, -98, -97), NA)), # these values are NA for different reasons in the Baria dataset
-    across(.cols = starts_with("date"), ~ if_else(.x %in% c("01-01-2999", "01-01-2997", "01-01-2995"), NA_character_, .x))
-  ) |> 
-  mutate( # time diff from baseline visit in weeks
-    across(date_v0:date_v7, dmy),
-    v0_to_v2_weeks = difftime(date_v2, date_v0, units = "weeks"),
-    v0_to_v3_weeks = difftime(date_v3, date_v0, units = "weeks"),
-    v0_to_v4_weeks = difftime(date_v4, date_v0, units = "weeks"),
-    v0_to_v5_weeks = difftime(date_v5, date_v0, units = "weeks"),
-    v0_to_v6_weeks = difftime(date_v6, date_v0, units = "weeks"),
-    v0_to_v7_weeks = difftime(date_v7, date_v0, units = "weeks"),
-
-    # calculate age at each visit to be used in the SMM and ASM formulas
-    # first convert difftime in weeks to numeric in years
-    v0_to_v2_numeric_y = as.numeric(v0_to_v2_weeks)/(365.25 / 7),
-    v0_to_v3_numeric_y = as.numeric(v0_to_v3_weeks)/(365.25 / 7),
-    v0_to_v4_numeric_y = as.numeric(v0_to_v4_weeks)/(365.25 / 7),
-    v0_to_v5_numeric_y = as.numeric(v0_to_v5_weeks)/(365.25 / 7),
-    v0_to_v6_numeric_y = as.numeric(v0_to_v6_weeks)/(365.25 / 7),
-    v0_to_v7_numeric_y = as.numeric(v0_to_v7_weeks)/(365.25 / 7)
-  ) |>
-  filter(!is.na(age_v0)) |> 
-  mutate(# calculate the age at every visit
-    age_v2 = age_v0 + v0_to_v2_numeric_y,
-    age_v3 = age_v0 + v0_to_v3_numeric_y,
-    age_v4 = age_v0 + v0_to_v4_numeric_y,
-    age_v5 = age_v0 + v0_to_v5_numeric_y,
-    age_v6 = age_v0 + v0_to_v6_numeric_y,
-    age_v7 = age_v0 + v0_to_v7_numeric_y,
-
+    across(.cols = starts_with("date"), ~ if_else(.x %in% c("01-01-2999", "01-01-2997", "01-01-2995"), NA_character_, .x)),
     sex = case_when(sex == "1" ~ "male", sex == "2" ~ "female"),
     t2d_v0 = case_when(t2d_v0 == "1" ~ "yes", t2d_v0 == "2" ~ "no"),
     aht = case_when(aht == "1" ~ "yes", aht == "2" ~ "no"),
     medication_binary_v0 = case_when(medication_binary_v0 == "1" ~ "yes", medication_binary_v0 == "2" ~ "no"),
     sport_v0 = case_when(sport_v0 == "1" ~ "yes", sport_v0 == "2" ~ "no"),
     sg_type = case_when(sg_type == "1" ~ "rygb", sg_type == "2" ~ "omegaloop", sg_type == "3" ~ "sg")
+  ) |>
+  pivot_longer(
+    cols = matches(long_vars_pattern),
+    names_to = c(".value", "visit"), 
+    names_pattern = "(.+)_(v\\d+)$"
   ) |> 
+  mutate(date = dmy(date)) |> 
+  group_by(id) |> 
   mutate(
-    # fix Hba1c units
-    hba1c_percent_v0 = if_else(hba1c_v0 < 15, hba1c_v0, hba1c_v0 * 0.0915 + 2.15),
-    hba1c_percent_v2 = if_else(hba1c_v2 < 15, hba1c_v2, hba1c_v2 * 0.0915 + 2.15),
-    hba1c_percent_v3 = if_else(hba1c_v3 < 15, hba1c_v3, hba1c_v3 * 0.0915 + 2.15),
-    hba1c_percent_v4 = if_else(hba1c_v4 < 15, hba1c_v4, hba1c_v4 * 0.0915 + 2.15),
-    hba1c_percent_v5 = if_else(hba1c_v5 < 15, hba1c_v5, hba1c_v5 * 0.0915 + 2.15),
-    hba1c_percent_v6 = if_else(hba1c_v6 < 15, hba1c_v6, hba1c_v6 * 0.0915 + 2.15),
-    hba1c_percent_v7 = if_else(hba1c_v7 < 15, hba1c_v7, hba1c_v7 * 0.0915 + 2.15),
-
-    # hba1c in mmol/l
-    hba1c_mmolmol_v0 = if_else(is.na(hba1c_mmolmol_v0) == FALSE, hba1c_mmolmol_v0, 10.93 * hba1c_percent_v0 - 23.5),
-    hba1c_mmolmol_v2 = if_else(is.na(hba1c_mmolmol_v2) == FALSE, hba1c_mmolmol_v2, 10.93 * hba1c_percent_v2 - 23.5),
-    hba1c_mmolmol_v3 = if_else(is.na(hba1c_mmolmol_v3) == FALSE, hba1c_mmolmol_v3, 10.93 * hba1c_percent_v3 - 23.5),
-    hba1c_mmolmol_v4 = if_else(is.na(hba1c_mmolmol_v4) == FALSE, hba1c_mmolmol_v4, 10.93 * hba1c_percent_v4 - 23.5),
-    hba1c_mmolmol_v5 = if_else(is.na(hba1c_mmolmol_v5) == FALSE, hba1c_mmolmol_v5, 10.93 * hba1c_percent_v5 - 23.5),
-    hba1c_mmolmol_v6 = if_else(is.na(hba1c_mmolmol_v6) == FALSE, hba1c_mmolmol_v6, 10.93 * hba1c_percent_v6 - 23.5),
-    hba1c_mmolmol_v7 = if_else(is.na(hba1c_mmolmol_v7) == FALSE, hba1c_mmolmol_v7, 10.93 * hba1c_percent_v7 - 23.5),
-
-    # HOMA-IR & HOMA-2B (only v0, v4, v5)
-    # insulin unit conversion from pmol/l to uU/ml
-    homa_ir_v0 = (fasting_insulin_pmoll_mmt_v0 / 6.945) * fasting_glucose_mmoll_mmt_v0 / 22.5,
-    homa_b_v0 = (20 * (fasting_insulin_pmoll_mmt_v0 / 6.945)) / (fasting_glucose_mmoll_mmt_v0 - 3.5),
-    homa_ir_v4 = (fasting_insulin_pmoll_mmt_v4 / 6.945) * fasting_glucose_mmoll_mmt_v4 / 22.5,
-    homa_b_v4 = (20 * (fasting_insulin_pmoll_mmt_v4 / 6.945)) / (fasting_glucose_mmoll_mmt_v4 - 3.5),
-    homa_ir_v5 = (fasting_insulin_pmoll_mmt_v5 / 6.945) * fasting_glucose_mmoll_mmt_v5 / 22.5,
-    homa_b_v5 = (20 * (fasting_insulin_pmoll_mmt_v5 / 6.945)) / (fasting_glucose_mmoll_mmt_v5 - 3.5),
-   
-    # T2D prevalence at follow-up
-    # A1C ≥ 6.5% (≥ 48 mmol/mol) OR
-    # FPG ≥ 126 mg/dL (≥ 7.0 mmol/L) (2h OGTT or random plasma glucose not measured)
-    t2d_v4 = case_when(
-      is.na(hba1c_percent_v4) & is.na(fasting_glucose_mmoll_mmt_v4) ~ NA_character_,
-      hba1c_percent_v4 >= 6.5 | fasting_glucose_mmoll_mmt_v4 >= 7.0 ~ "yes",
-      TRUE ~ "no"
-    ),
-    t2d_v5 = case_when(
-      is.na(hba1c_percent_v5) & is.na(fasting_glucose_mmoll_mmt_v5) ~ NA_character_,
-      hba1c_percent_v5 >= 6.5 | fasting_glucose_mmoll_mmt_v5 >= 7.0 ~ "yes",
-      TRUE ~ "no"
-    ),
-
-    # Prediabetes (baseline and follow-up) based on ADA SOC 2026
-    # A1C 5.7–6.4% (39–47 mmol/mol) OR 
-    # FPG 100 mg/dL (5.6 mmol/L) to 125 mg/dL (6.9 mmol/L) (IFG) OR 2h gluc (not available, no OGTT)
-    prediab_v0 = case_when(
-      t2d_v0 == "yes" ~ "no",
-      is.na(hba1c_percent_v0) & is.na(fasting_glucose_mmoll_mmt_v0) ~ NA_character_,
-      (hba1c_percent_v0 >= 5.7 & hba1c_percent_v0 <= 6.4) | (fasting_glucose_mmoll_mmt_v0 >= 5.6 & fasting_glucose_mmoll_mmt_v0 <= 6.9) ~ "yes",
-      TRUE ~ "no"
-    ),
-    prediab_v4 = case_when(
-      t2d_v4 == "yes" ~ "no",
-      is.na(hba1c_percent_v4) & is.na(fasting_glucose_mmoll_mmt_v4) ~ NA_character_,
-      (hba1c_percent_v4 >= 5.7 & hba1c_percent_v4 <= 6.4) | (fasting_glucose_mmoll_mmt_v4 >= 5.6 & fasting_glucose_mmoll_mmt_v4 <= 6.9) ~ "yes",
-      TRUE ~ "no"
-    ),
-    prediab_v5 = case_when(
-      t2d_v5 == "yes" ~ "no",
-      is.na(hba1c_percent_v5) & is.na(fasting_glucose_mmoll_mmt_v5) ~ NA_character_,
-      (hba1c_percent_v5 >= 5.7 & hba1c_percent_v5 <= 6.4) | (fasting_glucose_mmoll_mmt_v5 >= 5.6 & fasting_glucose_mmoll_mmt_v5 <= 6.9) ~ "yes",
-      TRUE ~ "no"
-    ),
-
-    # de novo occurence(1 & 2y post-surgery, if NGT at baseline/previous visits)
-    # prediabetes
-    denovo_prediab_v4 = case_when(
-      is.na(t2d_v0) | is.na(prediab_v0) | is.na(prediab_v4) ~ NA_character_,
-      (t2d_v0 == "no" & prediab_v0 == "no" & prediab_v4 == "yes") ~ "yes",
-      TRUE ~ "no"
-    ),
-    denovo_prediab_v5 = case_when(
-      is.na(t2d_v0) | is.na(prediab_v0) | is.na(prediab_v4) | is.na(prediab_v5) ~ NA_character_,
-      (t2d_v0 == "no" & prediab_v0 == "no" & prediab_v4 == "no" & prediab_v5 == "yes")  ~ "yes",
-      TRUE ~ "no"
-    ),
-
-    # T2D
-    denovo_t2d_v4 = case_when(
-      is.na(t2d_v0) | is.na(t2d_v4) ~ NA_character_,
-      (t2d_v0 == "no" & t2d_v4 == "yes") ~ "yes",
-      TRUE ~ "no"
-    ),
-    denovo_t2d_v5 = case_when(
-      is.na(t2d_v0) | is.na(t2d_v4) | is.na(t2d_v5) ~ NA_character_,
-      t2d_v0 == "no" & t2d_v4 == "no" & t2d_v5 == "yes" ~ "yes",
-      TRUE ~ "no"
-    )
-  ) |> 
-  select(-starts_with("hba1c_v")) |> 
-  # body composition
-  # fix incorrect data entries for bia data
-  mutate(
-    id = as.character(id),
-    fm_kg_v0 = if_else(id == "212", fm_kg_v0/100, fm_kg_v0),
-    fm_kg_v0 = if_else(id == "600", fm_kg_v0*10, fm_kg_v0),
-    ffm_kg_v0 = if_else(id == "238", ffm_kg_v0*10, ffm_kg_v0),
-    fm_kg_v4 = if_else(id == "30004", fm_kg_v4/100, fm_kg_v4),
-    fm_kg_v4 = if_else(id == "335", fm_kg_v4*10, fm_kg_v4),
-    ffm_kg_v5 = if_else(id == "50", 79.16, ffm_kg_v5)
-  ) |> 
-  filter( # filtering for device's (Maltron BioScan 920) resolution range excluding high and low outliers
-    # qc baseline BIA results
-    bia_resistance_50khz_v0 >= 110,
-    bia_resistance_50khz_v0 <= 1000,
-    !is.na(ffm_percent_v0), !is.na(fm_percent_v0), # baseline bia is needed
-
-    # check if percentages add up
-    # baseline
-    abs(ffm_percent_v0 + fm_percent_v0 - 100) < 0.1,
-    # follow-up: keep if follow-up bia is missing
-    # if follow-up bia available, both ffm and fm must be available and add up to 100
-    (is.na(ffm_percent_v4) & is.na(fm_percent_v4)) |
-    (!is.na(ffm_percent_v4) & !is.na(fm_percent_v4) & abs(ffm_percent_v4 + fm_percent_v4 - 100) < 0.1),
-    (is.na(ffm_percent_v5) & is.na(fm_percent_v5)) |
-    (!is.na(ffm_percent_v5) & !is.na(fm_percent_v5) & abs(ffm_percent_v5 + fm_percent_v5 - 100) < 0.1),
-    (is.na(ffm_percent_v6) & is.na(fm_percent_v6)) |
-    (!is.na(ffm_percent_v6) & !is.na(fm_percent_v6) & abs(ffm_percent_v6 + fm_percent_v6 - 100) < 0.1),
-
-    # qc for v4, v5, v6 if not NA (50 khz is used in smm calculation later on)
-    is.na(bia_resistance_50khz_v4) | (bia_resistance_50khz_v4 >= 110 & bia_resistance_50khz_v4 <= 1000),
-    is.na(bia_resistance_50khz_v5)| (bia_resistance_50khz_v5 >= 110 & bia_resistance_50khz_v5 <= 1000),
-    is.na(bia_resistance_50khz_v6) | (bia_resistance_50khz_v6 >= 110 & bia_resistance_50khz_v6 <= 1000)
-  )|> 
-  mutate(
-    # ffm and fm indices v0, v4, v5, v6
-    ffmi_v0 = ffm_kg_v0 / ((height_cm / 100)^2),
-    fmi_v0 = fm_kg_v0 / ((height_cm / 100)^2),
-    ffmi_v4 = ffm_kg_v4 / ((height_cm / 100)^2),
-    fmi_v4 = fm_kg_v4 / ((height_cm / 100)^2),
-    ffmi_v5 = ffm_kg_v5 / ((height_cm / 100)^2),
-    fmi_v5 = fm_kg_v5 / ((height_cm / 100)^2),
-    ffmi_v6 = ffm_kg_v6 / ((height_cm / 100)^2),
-    fmi_v6 = fm_kg_v6 / ((height_cm / 100)^2),
-
-    # calculate muscle mass indices
-    # (sex: women = 0, men = 1; race: White or Hispanic = 0, Black = 1.9, Asian = −1.6) 
-    # race in a format to be used for ASM formula (White/Hispanic vs. Black vs. Asian)
-    race = case_when(
-      `race#Kaukasisch` == "1" ~ "white/hispanic",
-      `race#Mediterraans` == "1" ~ "white/hispanic",
-      `race#Midden-Aziatisch` == "1" ~ "asian",
-      `race#Negroïde` == "1" ~ "black",
-      `race#Noord-Afrikaans` == "1" ~ "white/hispanic", # for the asm calculation
-      `race#Oost-Aziatisch` == "1" ~ "asian",
-      `race#Overig` == "1" ~ "white/hispanic", # to be able to use the formula
-      `race#Slavisch` == "1" ~ "white/hispanic",
-      `race#West-Aziatisch` == "1" ~ "asian",
-      `race#Zuid-Amerikaans` == "1" ~ "white/hispanic"
-    ),
-    # Appendicular skeletal mass (ASM)
-    # ASM = (0.244 × weight [kg]) + (7.8 × height [m]) + (6.6 × sex) – (0.098 × age [years]) + (race – 3.3); 
-    # (sex: women = 0, men = 1; race: White or Hispanic = 0, Black = 1.9, Asian = −1.6)
-    race_num = case_when(race == "white/hispanic" ~ 0, race == "black" ~ 1.9, race == "asian" ~ -1.6),
-
-    asm_kg_v0 = (0.244 * weight_kg_v0) + (7.8 * (height_cm / 100)) + if_else(sex == "male", 6.6, 0) - (0.098 * age_v0) + (race_num - 3.3),
-    asm_kg_v2 = (0.244 * weight_kg_v2) + (7.8 * (height_cm / 100)) + if_else(sex == "male", 6.6, 0) - (0.098 * age_v2) + (race_num - 3.3),
-    asm_kg_v3 = (0.244 * weight_kg_v3) + (7.8 * (height_cm / 100)) + if_else(sex == "male", 6.6, 0) - (0.098 * age_v3) + (race_num - 3.3),
-    asm_kg_v4 = (0.244 * weight_kg_v4) + (7.8 * (height_cm / 100)) + if_else(sex == "male", 6.6, 0) - (0.098 * age_v4) + (race_num - 3.3),
-    asm_kg_v5 = (0.244 * weight_kg_v5) + (7.8 * (height_cm / 100)) + if_else(sex == "male", 6.6, 0) - (0.098 * age_v5) + (race_num - 3.3),
-    asm_kg_v6 = (0.244 * weight_kg_v6) + (7.8 * (height_cm / 100)) + if_else(sex == "male", 6.6, 0) - (0.098 * age_v6) + (race_num - 3.3),
-    asm_kg_v7 = (0.244 * weight_kg_v7) + (7.8 * (height_cm / 100)) + if_else(sex == "male", 6.6, 0) - (0.098 * age_v7) + (race_num - 3.3),
-
-    # ASM/height(m)^2 (EWGSOP2 recommendation)
-    asm_height2_v0 = asm_kg_v0/((height_cm / 100)^2),
-    asm_height2_v2 = asm_kg_v2/((height_cm / 100)^2),
-    asm_height2_v3 = asm_kg_v3/((height_cm / 100)^2),
-    asm_height2_v4 = asm_kg_v4/((height_cm / 100)^2),
-    asm_height2_v5 = asm_kg_v5/((height_cm / 100)^2),
-    asm_height2_v6 = asm_kg_v6/((height_cm / 100)^2),
-    asm_height2_v7 = asm_kg_v7/((height_cm / 100)^2),
-
-    # Skeletal muscle mass (SMM)
-    # SMM by Janssen: SMM [kg] = (height^2 [cm] / BIA-resistance [Ohms] X 0.401) + (gender x 3.825) + (age [years] x - 0.071)] + 5.102 (men = 1; women = 0)
-    smm_kg_v0 = ((height_cm^2) / bia_resistance_50khz_v0 * 0.401) + (age_v0 * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0),
-    smm_kg_v4 = ((height_cm^2) / bia_resistance_50khz_v4 * 0.401) + (age_v4 * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0),
-    smm_kg_v5 = ((height_cm^2) / bia_resistance_50khz_v5 * 0.401) + (age_v5 * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0),
-    smm_kg_v6 = ((height_cm^2) / bia_resistance_50khz_v6 * 0.401) + (age_v6 * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0),
-
-    # smm/weight (recommended for BIA by ESPEN/EASO consensus statement)
-    smm_by_weight_v0 = smm_kg_v0 / weight_kg_v0,
-    smm_by_weight_v4 = smm_kg_v4 / weight_kg_v4,
-    smm_by_weight_v5 = smm_kg_v5 / weight_kg_v5,
-    smm_by_weight_v6 = smm_kg_v6 / weight_kg_v6
-  ) |> 
-  select(-contains("race#")) |>
-  select(-race_num) |> # only used for asm calculation
-  group_by(sex) |> # calculate cut-offs for female and male participants
-  mutate(
-    # Calculate tertiles for FFMI, ASM and SMM (raw and indexed)
-    ffmi_v0_tertile = quantile(ffmi_v0, probs = 1/3, na.rm = TRUE),
-    asm_kg_v0_tertile = quantile(asm_kg_v0, probs = 1/3, na.rm = TRUE),
-    asm_height2_v0_tertile = quantile(asm_height2_v0, probs = 1/3, na.rm = TRUE),
-    smm_kg_v0_tertile = quantile(smm_kg_v0, probs = 1/3, na.rm = TRUE),
-    smm_by_weight_v0_tertile = quantile(smm_by_weight_v0, probs = 1/3, na.rm = TRUE),
-
-    low_ffmi_v0 = if_else(ffmi_v0 <= ffmi_v0_tertile, "yes", "no"),
-    low_asm_v0 = if_else(asm_kg_v0 <= asm_kg_v0_tertile, "yes", "no"),
-    low_asm_height2_v0 = if_else(asm_height2_v0 <= asm_height2_v0_tertile, "yes", "no"),
-    low_smm_v0 = if_else(smm_kg_v0 <= smm_kg_v0_tertile, "yes", "no"),
-    low_smm_by_weight_v0 = if_else(smm_by_weight_v0 <= smm_by_weight_v0_tertile, "yes", "no"),
-
-    # SO proxy at 1 and 5 years
-    low_smm_by_weight_v4 = if_else(smm_by_weight_v4 <= smm_by_weight_v0_tertile, "yes", "no"),
-    low_smm_by_weight_v6 = if_else(smm_by_weight_v6 <= smm_by_weight_v0_tertile, "yes", "no")
-  ) |> 
+    date_baseline = date[visit == "v0"],
+    n_years_from_v0 = as.numeric(date - date_baseline) / 365.25,
+    age = age_v0 + n_years_from_v0
+  )  |> 
   ungroup() |> 
+  mutate(
+    hba1c_percent = if_else(hba1c < 15, hba1c, hba1c * 0.0915 + 2.15),
+    hba1c_mmolmol = if_else(is.na(hba1c_mmolmol) == FALSE, hba1c_mmolmol, 10.93 * hba1c_percent - 23.5),
+
+    # HOMA-IR & HOMA-2B (insulin unit conversion from pmol/l to uU/ml)
+    homa_ir = (fasting_insulin_pmoll_mmt / 6.945) * fasting_glucose_mmoll_mmt / 22.5,
+    homa_b = (20 * (fasting_insulin_pmoll_mmt / 6.945)) / (fasting_glucose_mmoll_mmt - 3.5),
+
+    # T2D prevalence at follow-up: i. A1C ≥ 6.5% (≥ 48 mmol/mol) OR ii. FPG ≥ 126 mg/dL (≥ 7.0 mmol/L) (2h OGTT or random plasma glucose not measured)
+    t2d_labs = case_when(
+      is.na(hba1c_percent) & is.na(fasting_glucose_mmoll_mmt) ~ NA_character_,
+      hba1c_percent >= 6.5 | fasting_glucose_mmoll_mmt >= 7.0 ~ "yes",
+      TRUE ~ "no"
+    ),
+
+    # Prediabetes (ADA SOC 2026): i. A1C 5.7–6.4% (39–47 mmol/mol) OR ii. FPG 100 mg/dL (5.6 mmol/L) to 125 mg/dL (6.9 mmol/L) (IFG) OR 2h gluc (OGTT not available)
+    prediab_labs = case_when(
+      t2d_labs == "yes" ~ "no",
+      is.na(hba1c_percent) & is.na(fasting_glucose_mmoll_mmt) ~ NA_character_,
+      (hba1c_percent >= 5.7 & hba1c_percent <= 6.4) | (fasting_glucose_mmoll_mmt >= 5.6 & fasting_glucose_mmoll_mmt <= 6.9) ~ "yes",
+      TRUE ~ "no"
+    ),
+
+    # de novo occurence(1 & 2y post-surgery, if NGT at baseline/previous visits) 
+    # This I need to fix
+    # denovo_prediab = case_when(
+     # is.na(t2d_v0) | (is.na(prediab_labs) & visit == "v0") | (is.na(prediab_labs) & visit == "v0") ~ NA_character_,
+      #(t2d_v0 == "no" & prediab_v0 == "no" & prediab_v4 == "yes") ~ "yes",
+      #TRUE ~ "no")
+  ) |>
+  select(-date_baseline, -age_v0) |> 
+  ungroup() |> 
+  mutate(# manual corrections for incorrect BIA data entries
+    id = as.character(id),
+    fm_kg = case_when(
+      id == "212" & visit == "v0" ~ fm_kg / 100,
+      id == "600" & visit == "v0" ~ fm_kg * 10,
+      id == "30004" & visit == "v4" ~ fm_kg / 100,
+      id == "567" & visit == "v4" ~ fm_kg / 10,
+      id == "335" & visit == "v4" ~ fm_kg * 10,
+      id == "612" & visit == "v0" ~ 52.0,
+      id == "23" & visit == "v5" ~ 13.8,
+      TRUE ~ fm_kg
+    ),
+    ffm_kg = case_when(
+      id == "238" & visit == "v0" ~ ffm_kg * 10,
+      id == "30016" & visit == "v0" ~ ffm_kg * 10,
+      id == "50" & visit == "v5" ~ 79.16,
+      id == "484" & visit == "v4" ~ 51.3,
+      id == "520" & visit == "v4" ~ 57.5,
+      id == "451" & visit == "v4" ~ 39.7,
+      TRUE ~ ffm_kg
+    ),
+    fm_percent = case_when(
+      id == "551" & visit == "v0" ~ fm_percent / 100,
+      id == "572" & visit == "v4" ~ fm_percent / 100,
+      id == "120" & visit == "v5" ~ fm_percent / 100,
+      TRUE ~ fm_percent
+    ),
+    ffm_percent = case_when(
+      id == "590" & visit == "v0" ~ ffm_percent * 10,
+      id == "95"  & visit == "v5" ~ ffm_percent / 100,
+      id == "130" & visit == "v5" ~ ffm_percent / 100,
+      id == "496" & visit == "v5" ~ ffm_percent / 100,
+      id == "364" & visit == "v5" ~ ffm_percent / 10,
+      id == "217" & visit == "v5" ~ 67.0,
+      id == "257" & visit == "v0" ~ 54.4,
+      TRUE ~ ffm_percent
+    ),
+    # BIA quality & consistency checks
+    bia_perc_diff = abs((ffm_percent + fm_percent) - 100),
+    bia_kg_diff = abs((ffm_kg + fm_kg) - weight_kg),
+    bia_resistance_valid = case_when(
+    is.na(bia_resistance_50khz) ~ NA,
+    between(bia_resistance_50khz, 110, 1000) ~ TRUE, # Device's resistance range (Maltron BioScan 920)
+    TRUE ~ FALSE
+  )
+)
+
+# Define cohort: valid baseline BIA & available baseline shotgun data & not taking antibiotics
+# 1. Valid baseline BIA
+bia_v0_ids <- baria_muscle_vars |>
+  filter(
+    visit == "v0",
+    !is.na(ffm_kg),
+    !is.na(fm_kg),
+    bia_perc_diff <= 5,
+    bia_kg_diff <= 5
+  ) |>
+  pull(id) |> 
+  unique()
+
+# 2. Available baseline microbiome/shotgun data
+mb_v0_ids <- sample_data(baria_mb) |> 
+  data.frame() |> 
+  filter(Time_Point == "V-1") |> 
+  pull(Subject_ID) |> 
+  as.character() |>
+  unique()
+
+bia_mb_ids <- intersect(bia_v0_ids, mb_v0_ids)
+
+#### Stopped here #####
+baria_muscle_final_cohort <- baria_muscle_vars |> 
+  filter(id %in% bia_mb_ids) |> 
+  mutate(
+    ffmi = ffm_kg / ((height_cm / 100)^2),
+    smm_kg = ((height_cm^2) / bia_resistance_50khz * 0.401) + (age * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0),
+    smm_by_weight = smm_kg / weight_kg
+  ) |> 
+  group_by(sex, visit) |> # calculate sex-specific cut-offs
+  mutate(
+    # Calculate tertiles for FFMI and SMM (raw and indexed)
+    ffmi_tertile = quantile(ffmi, probs = 1/3, na.rm = TRUE),
+    smm_kg_tertile = quantile(smm_kg, probs = 1/3, na.rm = TRUE),
+    smm_by_weight_tertile = quantile(smm_by_weight, probs = 1/3, na.rm = TRUE),
+    low_ffmi = if_else(ffmi <= ffmi_tertile, "yes", "no"),
+    low_smm = if_else(smm_kg <= smm_kg_tertile, "yes", "no"),
+    low_smm_by_weight = if_else(smm_by_weight <= smm_by_weight_tertile, "yes", "no")
+  ) |> 
+  ungroup() 
+  #pivot_wider(# empty for now) |> 
   mutate(
     # %BW change from baseline to 1, 2 and 5 years
     perc_weight_change_v4 = (weight_kg_v4 - weight_kg_v0) / weight_kg_v0 * 100,
@@ -484,44 +399,7 @@ baria_muscle_clinical <- baria_clinical_data_raw |>
     asm_change_v6_group = if_else(perc_asm_change_v6 <= asm_change_v6_tertile, "high", "low/modest")
   ) |> 
   ungroup() |> 
-  relocate(race, .after = sex) |> 
-  relocate(age_v2:age_v7, .after = age_v0) |>
-  relocate(v0_to_v2_weeks:v0_to_v7_numeric_y, .after = age_v7) |> 
-  relocate(c(hba1c_percent_v0, homa_ir_v0, homa_b_v0), .after = hba1c_mmolmol_v0) |> # Hba1c 
-  relocate(prediab_v0, .after = t2d_v0) |> 
-  relocate(c(t2d_v4, denovo_t2d_v4, prediab_v4, denovo_prediab_v4), .before = bmi_v4) |>
-  relocate(c(t2d_v5, denovo_t2d_v5, prediab_v5, denovo_prediab_v5), .before = bmi_v5) |>
-  relocate(hba1c_percent_v2, .after = hba1c_mmolmol_v2) |>
-  relocate(hba1c_percent_v3, .after = hba1c_mmolmol_v3) |>
-  relocate(c(hba1c_percent_v4, homa_ir_v4, homa_b_v4), .after = hba1c_mmolmol_v4) |>
-  relocate(c(hba1c_percent_v5, homa_ir_v5, homa_b_v5), .after = hba1c_mmolmol_v5) |>
-  relocate(hba1c_percent_v6, .after = hba1c_mmolmol_v6) |>
-  relocate(hba1c_percent_v7, .after = hba1c_mmolmol_v7) |>
-  relocate(perc_weight_change_v4, .after = weight_kg_v4) |>
-  relocate(perc_weight_change_v5, .after = weight_kg_v5) |>
-  relocate(perc_weight_change_v6, .after = weight_kg_v6) |>
-  relocate(c(ffmi_v0, fmi_v0), .after = ffm_percent_v0) |> # FFMI & FMI
-  relocate(c(ffmi_v4, fmi_v4, perc_ffm_change_v4, perc_fm_change_v4), .after = ffm_percent_v4) |>
-  relocate(c(ffmi_v5, fmi_v5, perc_ffm_change_v5, perc_fm_change_v5), .after = ffm_percent_v5) |>
-  relocate(c(ffmi_v6, fmi_v6, perc_ffm_change_v6, perc_fm_change_v6), .after = ffm_percent_v6) |>
-  relocate(ffmi_v0_tertile:smm_by_weight_v0_tertile, .after = upperleg_cm_v0) |> # cut-offs
-  relocate(c(asm_kg_v0, asm_height2_v0, smm_kg_v0, smm_by_weight_v0, low_asm_v0, low_asm_height2_v0, low_smm_v0, low_smm_by_weight_v0, low_ffmi_v0), .after = upperleg_cm_v0) |> # muscle mass
-  relocate(asm_kg_v2, asm_height2_v2, .after = upperleg_cm_v2) |>
-  relocate(asm_kg_v3, asm_height2_v3, .after = upperleg_cm_v3) |>
-  relocate(c(asm_kg_v4, delta_asm_v4, asm_height2_v4, smm_kg_v4, smm_by_weight_v4, low_smm_by_weight_v4, perc_asm_change_v4, asm_change_v4_tertile, asm_change_v4_group, delta_ffmi_v4, perc_ffmi_change_v4, ffmi_change_v4_tertile, ffmi_change_v4_group), .after = upperleg_cm_v4) |>
-  relocate(c(asm_kg_v5, delta_asm_v5, asm_height2_v5, smm_kg_v5, smm_by_weight_v5, perc_asm_change_v5, asm_change_v5_tertile, asm_change_v5_group, delta_ffmi_v5, perc_ffmi_change_v5, ffmi_change_v5_tertile, ffmi_change_v5_group), .after = upperleg_cm_v5) |>
-  relocate(c(asm_kg_v6, delta_asm_v6, asm_height2_v6, smm_kg_v6, smm_by_weight_v6, low_smm_by_weight_v6, perc_asm_change_v6, asm_change_v6_tertile, asm_change_v6_group, delta_ffmi_v6, perc_ffmi_change_v6, ffmi_change_v6_tertile, ffmi_change_v6_group), .after = upperleg_cm_v6) |>
-  relocate(asm_kg_v7, asm_height2_v7, .after = upperleg_cm_v7) |>
   mutate(across(where(is.character) & !id, as.factor))
-
-## Formulas used:
-# Hba1c(%) = (0,0915 * HbA1c (mmol/mol) + 2,15 (from diabetesfonds.nl)
-# Hba1c(mmol/mol) = (10,93 x Hba1c (%)) - 23,5
-
-# DOI: 10.2337/diacare.21.12.2191 for HOMA calculations
-# HOMA-IR = (Fasting insulin (µU/mL) × Fasting glucose (mmol/L)) / 22.5 (for glucose in mmol/L)
-# HOMA-B = (20 × Fasting insulin (µU/mL)) / (Fasting glucose (mmol/L) − 3.5)
-# Insulin was converted from pmol/l to μU/ml
 
 ## Medication
 baria_muscle_clinical_with_medication_notypos <- baria_muscle_clinical |>
@@ -783,10 +661,12 @@ baria_muscle_clean <- baria_muscle_clinical_with_medication_notypos |>
     # Antibiotics
     abx_v0 = if_else(str_detect(medication_list_v0, antibiotics_pattern), "yes", "no")
   ) |> 
-  filter(abx_v0 == "no") |> # exclude participants on antibiotics
+  # 3. filter for final analysis cohort: antibiotics exclusion
+  filter(abx_v0 == "no") |> 
   select(-medication_list_v0) |> 
   arrange(date_v0)
 
+
 # then save as both RDS and csv files
-write.csv(baria_muscle_clean, "data/processed_data/20260731_BARIA_muscle_clinical.csv")
-saveRDS(baria_muscle_clean, "data/processed_data/20260731_BARIA_muscle_clinical.RDS")
+write.csv(baria_muscle_clean, "data/processed_data/260810_BARIA_muscle_clinical.csv")
+saveRDS(baria_muscle_clean, "data/processed_data/260810_BARIA_muscle_clinical.RDS")
