@@ -213,46 +213,6 @@ baria_muscle_vars <- baria_clinical_data_raw |>
     names_to = c(".value", "visit"), 
     names_pattern = "(.+)_(v\\d+)$"
   ) |> 
-  mutate(date = dmy(date)) |> 
-  group_by(id) |> 
-  mutate(
-    date_baseline = date[visit == "v0"],
-    n_years_from_v0 = as.numeric(date - date_baseline) / 365.25,
-    age = age_v0 + n_years_from_v0
-  )  |> 
-  ungroup() |> 
-  mutate(
-    hba1c_percent = if_else(hba1c < 15, hba1c, hba1c * 0.0915 + 2.15),
-    hba1c_mmolmol = if_else(is.na(hba1c_mmolmol) == FALSE, hba1c_mmolmol, 10.93 * hba1c_percent - 23.5),
-
-    # HOMA-IR & HOMA-2B (insulin unit conversion from pmol/l to uU/ml)
-    homa_ir = (fasting_insulin_pmoll_mmt / 6.945) * fasting_glucose_mmoll_mmt / 22.5,
-    homa_b = (20 * (fasting_insulin_pmoll_mmt / 6.945)) / (fasting_glucose_mmoll_mmt - 3.5),
-
-    # T2D prevalence at follow-up: i. A1C ≥ 6.5% (≥ 48 mmol/mol) OR ii. FPG ≥ 126 mg/dL (≥ 7.0 mmol/L) (2h OGTT or random plasma glucose not measured)
-    t2d_labs = case_when(
-      is.na(hba1c_percent) & is.na(fasting_glucose_mmoll_mmt) ~ NA_character_,
-      hba1c_percent >= 6.5 | fasting_glucose_mmoll_mmt >= 7.0 ~ "yes",
-      TRUE ~ "no"
-    ),
-
-    # Prediabetes (ADA SOC 2026): i. A1C 5.7–6.4% (39–47 mmol/mol) OR ii. FPG 100 mg/dL (5.6 mmol/L) to 125 mg/dL (6.9 mmol/L) (IFG) OR 2h gluc (OGTT not available)
-    prediab_labs = case_when(
-      t2d_labs == "yes" ~ "no",
-      is.na(hba1c_percent) & is.na(fasting_glucose_mmoll_mmt) ~ NA_character_,
-      (hba1c_percent >= 5.7 & hba1c_percent <= 6.4) | (fasting_glucose_mmoll_mmt >= 5.6 & fasting_glucose_mmoll_mmt <= 6.9) ~ "yes",
-      TRUE ~ "no"
-    ),
-
-    # de novo occurence(1 & 2y post-surgery, if NGT at baseline/previous visits) 
-    # This I need to fix
-    # denovo_prediab = case_when(
-     # is.na(t2d_v0) | (is.na(prediab_labs) & visit == "v0") | (is.na(prediab_labs) & visit == "v0") ~ NA_character_,
-      #(t2d_v0 == "no" & prediab_v0 == "no" & prediab_v4 == "yes") ~ "yes",
-      #TRUE ~ "no")
-  ) |>
-  select(-date_baseline, -age_v0) |> 
-  ungroup() |> 
   mutate(# manual corrections for incorrect BIA data entries
     id = as.character(id),
     fm_kg = case_when(
@@ -300,109 +260,8 @@ baria_muscle_vars <- baria_clinical_data_raw |>
   )
 )
 
-# Define cohort: valid baseline BIA & available baseline shotgun data & not taking antibiotics
-# 1. Valid baseline BIA
-bia_v0_ids <- baria_muscle_vars |>
-  filter(
-    visit == "v0",
-    !is.na(ffm_kg),
-    !is.na(fm_kg),
-    bia_perc_diff <= 5,
-    bia_kg_diff <= 5
-  ) |>
-  pull(id) |> 
-  unique()
-
-# 2. Available baseline microbiome/shotgun data
-mb_v0_ids <- sample_data(baria_mb) |> 
-  data.frame() |> 
-  filter(Time_Point == "V-1") |> 
-  pull(Subject_ID) |> 
-  as.character() |>
-  unique()
-
-bia_mb_ids <- intersect(bia_v0_ids, mb_v0_ids)
-
-#### Stopped here #####
-baria_muscle_final_cohort <- baria_muscle_vars |> 
-  filter(id %in% bia_mb_ids) |> 
-  mutate(
-    ffmi = ffm_kg / ((height_cm / 100)^2),
-    smm_kg = ((height_cm^2) / bia_resistance_50khz * 0.401) + (age * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0),
-    smm_by_weight = smm_kg / weight_kg
-  ) |> 
-  group_by(sex, visit) |> # calculate sex-specific cut-offs
-  mutate(
-    # Calculate tertiles for FFMI and SMM (raw and indexed)
-    ffmi_tertile = quantile(ffmi, probs = 1/3, na.rm = TRUE),
-    smm_kg_tertile = quantile(smm_kg, probs = 1/3, na.rm = TRUE),
-    smm_by_weight_tertile = quantile(smm_by_weight, probs = 1/3, na.rm = TRUE),
-    low_ffmi = if_else(ffmi <= ffmi_tertile, "yes", "no"),
-    low_smm = if_else(smm_kg <= smm_kg_tertile, "yes", "no"),
-    low_smm_by_weight = if_else(smm_by_weight <= smm_by_weight_tertile, "yes", "no")
-  ) |> 
-  ungroup() 
-  #pivot_wider(# empty for now) |> 
-  mutate(
-    # %BW change from baseline to 1, 2 and 5 years
-    perc_weight_change_v4 = (weight_kg_v4 - weight_kg_v0) / weight_kg_v0 * 100,
-    perc_weight_change_v5 = (weight_kg_v5 - weight_kg_v0) / weight_kg_v0 * 100,
-    perc_weight_change_v6 = (weight_kg_v6 - weight_kg_v0) / weight_kg_v0 * 100,
-
-    # %FFM change from baseline to 1, 2 and 5 years
-    perc_ffm_change_v4 = (ffm_kg_v4 - ffm_kg_v0) / ffm_kg_v0 * 100,
-    perc_ffm_change_v5 = (ffm_kg_v5 - ffm_kg_v0) / ffm_kg_v0 * 100,
-    perc_ffm_change_v6 = (ffm_kg_v6 - ffm_kg_v0) / ffm_kg_v0 * 100,
-
-    # ΔFFMI and %FFMI change from baseline to 1, 2 and 5 years
-    delta_ffmi_v4 = ffmi_v4 - ffmi_v0, # 1y
-    delta_ffmi_v5 = ffmi_v5 - ffmi_v0, # 2y
-    delta_ffmi_v6 = ffmi_v6 - ffmi_v0, # 5y
-
-    perc_ffmi_change_v4 = (ffmi_v4 - ffmi_v0) / ffmi_v0 * 100,
-    perc_ffmi_change_v5 = (ffmi_v5 - ffmi_v0) / ffmi_v0 * 100,
-    perc_ffmi_change_v6 = (ffmi_v6 - ffmi_v0) / ffmi_v0 * 100,
-
-    # %FM change from baseline to 1, 2 and 5 years
-    perc_fm_change_v4 = (fm_kg_v4 - fm_kg_v0) / fm_kg_v0 * 100,
-    perc_fm_change_v5 = (fm_kg_v5 - fm_kg_v0) / fm_kg_v0 * 100,
-    perc_fm_change_v6 = (fm_kg_v6 - fm_kg_v0) / fm_kg_v0 * 100,
-
-    # Calculate ΔASM and %ASM change from baseline to 1, 2 and 5 years
-    delta_asm_v4 = asm_kg_v4 - asm_kg_v0, # 1y
-    delta_asm_v5 = asm_kg_v5 - asm_kg_v0, # 2y
-    delta_asm_v6 = asm_kg_v6 - asm_kg_v0, # 5y
-    
-    perc_asm_change_v4 = (asm_kg_v4 - asm_kg_v0) / asm_kg_v0 * 100, 
-    perc_asm_change_v5 = (asm_kg_v5 - asm_kg_v0) / asm_kg_v0 * 100,
-    perc_asm_change_v6 = (asm_kg_v6 - asm_kg_v0) / asm_kg_v0 * 100) |> 
-  group_by(sex) |> 
-  mutate(
-    # Calculate tertiles for %FFMI change
-    ffmi_change_v4_tertile = quantile(perc_ffmi_change_v4, probs = 1/3, na.rm = TRUE),
-    ffmi_change_v5_tertile = quantile(perc_ffmi_change_v5, probs = 1/3, na.rm = TRUE),
-    ffmi_change_v6_tertile = quantile(perc_ffmi_change_v6, probs = 1/3, na.rm = TRUE),
-
-    # Grouping based on %FFMI change tertile
-    ffmi_change_v4_group = if_else(perc_ffmi_change_v4 <= ffmi_change_v4_tertile, "high", "low/modest"),
-    ffmi_change_v5_group = if_else(perc_ffmi_change_v5 <= ffmi_change_v5_tertile, "high", "low/modest"),
-    ffmi_change_v6_group = if_else(perc_ffmi_change_v6 <= ffmi_change_v6_tertile, "high", "low/modest"), 
-   
-    # Calculate tertiles for %ASM change
-    asm_change_v4_tertile = quantile(perc_asm_change_v4, probs = 1/3, na.rm = TRUE),
-    asm_change_v5_tertile = quantile(perc_asm_change_v5, probs = 1/3, na.rm = TRUE),
-    asm_change_v6_tertile = quantile(perc_asm_change_v6, probs = 1/3, na.rm = TRUE),
-
-    # pool low/modest together
-    asm_change_v4_group = if_else(perc_asm_change_v4 <= asm_change_v4_tertile, "high", "low/modest"), 
-    asm_change_v5_group = if_else(perc_asm_change_v5 <= asm_change_v5_tertile, "high", "low/modest"),
-    asm_change_v6_group = if_else(perc_asm_change_v6 <= asm_change_v6_tertile, "high", "low/modest")
-  ) |> 
-  ungroup() |> 
-  mutate(across(where(is.character) & !id, as.factor))
-
-## Medication
-baria_muscle_clinical_with_medication_notypos <- baria_muscle_clinical |>
+## Medication textbox cleaning
+baria_muscle_vars_meds_notypos <- baria_muscle_vars |>
   mutate(medication_list_v0 = str_to_lower(medication_list_v0)) |> 
   mutate(
     medication_list_v0 = if_else(
@@ -608,7 +467,7 @@ antibiotics <- c(
 antibiotics_pattern <- str_c("\\b(", str_c(antibiotics, collapse = "|"), ")\\b")
 
 # Use regex patterns to create clean medication columns for all medication categories and subcategories
-baria_muscle_clean <- baria_muscle_clinical_with_medication_notypos |> 
+baria_muscle_vars_meds <- baria_muscle_vars_meds_notypos |> 
   mutate(
     # Diabetes medication classes
     metformin_v0 = if_else(str_detect(medication_list_v0, dm_meds_patterns$metformin), "yes", "no"),
@@ -661,10 +520,150 @@ baria_muscle_clean <- baria_muscle_clinical_with_medication_notypos |>
     # Antibiotics
     abx_v0 = if_else(str_detect(medication_list_v0, antibiotics_pattern), "yes", "no")
   ) |> 
-  # 3. filter for final analysis cohort: antibiotics exclusion
-  filter(abx_v0 == "no") |> 
-  select(-medication_list_v0) |> 
-  arrange(date_v0)
+  select(-medication_list_v0)
+
+# Define cohort: valid baseline BIA & available baseline shotgun data & not taking antibiotics
+# 1. Valid baseline BIA & no antibiotics
+bia_abx_v0_ids <- baria_muscle_vars_meds |>
+  filter(
+    # Baseline BIA QC
+    visit == "v0",
+    !is.na(ffm_kg),
+    !is.na(fm_kg),
+    bia_perc_diff <= 5,
+    bia_kg_diff <= 5,
+
+    # No antibiotics
+    abx_v0 == "no"
+  ) |>
+  pull(id) |> 
+  unique()
+
+# 2. Available baseline microbiome/shotgun data
+mb_v0_ids <- sample_data(baria_mb) |> 
+  data.frame() |> 
+  filter(Time_Point == "V-1") |> 
+  pull(Subject_ID) |> 
+  as.character() |>
+  unique()
+
+bia_abx_mb_ids <- intersect(bia_abx_v0_ids, mb_v0_ids)
+
+#### Stopped here #####
+baria_muscle_final_cohort <- baria_muscle_vars |> 
+  filter(id %in% bia_mb_ids) |> 
+  mutate(
+    ffmi = ffm_kg / ((height_cm / 100)^2),
+    smm_kg = ((height_cm^2) / bia_resistance_50khz * 0.401) + (age * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0),
+    smm_by_weight = smm_kg / weight_kg
+  ) |> 
+  group_by(sex, visit) |> # calculate sex-specific cut-offs
+  mutate(date = dmy(date)) |> 
+  group_by(id) |> 
+  mutate(
+    date_baseline = date[visit == "v0"],
+    n_years_from_v0 = as.numeric(date - date_baseline) / 365.25,
+    age = age_v0 + n_years_from_v0
+  )  |> 
+  ungroup() |> 
+  mutate(
+    hba1c_percent = if_else(hba1c < 15, hba1c, hba1c * 0.0915 + 2.15),
+    hba1c_mmolmol = if_else(is.na(hba1c_mmolmol) == FALSE, hba1c_mmolmol, 10.93 * hba1c_percent - 23.5),
+
+    # HOMA-IR & HOMA-2B (insulin unit conversion from pmol/l to uU/ml)
+    homa_ir = (fasting_insulin_pmoll_mmt / 6.945) * fasting_glucose_mmoll_mmt / 22.5,
+    homa_b = (20 * (fasting_insulin_pmoll_mmt / 6.945)) / (fasting_glucose_mmoll_mmt - 3.5),
+
+    # T2D prevalence at follow-up: i. A1C ≥ 6.5% (≥ 48 mmol/mol) OR ii. FPG ≥ 126 mg/dL (≥ 7.0 mmol/L) (2h OGTT or random plasma glucose not measured)
+    t2d_labs = case_when(
+      is.na(hba1c_percent) & is.na(fasting_glucose_mmoll_mmt) ~ NA_character_,
+      hba1c_percent >= 6.5 | fasting_glucose_mmoll_mmt >= 7.0 ~ "yes",
+      TRUE ~ "no"
+    ),
+
+    # Prediabetes (ADA SOC 2026): i. A1C 5.7–6.4% (39–47 mmol/mol) OR ii. FPG 100 mg/dL (5.6 mmol/L) to 125 mg/dL (6.9 mmol/L) (IFG) OR 2h gluc (OGTT not available)
+    prediab_labs = case_when(
+      t2d_labs == "yes" ~ "no",
+      is.na(hba1c_percent) & is.na(fasting_glucose_mmoll_mmt) ~ NA_character_,
+      (hba1c_percent >= 5.7 & hba1c_percent <= 6.4) | (fasting_glucose_mmoll_mmt >= 5.6 & fasting_glucose_mmoll_mmt <= 6.9) ~ "yes",
+      TRUE ~ "no"
+    ),
+
+    # de novo occurence(1 & 2y post-surgery, if NGT at baseline/previous visits) 
+    # This I need to fix
+    # denovo_prediab = case_when(
+     # is.na(t2d_v0) | (is.na(prediab_labs) & visit == "v0") | (is.na(prediab_labs) & visit == "v0") ~ NA_character_,
+      #(t2d_v0 == "no" & prediab_v0 == "no" & prediab_v4 == "yes") ~ "yes",
+      #TRUE ~ "no")
+  ) |>
+  mutate(
+    # Calculate tertiles for FFMI and SMM (raw and indexed)
+    ffmi_tertile = quantile(ffmi, probs = 1/3, na.rm = TRUE),
+    smm_kg_tertile = quantile(smm_kg, probs = 1/3, na.rm = TRUE),
+    smm_by_weight_tertile = quantile(smm_by_weight, probs = 1/3, na.rm = TRUE),
+    low_ffmi = if_else(ffmi <= ffmi_tertile, "yes", "no"),
+    low_smm = if_else(smm_kg <= smm_kg_tertile, "yes", "no"),
+    low_smm_by_weight = if_else(smm_by_weight <= smm_by_weight_tertile, "yes", "no")
+  ) |> 
+  ungroup() 
+  #pivot_wider(# empty for now) |> 
+  mutate(
+    # %BW change from baseline to 1, 2 and 5 years
+    perc_weight_change_v4 = (weight_kg_v4 - weight_kg_v0) / weight_kg_v0 * 100,
+    perc_weight_change_v5 = (weight_kg_v5 - weight_kg_v0) / weight_kg_v0 * 100,
+    perc_weight_change_v6 = (weight_kg_v6 - weight_kg_v0) / weight_kg_v0 * 100,
+
+    # %FFM change from baseline to 1, 2 and 5 years
+    perc_ffm_change_v4 = (ffm_kg_v4 - ffm_kg_v0) / ffm_kg_v0 * 100,
+    perc_ffm_change_v5 = (ffm_kg_v5 - ffm_kg_v0) / ffm_kg_v0 * 100,
+    perc_ffm_change_v6 = (ffm_kg_v6 - ffm_kg_v0) / ffm_kg_v0 * 100,
+
+    # ΔFFMI and %FFMI change from baseline to 1, 2 and 5 years
+    delta_ffmi_v4 = ffmi_v4 - ffmi_v0, # 1y
+    delta_ffmi_v5 = ffmi_v5 - ffmi_v0, # 2y
+    delta_ffmi_v6 = ffmi_v6 - ffmi_v0, # 5y
+
+    perc_ffmi_change_v4 = (ffmi_v4 - ffmi_v0) / ffmi_v0 * 100,
+    perc_ffmi_change_v5 = (ffmi_v5 - ffmi_v0) / ffmi_v0 * 100,
+    perc_ffmi_change_v6 = (ffmi_v6 - ffmi_v0) / ffmi_v0 * 100,
+
+    # %FM change from baseline to 1, 2 and 5 years
+    perc_fm_change_v4 = (fm_kg_v4 - fm_kg_v0) / fm_kg_v0 * 100,
+    perc_fm_change_v5 = (fm_kg_v5 - fm_kg_v0) / fm_kg_v0 * 100,
+    perc_fm_change_v6 = (fm_kg_v6 - fm_kg_v0) / fm_kg_v0 * 100,
+
+    # Calculate ΔASM and %ASM change from baseline to 1, 2 and 5 years
+    delta_asm_v4 = asm_kg_v4 - asm_kg_v0, # 1y
+    delta_asm_v5 = asm_kg_v5 - asm_kg_v0, # 2y
+    delta_asm_v6 = asm_kg_v6 - asm_kg_v0, # 5y
+    
+    perc_asm_change_v4 = (asm_kg_v4 - asm_kg_v0) / asm_kg_v0 * 100, 
+    perc_asm_change_v5 = (asm_kg_v5 - asm_kg_v0) / asm_kg_v0 * 100,
+    perc_asm_change_v6 = (asm_kg_v6 - asm_kg_v0) / asm_kg_v0 * 100) |> 
+  group_by(sex) |> 
+  mutate(
+    # Calculate tertiles for %FFMI change
+    ffmi_change_v4_tertile = quantile(perc_ffmi_change_v4, probs = 1/3, na.rm = TRUE),
+    ffmi_change_v5_tertile = quantile(perc_ffmi_change_v5, probs = 1/3, na.rm = TRUE),
+    ffmi_change_v6_tertile = quantile(perc_ffmi_change_v6, probs = 1/3, na.rm = TRUE),
+
+    # Grouping based on %FFMI change tertile
+    ffmi_change_v4_group = if_else(perc_ffmi_change_v4 <= ffmi_change_v4_tertile, "high", "low/modest"),
+    ffmi_change_v5_group = if_else(perc_ffmi_change_v5 <= ffmi_change_v5_tertile, "high", "low/modest"),
+    ffmi_change_v6_group = if_else(perc_ffmi_change_v6 <= ffmi_change_v6_tertile, "high", "low/modest"), 
+   
+    # Calculate tertiles for %ASM change
+    asm_change_v4_tertile = quantile(perc_asm_change_v4, probs = 1/3, na.rm = TRUE),
+    asm_change_v5_tertile = quantile(perc_asm_change_v5, probs = 1/3, na.rm = TRUE),
+    asm_change_v6_tertile = quantile(perc_asm_change_v6, probs = 1/3, na.rm = TRUE),
+
+    # pool low/modest together
+    asm_change_v4_group = if_else(perc_asm_change_v4 <= asm_change_v4_tertile, "high", "low/modest"), 
+    asm_change_v5_group = if_else(perc_asm_change_v5 <= asm_change_v5_tertile, "high", "low/modest"),
+    asm_change_v6_group = if_else(perc_asm_change_v6 <= asm_change_v6_tertile, "high", "low/modest")
+  ) |> 
+  ungroup() |> 
+  mutate(across(where(is.character) & !id, as.factor))
 
 
 # then save as both RDS and csv files
