@@ -4,14 +4,9 @@
 # Packages
 library(tidyverse)
 library(phyloseq)
-library(vegan)
 library(MetBrewer)
-library(ggthemes)
-library(patchwork)
 
 # Theme
-renoir_20 <- met.brewer("Renoir", n = 20)
-
 theme_minimal_composition <- function(base_size = 14, base_family = "sans") {
 
   theme_minimal(base_size = base_size, base_family = base_family) +
@@ -37,83 +32,42 @@ theme_minimal_composition <- function(base_size = 14, base_family = "sans") {
       plot.margin = unit(c(10, 5, 5, 5), "mm")
     )
 }
+renoir_20 <- met.brewer("Renoir", n = 20)
 
 # Data
-baria_muscle <- read_rds("data/20260731_BARIA_muscle_clinical.RDS") # metadata/clinical data CHECK FOR MOST RECENT VERSION
-baria_mb <- read_rds("data/ps.BARIA.metaphlan.706.2548.RDS")
+baria_mb <- readRDS("data/processed_data/260811_BARIA_mb_clean.RDS") # already contains necessary metadata for the grouping
 
 # Melt into df
 melted_mb <- psmelt(baria_mb)
 
-# QC
-# Check that the raw metaphlan rel. abundances sum to 100% per sample
-melted_mb |> 
-  group_by(Sample) |> 
-  summarize(total_abundance = sum(Abundance)) |> 
-  summarize(
-    min = min(total_abundance),
-    mean = mean(total_abundance),
-    max = max(total_abundance)
-  ) # returns 100 for all
-
-# Merge with metadata
-mb <- melted_mb |> 
-  filter(Extra_data == "NA" | Extra_data == "rep1") |> # keep first run of samples with extra data
-  select(-c(Study, Sample_Type, Data_Type)) |> 
-  mutate(
-    visit = str_extract(Time_Point, "\\d"),
-    visit = if_else(visit == "1", "0", visit),
-    visit = as.factor(visit),
-    id = Subject_ID
-  ) |> 
-  tibble::rownames_to_column(var = "otu") |> 
-  select(-Subject_ID, -Time_Point, -OTU) |> 
-  left_join(baria_muscle, by = join_by(id)) |> 
-  relocate(visit, .before = otu) |> 
-  relocate(id, .before = visit)
-
-# QC sums
-mb |> 
-  group_by(Sample) |> 
-  summarise(total_abundance = sum(Abundance, na.rm = TRUE)) |> 
-  summarise(
-    min = min(total_abundance),
-    mean = mean(total_abundance),
-    max = max(total_abundance)
-  ) # returns 100 for all
-
 #### Composition Plots ####
 #### Statified by FFMI status at baseline ####
 ### Species level ###
-# Summarize per group and identify top 20 species (baseline = V1) 
-top20_species_v0 <- mb |> 
-  filter(visit == "0") |>
+# Summarize per group and identify top 20 species at baseline
+top20_species_v0 <- melted_mb |> 
+  filter(visit == "v0") |>
   group_by(Sample, Species) |> 
   summarize(Abundance = sum(Abundance), .groups = "drop") |> 
   group_by(Species) |> 
   summarize(Abundance = mean(Abundance)) |> 
   arrange(-Abundance) |> 
-  select(Species) |> 
-  head(20)
+  slice_head(n = 20)
 
 ### Baseline composition ###
-species_ffmi_v0 <- mb |> 
-  filter(
-    visit == "0", # baseline composition (in clinical data v0 for shotgun data v1!)
-    !is.na(low_ffmi_v0)
-  ) |> 
+species_ffmi_v0 <- melted_mb |>
+  filter(visit == "v0", !is.na(low_ffmi_v0)) |>
   mutate(
     Species2 = if_else(
-        Species %in% top20_species_v0$Species,
-        Species,
-        "Other species" # collapse other species
-        )
-  ) |> 
-  group_by(Species2, Sample, low_ffmi_v0) |> # species abundance per sample
-  summarize(Abundance = sum(Abundance)) |> 
+      Species %in% top20_species_v0$Species,
+      Species,
+      "Other species" # Collapse other species
+    )
+  ) |>
+  group_by(Species2, Sample, low_ffmi_v0) |>
+  summarize(Abundance = sum(Abundance), .groups = "drop") |>
   group_by(Species2, low_ffmi_v0) |> # species per muscle mass group
   summarize(Abundance = mean(Abundance), .groups = "drop") # avg abundance per species per FFMI group
-  
+
 # check sum
 species_ffmi_v0 |> # check
   group_by(low_ffmi_v0) |> 
@@ -128,11 +82,8 @@ species_order_low_ffmi_v0 <- species_ffmi_v0 |>
   arrange(-Abundance) |> 
   pull(Species2)
 
-# Apply levels to species
-species_ffmi_v0 <- species_ffmi_v0 |> 
-  mutate(
-    Species2 = factor(as.character(Species2),levels = c(species_order_low_ffmi_v0, "Other species"))
-  )
+species_ffmi_v0 <- species_ffmi_v0 |>
+  mutate(Species2 = factor(Species2, levels = c(species_order_low_ffmi_v0, "Other species")))
   
 # Assign colors according to abundance order in the low FFMI group
 set.seed(13)
