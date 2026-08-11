@@ -1,4 +1,4 @@
-# Baria muscle loss & microbiota project: Beta diversity
+# Beta diversity
 # Anna Giannakogeorgou, a.gianna@amsterdamumc.nl
 
 # Packages
@@ -9,22 +9,9 @@ library(MetBrewer)
 library(grid)
 library(ggthemes)
 library(ggpubr)
-library(patchwork)
 library(ggsci)
 
 # Theme
-renoir_cols_20 <- met.brewer("Renoir", n = 20)
-
-fill_cols_2 <- scale_fill_manual(
-  values = c("yes" = renoir_cols_20[18], "no" = renoir_cols_20[5]),
-  labels = c("yes" = "Low FFMI", "no" = "Moderate/high FFMI")
-)
-
-color_cols_2 <- scale_color_manual(
-  values = c("yes" = renoir_cols_20[18], "no" = renoir_cols_20[5]),
-  labels = c("yes" = "Low FFMI", "no" = "Moderate/high FFMI")
-)
-
 theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
 
   theme_minimal(base_size = base_size, base_family = base_family) +
@@ -47,63 +34,34 @@ theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
 
 }
 
-# Data
-baria_muscle <- read_rds("data/20260731_BARIA_muscle_clinical.RDS") # clinical data
-baria_mb <- read_rds("data/ps.BARIA.metaphlan.706.2548.RDS")
-
-# qc
-sample_sums(baria_mb) |>
-  summary() # adds up to 100
-
-# Subset; keep only samples with one run or first run of samples with duplicates
-run1_mb <- prune_samples(
-  sample_data(baria_mb)$Extra_data == "NA" | sample_data(baria_mb)$Extra_data == "rep1",
-  baria_mb
+renoir_cols_20 <- met.brewer("Renoir", n = 20)
+fill_cols_2 <- scale_fill_manual(
+  values = c("yes" = renoir_cols_20[18], "no" = renoir_cols_20[5]),
+  labels = c("yes" = "Low FFMI", "no" = "Moderate/high FFMI")
+)
+color_cols_2 <- scale_color_manual(
+  values = c("yes" = renoir_cols_20[18], "no" = renoir_cols_20[5]),
+  labels = c("yes" = "Low FFMI", "no" = "Moderate/high FFMI")
 )
 
-# Convert OTU table to matrix
-matrix_mb <- as(otu_table(run1_mb), "matrix")
+# Data
+baria_mb <- readRDS("data/processed_data/260811_BARIA_mb_clean.RDS") # already contains necessary metadata for the grouping
 
-# vegan requires a matrix with samples as rows and taxa as cols
-if (taxa_are_rows(run1_mb)) { 
-  matrix_mb <- t(matrix_mb) 
-}
+# Convert OTU table to matrix and transpose 
+matrix_mb <- as(otu_table(baria_mb), "matrix") |> 
+  t() # vegan requires a matrix with samples as rows and taxa as cols
 
-# checks
-dim(matrix_mb) # should be n samples (rows) x n taxa (cols)
-rownames(matrix_mb)[1:5] # Samples
-colnames(matrix_mb)[1:5] # Taxa
-summary(rowSums(matrix_mb)) # should be ~100
+# Metadata (baseline only)
+mb_meta_v0 <- as(sample_data(baria_mb), "data.frame") |>
+  rownames_to_column(var = "Sample") |>
+  select(Sample, id, visit, low_ffmi_v0) |> 
+  filter(visit == "v0")
 
-# Convert sample data into a df
-mb_df <- sample_data(run1_mb) |> 
-  data.frame() |> 
-  tibble::rownames_to_column(var = "Sample")
+# Keep baseline samples and order matrix to match metadata
+mb_v0 <- matrix_mb[mb_meta_v0$Sample, , drop = FALSE] # keeps the result as a matrix
 
-# Merge with metadata
-mb_meta <- mb_df |> 
-  mutate(
-    visit = str_extract(Time_Point, "\\d"),
-    visit = if_else(visit == "1", "0", visit),
-    visit = as.factor(visit),
-    id = Subject_ID
-  ) |> 
-  select(Sample, id, visit) |> 
-  inner_join(baria_muscle, by = "id") |> 
-  relocate(id, .before = Sample)
-
-# Keep only baseline samples for baseline beta diversity analysis
-mb_meta_v0 <- mb_meta |> 
-  filter(visit == "0")
-
-# Check whether all samples from metadata are in the (baseline) mb matrix
-all(mb_meta_v0$Sample %in% rownames(matrix_mb)) # returns TRUE
-
-# Keep only samples that also have matched metadata; order to match mb_meta exactly for downstream analyses
-mb_v0 <- matrix_mb[mb_meta_v0$Sample, , drop = FALSE]
-
-# Final check
-all(rownames(mb_v0) == mb_meta_v0$Sample)
+# Check exact alignment
+stopifnot(all(rownames(mb_v0) == mb_meta_v0$Sample))
 
 ### Compute Bray-Curtis distance ###
 bray_v0 <- vegan::vegdist(mb_v0, method = "bray")
@@ -119,7 +77,7 @@ expl_variance_bray_v0[1:2]
 
 # Extract first 2 PCoA axes and add Sample names
 bray_2_v0 <- as.data.frame(pcoord_v0$vectors[, c("Axis.1", "Axis.2")]) |>
-  tibble::rownames_to_column("Sample") |>
+  rownames_to_column("Sample") |>
   left_join(mb_meta_v0, by = "Sample") # merge with ordered metadata 
 
 ## PERMANOVA
