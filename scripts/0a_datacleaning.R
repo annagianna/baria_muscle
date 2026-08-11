@@ -498,11 +498,11 @@ sample_data(run1_mb)$id <- as.character(sample_data(run1_mb)$Subject_ID)
 baria_mb_clean <- prune_samples(sample_data(run1_mb)$id %in% bia_abx_mb_ids, run1_mb)
 
 # Save clinical data as both RDS and csv files
-# Long data
+# Long clinical data
 write.csv(baria_muscle_long, "data/processed_data/260810_BARIA_muscle_long.csv")
 saveRDS(baria_muscle_long, "data/processed_data/260810_BARIA_muscle_long.RDS")
 
-# Wide data
+# Wide clinical data
 write.csv(baria_muscle_wide, "data/processed_data/260810_BARIA_muscle_wide.csv")
 saveRDS(baria_muscle_wide, "data/processed_data/260810_BARIA_muscle_wide.RDS")
 
