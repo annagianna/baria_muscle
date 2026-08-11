@@ -30,6 +30,7 @@ baria_mb <- readRDS("data/raw_data/ps.BARIA.metaphlan.706.2548.RDS")
 
 # Skeletal muscle mass (SMM) by Janssen: SMM [kg] = (height^2 [cm] / BIA-resistance [Ohms] X 0.401) + (gender x 3.825) + (age [years] x - 0.071)] + 5.102 (men = 1; women = 0)
 
+#### Clinical Data ####
 # Longitudinal vars
 long_vars <- c("date",
   # Body composition
@@ -476,7 +477,27 @@ baria_muscle_wide <- baria_muscle_long |>
   mutate(across(where(is.character) & !matches("^id$"), as.factor))
 
 
-# Save as both RDS and csv files
+#### Microbiome Data Cleaning ####
+# Keep single runs and first run of duplicated samples (after comparing 1st and 2nd runs)
+run1_mb <- prune_samples(
+  sample_data(baria_mb)$Extra_data == "NA" |sample_data(baria_mb)$Extra_data == "rep1",
+  baria_mb
+)
+
+# Clean microbiome metadata
+sample_data(run1_mb)$visit <- case_when(
+  sample_data(run1_mb)$Time_Point == "V-1" ~ "v0",
+  sample_data(run1_mb)$Time_Point == "V4" ~ "v4",
+  sample_data(run1_mb)$Time_Point == "V5" ~ "v5",
+  TRUE ~ NA_character_
+)
+
+sample_data(run1_mb)$id <- as.character(sample_data(run1_mb)$Subject_ID)
+
+# Restrict to final Baria muscle cohort
+baria_mb_clean <- prune_samples(sample_data(run1_mb)$id %in% bia_abx_mb_ids, run1_mb)
+
+# Save clinical data as both RDS and csv files
 # Long data
 write.csv(baria_muscle_long, "data/processed_data/260810_BARIA_muscle_long.csv")
 saveRDS(baria_muscle_long, "data/processed_data/260810_BARIA_muscle_long.RDS")
@@ -484,3 +505,6 @@ saveRDS(baria_muscle_long, "data/processed_data/260810_BARIA_muscle_long.RDS")
 # Wide data
 write.csv(baria_muscle_wide, "data/processed_data/260810_BARIA_muscle_wide.csv")
 saveRDS(baria_muscle_wide, "data/processed_data/260810_BARIA_muscle_wide.RDS")
+
+# Save mb data
+saveRDS(baria_mb_clean, "data/processed_data/260811_BARIA_mb_clean.RDS")
