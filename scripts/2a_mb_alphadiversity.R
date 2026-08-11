@@ -38,27 +38,13 @@ theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
 }
 
 # Data
-baria_muscle <- readRDS("data/20260731_BARIA_muscle_clinical.RDS") # metadata/clinical data
-baria_mb <- readRDS("data/ps.BARIA.metaphlan.706.2548.RDS")
-
-# qc
-sample_sums(baria_mb) |>
-  summary() # adds up to 100
-
-# Subset; keep only samples with one run or first run of samples with duplicates
-run1_mb <- prune_samples(
-  sample_data(baria_mb)$Extra_data == "NA" | sample_data(baria_mb)$Extra_data == "rep1",
-  baria_mb
-)
+baria_muscle <- readRDS("data/processed_data/260810_BARIA_muscle_wide.RDS")
+baria_mb <- readRDS("data/processed_data/260811_BARIA_mb_clean.RDS")
 
 # Diversity metrics
-# Convert OTU table to matrix
-matrix_mb <- as(otu_table(run1_mb), "matrix")
-
-# vegan requires a matrix with samples as rows and taxa as cols
-if (taxa_are_rows(run1_mb)) { 
-  matrix_mb <- t(matrix_mb) 
-}
+# Convert OTU table to matrix and transpose 
+matrix_mb <- as(otu_table(baria_mb), "matrix") |> 
+  t() # vegan requires a matrix with samples as rows and taxa as cols
 
 # Shannon, Simpson, Richness 
 # note to self: calculated per sample, no filtering per visit needed at this stage
@@ -75,7 +61,7 @@ alpha <- tibble(
 )
 
 # Merge with metadata
-baria_mb_df <- as(sample_data(run1_mb), "data.frame")
+baria_mb_df <- as(sample_data(baria_mb), "data.frame")
 
 alpha_meta <- baria_mb_df |> 
   tibble::rownames_to_column(var = "Sample") |> 
