@@ -412,6 +412,7 @@ baria_muscle_long <- baria_muscle_vars_meds |>
       TRUE ~ "no"
     ),
     ffmi = ffm_kg / ((height_cm / 100)^2),
+    fmi = fm_kg / ((height_cm / 100)^2),
     smm_kg = if_else(
       bia_resistance_valid == TRUE, 
       ((height_cm^2) / bia_resistance_50khz * 0.401) + (age * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0), NA_real_),
@@ -435,7 +436,7 @@ baria_muscle_wide <- baria_muscle_long |>
     names_from = visit,
     values_from =  c(
       all_of(long_vars), "n_years_from_v0", "age", "hba1c_percent", "homa_ir", "homa_b", "t2d_labs", "prediab_labs",
-      contains("ffmi"), contains("smm"), contains("bia_")
+      contains("ffmi"), contains("fmi"), contains("smm"), contains("bia_")
     ),
     names_glue = "{.value}_{visit}"
   ) |> 
