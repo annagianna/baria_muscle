@@ -476,7 +476,6 @@ baria_muscle_wide <- baria_muscle_long |>
   ungroup() |> 
   mutate(across(where(is.character) & !matches("^id$"), as.factor))
 
-
 #### Microbiome Data Cleaning ####
 # Keep single runs and first run of duplicated samples (after comparing 1st and 2nd runs)
 run1_mb <- prune_samples(
