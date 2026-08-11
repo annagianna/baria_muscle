@@ -396,11 +396,9 @@ baria_muscle_long <- baria_muscle_vars_meds |>
       (hba1c_percent >= 5.7 & hba1c_percent <= 6.4) | (fasting_glucose_mmoll_mmt >= 5.6 & fasting_glucose_mmoll_mmt <= 6.9) ~ "yes",
       TRUE ~ "no"
     ),
-    ffmi = ffm_kg / ((height_cm / 100)^2),
-    fmi = fm_kg / ((height_cm / 100)^2),
-    smm_kg = if_else(
-      bia_resistance_valid == TRUE, 
-      ((height_cm^2) / bia_resistance_50khz * 0.401) + (age * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0), NA_real_),
+    ffmi = if_else(bia_valid, ffm_kg / ((height_cm / 100)^2), NA_real_),
+    fmi = if_else(bia_valid, fm_kg / ((height_cm / 100)^2), NA_real_),
+    smm_kg = if_else(bia_valid, ((height_cm^2) / bia_resistance_50khz * 0.401) + (age * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0), NA_real_),
     smm_by_weight = smm_kg / weight_kg
   ) |>
   group_by(sex, visit) |> 
