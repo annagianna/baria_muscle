@@ -1,0 +1,16 @@
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+
+# data
+data/
+
+# results
+graphs/
+tables/
+
+#vscode
+.vscode/*
+
+# R
+.Rhistory
