@@ -498,7 +498,7 @@ baria_mb_clean <- prune_samples(sample_data(run1_mb)$id %in% bia_abx_mb_ids, run
 
 # Add relevant metadata to mb
 baria_mb_metadata <- as(sample_data(baria_mb_clean), "data.frame") |> 
-  rownames_to_column(var = "Sample") |> 
+  rownames_to_column(var = "Sample") |>
   left_join(
     baria_muscle_wide |> 
       select(id, sex, ffmi_v0, low_ffmi_v0),
