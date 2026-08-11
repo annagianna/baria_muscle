@@ -4,6 +4,7 @@
 # Packages
 library(tidyverse)
 library(phyloseq)
+library(grid)
 library(MetBrewer)
 
 # Theme
