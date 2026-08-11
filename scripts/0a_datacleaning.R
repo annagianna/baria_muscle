@@ -10,26 +10,6 @@ library(phyloseq)
 baria_clinical_data_raw <- readRDS("./data/raw_data/BARIA.clinical.2024-12-09.723.2043.RDS")
 baria_mb <- readRDS("data/raw_data/ps.BARIA.metaphlan.706.2548.RDS")
 
-## Formulas used in this script
-# Hba1c(%) = (0,0915 * HbA1c (mmol/mol) + 2,15 (from diabetesfonds.nl)
-# Hba1c(mmol/mol) = (10,93 x Hba1c (%)) - 23,5
-
-## T2D Definition
-# i. A1C ≥ 6.5% (≥ 48 mmol/mol) OR 
-# ii. FPG ≥ 126 mg/dL (≥ 7.0 mmol/L) 
-# (iii. 2h OGTT or random plasma glucose (not measured))
-
-## Prediabetes Definition (ADA SOC 2026)
-# i. A1C 5.7–6.4% (39–47 mmol/mol) OR
-# ii. FPG 100 mg/dL (5.6 mmol/L) to 125 mg/dL (6.9 mmol/L) (IFG) OR
-# (iii. 2h gluc (OGTT not available))
-
-# DOI: 10.2337/diacare.21.12.2191 for HOMA calculations
-# HOMA-IR = (Fasting insulin (µU/mL) × Fasting glucose (mmol/L)) / 22.5 (for glucose in mmol/L)
-# HOMA-B = (20 × Fasting insulin (µU/mL)) / (Fasting glucose (mmol/L) − 3.5)
-
-# Skeletal muscle mass (SMM) by Janssen: SMM [kg] = (height^2 [cm] / BIA-resistance [Ohms] X 0.401) + (gender x 3.825) + (age [years] x - 0.071)] + 5.102 (men = 1; women = 0)
-
 #### Clinical Data ####
 # Longitudinal vars
 long_vars <- c("date",
@@ -156,10 +136,19 @@ baria_muscle_vars <- baria_clinical_data_raw |>
     bia_perc_diff = abs((ffm_percent + fm_percent) - 100),
     bia_kg_diff = abs((ffm_kg + fm_kg) - weight_kg),
     bia_resistance_valid = case_when(
-    is.na(bia_resistance_50khz) ~ NA,
-    between(bia_resistance_50khz, 110, 1000) ~ TRUE, # Device's resistance range (Maltron BioScan 920)
-    TRUE ~ FALSE
-  )
+      is.na(bia_resistance_50khz) ~ NA,
+      between(bia_resistance_50khz, 110, 1000) ~ TRUE, # Device's resistance range (Maltron BioScan 920)
+      TRUE ~ FALSE
+    ),
+    bia_valid =
+      !is.na(ffm_kg) &
+      !is.na(fm_kg) &
+      !is.na(weight_kg) &
+      !is.na(bia_perc_diff) &
+      !is.na(bia_kg_diff) &
+      bia_perc_diff <= 5 &
+      bia_kg_diff <= 5 &
+      bia_resistance_valid %in% TRUE
 )
 
 ## Medication textbox cleaning
@@ -350,11 +339,7 @@ bia_abx_v0_ids <- baria_muscle_vars_meds |>
   filter(
     # Baseline BIA QC
     visit == "v0",
-    !is.na(ffm_kg),
-    !is.na(fm_kg),
-    bia_perc_diff <= 5,
-    bia_kg_diff <= 5,
-    bia_resistance_valid == TRUE,
+    bia_valid,
 
     # No antibiotics
     abx_v0 == "no"
