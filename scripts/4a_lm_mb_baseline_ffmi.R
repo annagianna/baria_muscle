@@ -4,16 +4,11 @@
 # Packages
 library(tidyverse)
 library(phyloseq)
-library(dagitty)
-library(ggdag)
 library(broom)
-library(ggrepel)
-library(ggthemes)
 library(MetBrewer)
+library(grid)
 
 # Theme
-renoir_15 <- met.brewer("Renoir", n = 15)
-
 theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
 
   theme_minimal(base_size = base_size, base_family = base_family) +
@@ -35,80 +30,47 @@ theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
     )
 
 }
+renoir_15 <- met.brewer("Renoir", n = 15)
+shape_manual_signif <- scale_shape_manual(
+    values = c("significant" = 16, "not significant" = 1), 
+    labels = c("significant" = "< 0.05", "not significant" = "\u2265 0.05")
+  )
+color_manual_models123 <- scale_color_manual(
+    values = c(
+      "Age and sex" = renoir_15[14],
+      "Age, sex and FMI" = renoir_15[6],
+      "Age, sex, FMI, T2D, antidiabetic medication and statin use" = renoir_15[2]
+  ))
 
 # Data
-baria_muscle <- read_rds("data/20260731_BARIA_muscle_clinical.RDS") # clinical data
-baria_mb <- read_rds("data/ps.BARIA.metaphlan.706.2548.RDS")
+baria_muscle_wide <- readRDS("data/processed_data/260810_BARIA_muscle_wide.RDS")
+baria_mb <- readRDS("data/processed_data/260811_BARIA_mb_clean.RDS")
 
-# qc
-sample_sums(baria_mb) |>
-  summary() # adds up to 100
-
-# Keep only samples with one run or first run of samples with duplicates (same approach as in previous scripts)
-run1_mb <- prune_samples(
-  sample_data(baria_mb)$Extra_data == "NA" | sample_data(baria_mb)$Extra_data == "rep1",
+# Filter out poorly annotated ("GGB"-containing) taxa for species-level associations
+baria_mb_species <- prune_taxa(
+  str_detect(rownames(otu_table(baria_mb)), "GGB\\d+", negate = TRUE),
   baria_mb
 )
 
-# Filter out poorly annotated ("GGB"-containing) taxa for species-level associations
-run1_mb_clean <- prune_taxa(
-  str_detect(rownames(otu_table(run1_mb)), "GGB\\d+", negate = TRUE),
-  run1_mb
-)
-
 # Extract abundance matrix
-matrix_mb <- as(otu_table(run1_mb_clean), "matrix")
+matrix_mb <- as(otu_table(baria_mb_species), "matrix") |> 
+  t()
 
-# vegan requires a matrix with samples as rows, taxa as cols
-if (taxa_are_rows(run1_mb_clean)) {
-  matrix_mb <- t(matrix_mb)
-}
-
-# Check that each sample sums to ~100% to confirm that table sums rel. abundances
-rowSums(matrix_mb, na.rm = TRUE) |> 
-  summary()
-
-# Create analysis table: abundance matrix + mb sample data + clinical metadata
-# Sample data as df
-run1_mb_clean_df <- as(sample_data(run1_mb_clean), "data.frame") |> 
-  tibble::rownames_to_column(var = "Sample") |> 
-  mutate(
-    visit = case_when(
-      str_detect(Time_Point, "V-1") ~ "0",
-      str_detect(Time_Point, "V4") ~ "4",
-      str_detect(Time_Point, "V5") ~ "5",
-      TRUE ~ NA_character_
-    ),
-    visit = as.factor(visit),
-    id = Subject_ID
-  ) |> 
-  select(-Time_Point, -Subject_ID)
-
-# Join all together
-mb_df <- matrix_mb |> # abundance matrix
-  as.data.frame() |> 
-  tibble::rownames_to_column(var = "Sample") |> 
+# Build baseline model df
+mb_v0 <- as(sample_data(baria_mb_species), "data.frame") |>
+  rownames_to_column(var = "Sample") |>
+  select(Sample, id, visit) |>
+  filter(visit == "v0") |>
   left_join(
-    run1_mb_clean_df |> # mb sample data
-      select(Sample, visit, id),
+    baria_muscle_wide |>
+      select(id, age_v0, sex, t2d_v0, dm_meds_v0, statins_v0, ffmi_v0, fmi_v0, low_ffmi_v0),
+    by = "id"
+  ) |>
+  left_join(
+    matrix_mb |>
+      as.data.frame() |>
+      rownames_to_column(var = "Sample"),
     by = "Sample"
-  ) |> 
-  left_join(baria_muscle, by = "id") |> 
-  relocate(id, visit, .before = everything())
-
-# Keep baseline samples only for cross-sectional associations (baseline species abundance with FFMI)
-mb_v0 <- mb_df |> 
-  filter(
-    visit == "0",
-    id %in% baria_muscle$id
-  )
-
-# Check baseline sample size and availability of FFMI vars
-mb_v0 |> 
-  summarize(
-    n_samples = n(),
-    n_ffmi_v0 = sum(!is.na(ffmi_v0)),
-    n_low_ffmi_v0 = sum(!is.na(low_ffmi_v0))
   )
 
 ## Calculate prevalence and mean relative abundance per species
@@ -151,109 +113,6 @@ rowSums(species_v0_fltr, na.rm = TRUE) |>
 
 ##### FFMI #####
 ## Associations with baseline FFMI ##
-### Draw DAG ###
-# Model 1: Primary DAG
-dag_ffmi_v0_1 <- dagitty::dagitty("
-dag {
-microbiome [exposure]
-FFMI [outcome]
-
-age -> microbiome
-age -> FFMI
-
-sex -> microbiome
-sex -> FFMI
-
-microbiome -> metabolites
-metabolites -> FFMI
-}")
-
-dagitty::adjustmentSets(
-  dag_ffmi_v0_1,
-  exposure = "microbiome",
-  outcome = "FFMI",
-  type = "minimal",
-  effect = "total"
-)
-
-dagitty::paths(
-  dag_ffmi_v0_1,
-  from = "microbiome",
-  to = "FFMI"
-)
-
-# Model 2: Sensitivity DAG (with adjustment for adiposity/FMI)
-dag_ffmi_v0_2s <- dagitty::dagitty("
-dag {
-microbiome [exposure]
-FFMI [outcome]
-
-age -> microbiome
-age -> FFMI
-
-sex -> microbiome
-sex -> FFMI
-
-adiposity -> microbiome
-adiposity -> FFMI
-
-microbiome -> metabolites
-metabolites -> FFMI
-}")
-
-dagitty::adjustmentSets(
-  dag_ffmi_v0_2s,
-  exposure = "microbiome",
-  outcome = "FFMI",
-  type = "minimal",
-  effect = "total"
-)
-
-# Model 3: Extensive sensitivity DAG
-# Additional adjustment for T2D, antidiabetic medication and statins
-dag_ffmi_v0_3s <- dagitty::dagitty("
-dag {
-species_abundance [exposure]
-FFMI [outcome]
-
-age -> species_abundance
-age -> FFMI
-age -> T2D
-age -> statins
-
-sex -> species_abundance
-sex -> FFMI
-sex -> T2D
-
-adiposity -> species_abundance
-adiposity -> FFMI
-adiposity -> T2D
-adiposity -> antidiabetic_drugs
-adiposity -> statins
-
-T2D -> species_abundance
-T2D -> FFMI
-T2D -> antidiabetic_drugs
-T2D -> statins
-
-antidiabetic_drugs -> species_abundance
-antidiabetic_drugs -> FFMI
-
-statins -> species_abundance
-statins -> FFMI
-
-species_abundance -> FFMI
-}
-")
-
-dagitty::adjustmentSets(
-  dag_ffmi_v0_3s,
-  exposure = "species_abundance",
-  outcome = "FFMI",
-  type = "minimal",
-  effect = "total"
-)
-
 # Prepare data for linear models
 model_data_ffmi_v0 <- mb_v0 |> 
   select(id, age_v0, sex, t2d_v0, dm_meds_v0, statins_v0, ffmi_v0, fmi_v0, low_ffmi_v0, all_of(species_v0_keep))
@@ -326,7 +185,7 @@ model_ffmi_v0_1_signif <- model_ffmi_v0_1_results |>
   filter(p_fdr < 0.05) |> 
   arrange(p_fdr) |>
   relocate(species_label, .after = species)
-saveRDS(model_ffmi_v0_1_signif, "tables/260804_model_ffmi_v0_1_signif.RDS")
+saveRDS(model_ffmi_v0_1_signif, "tables/260811_model_ffmi_v0_1_signif.RDS")
 
 #### Model  2: Adjusted for age, sex and adiposity (FMI) ####
 # Fit one lm per species
@@ -398,7 +257,7 @@ model_ffmi_v0_3_signif <- model_ffmi_v0_3_results |>
 
 #### Prep model 1-3 results for a combined forest plot ####
 # Prepare data and labels to plot models 1-3 together
-# Species significant after FDR correction in at least one model (1 and/or 2)
+# Species significant after FDR correction in at least one model
 models_ffmi_1_2_signif <- union(model_ffmi_v0_1_signif$species, model_ffmi_v0_2_signif$species)
 models_ffmi_123_signif <- union(models_ffmi_1_2_signif, model_ffmi_v0_3_signif$species)
 
@@ -434,14 +293,16 @@ species_order_model1 <- models_ffmi_v0_123_results |>
   filter(model == "Age and sex") |> 
   arrange(estimate) |> 
   pull(species_label_unique)
-models_ffmi_v0_123_results$species_label_unique
 
-#### Combined forest plot for models 1-3 ####
-forest_model_ffmi_123 <- models_ffmi_v0_123_results |> 
+# Apply factor order
+models_ffmi_v0_123_results <- models_ffmi_v0_123_results |>
   mutate(
     species_label_unique = factor(species_label_unique, levels = species_order_model1),
     signif = factor(signif, levels = c("significant", "not significant"))
-  ) |> 
+  )
+
+#### Combined forest plot for models 1-3 ####
+forest_model_ffmi_123 <- models_ffmi_v0_123_results |> 
   ggplot(aes(x = estimate, y = species_label_unique, color = model, shape = signif, group = model)) +
   geom_vline(xintercept = 0, linetype = "dashed") +
   geom_errorbarh(
@@ -450,18 +311,12 @@ forest_model_ffmi_123 <- models_ffmi_v0_123_results |>
     position = position_dodge(width = 0.8, reverse = TRUE),
     show.legend = FALSE
   ) +
-  geom_point(size = 2.5, position = position_dodge(width = 0.8, reverse = TRUE)) +
-  scale_color_manual(# map separately
-    values = c(
-      "Age and sex" = renoir_15[14],
-      "Age, sex and FMI" = renoir_15[6],
-      "Age, sex, FMI, T2D, antidiabetic medication and statin use" = renoir_15[2]
-  )
-) +
-  scale_shape_manual( # map separately
-    values = c("significant" = 16, "not significant" = 1), 
-    labels = c("significant" = "< 0.05", "not significant" = "\u2265 0.05")
-  ) +
+  geom_point(
+  size = 2.5,
+  position = position_dodge(width = 0.8, reverse = TRUE)
+  ) + 
+  color_manual_models123 +
+  shape_manual_signif +
   labs(
     x = "Difference in baseline FFMI (kg/m²) per 1-unit increase in log10 abundance",
     y = NULL,
@@ -470,5 +325,4 @@ forest_model_ffmi_123 <- models_ffmi_v0_123_results |>
   ) +
   theme_minimal_custom() +
   theme(legend.position = "bottom", axis.text.y = element_text(face = "italic"))
-ggsave(plot = forest_model_ffmi_123, filename = "graphs/microbe_associations/forest_model_ffmi_123.pdf", width = 13, height = 8)
-
+ggsave(plot = forest_model_ffmi_123, filename = "graphs/microbe_associations/forest_model_ffmi_123.pdf", device = cairo_pdf, width = 13, height = 8)
