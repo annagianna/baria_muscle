@@ -12,9 +12,6 @@ library(ggpubr)
 library(patchwork)
 
 # Theme
-renoir_cols_20 <- met.brewer("Renoir", n = 20)
-fill_cols_2 <- scale_fill_manual(values = c("yes" = renoir_cols_20[18], "no" = renoir_cols_20[5]))
-
 theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
 
   theme_minimal(base_size = base_size, base_family = base_family) +
@@ -37,9 +34,12 @@ theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
 
 }
 
+renoir_cols_20 <- met.brewer("Renoir", n = 20)
+fill_cols_2 <- scale_fill_manual(values = c("yes" = renoir_cols_20[18], "no" = renoir_cols_20[5]))
+x_axis_labels_ffmi <- scale_x_discrete(labels = c("yes" = "Low FFMI", "no" = "Moderate/high FFMI"))
+
 # Data
-baria_muscle <- readRDS("data/processed_data/260810_BARIA_muscle_wide.RDS")
-baria_mb <- readRDS("data/processed_data/260811_BARIA_mb_clean.RDS")
+baria_mb <- readRDS("data/processed_data/260811_BARIA_mb_clean.RDS") # already contains necessary metadata for the grouping
 
 # Diversity metrics
 # Convert OTU table to matrix and transpose 
@@ -60,32 +60,22 @@ alpha <- tibble(
   richness = richness
 )
 
-# Merge with metadata
-baria_mb_df <- as(sample_data(baria_mb), "data.frame")
-
-alpha_meta <- baria_mb_df |> 
-  tibble::rownames_to_column(var = "Sample") |> 
-  mutate(
-    visit = str_extract(Time_Point, "\\d"),
-    visit = if_else(visit == "1", "0", visit),
-    visit = as.factor(visit),
-    id = Subject_ID
-  ) |> 
-  select(Sample, id, visit) |> 
-  left_join(alpha, by = "Sample") |>  
-  inner_join(baria_muscle, by = "id") |> 
-  relocate(id, .before = Sample)
+# Metadata
+alpha_meta <- as(sample_data(baria_mb), "data.frame") |>
+  rownames_to_column(var = "Sample") |>
+  select(Sample, id, visit, low_ffmi_v0) |>
+  left_join(alpha, by = "Sample")
 
 #### Baseline Plots ####
 alpha_v0 <- alpha_meta |>
-  filter(visit == "0") |>
+  filter(visit == "v0") |>
   arrange(id, Sample) |>
-  distinct(id, .keep_all = TRUE)
+  distinct(id, .keep_all = TRUE) |> 
+  mutate(low_ffmi_v0 = fct_relevel(low_ffmi_v0, "yes"))
 
 ## Shannon ##
 # Boxplot
 shannon_ffmi_v0 <- alpha_v0 |> 
-  mutate(low_ffmi_v0 = fct_relevel(low_ffmi_v0, "yes", after = 0L)) |> 
   ggplot(aes(x = low_ffmi_v0, y = shannon, fill = low_ffmi_v0)) +
   geom_boxplot() +
   #geom_jitter(position = position_dodge(0.75)) +
@@ -98,7 +88,6 @@ ggsave(shannon_ffmi_v0, filename = "graphs/alphadiversity/shannon_ffmi_v0.pdf", 
 
 # Violin
 shannon_violin_ffmi_v0 <- alpha_v0 |> 
-  mutate(low_ffmi_v0 = fct_relevel(low_ffmi_v0, "yes", after = 0L)) |>  
   ggplot(aes(x = low_ffmi_v0, y = shannon)) +
   geom_violin(aes(fill = low_ffmi_v0), trim = FALSE) +
   geom_boxplot(fill = "white", width = 0.1) +
@@ -111,8 +100,7 @@ shannon_violin_ffmi_v0 <- alpha_v0 |>
     label = "p.signif"
   ) + 
   fill_cols_2 +
-  scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
-  scale_x_discrete(labels = c("yes" = "Low FFMI", "no" = "Moderate/high FFMI")) +
+  x_axis_labels_ffmi + 
   theme_minimal_custom() +
   theme(legend.position = "none")
 ggsave(shannon_violin_ffmi_v0, filename = "graphs/alphadiversity/shannon_violin_ffmi_v0.pdf", width = 6, height = 5)
@@ -120,7 +108,6 @@ ggsave(shannon_violin_ffmi_v0, filename = "graphs/alphadiversity/shannon_violin_
 ## Simpson ##
 # Boxplot
 simpson_ffmi_v0 <- alpha_v0 |> 
-  mutate(low_ffmi_v0 = fct_relevel(low_ffmi_v0, "yes", after = 0L)) |> 
   ggplot(aes(x = low_ffmi_v0, y = simpson, fill = low_ffmi_v0)) +
   geom_boxplot() +
   #geom_jitter(position = position_dodge(0.75)) +
@@ -133,7 +120,6 @@ ggsave(simpson_ffmi_v0, filename = "graphs/alphadiversity/simpson_ffmi_v0.pdf", 
 
 # Violin
 simpson_violin_ffmi_v0 <- alpha_v0 |> 
-  mutate(low_ffmi_v0 = fct_relevel(low_ffmi_v0, "yes", after = 0L)) |>  
   ggplot(aes(x = low_ffmi_v0, y = simpson)) +
   geom_violin(aes(fill = low_ffmi_v0), trim = FALSE) +
   geom_boxplot(fill = "white", width = 0.1) +
@@ -146,8 +132,7 @@ simpson_violin_ffmi_v0 <- alpha_v0 |>
     label = "p.signif"
   ) + 
   fill_cols_2 +
-  scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
-  scale_x_discrete(labels = c("yes" = "Low FFMI", "no" = "Moderate/high FFMI")) +
+  x_axis_labels_ffmi +
   theme_minimal_custom() +
   theme(legend.position = "none")
 ggsave(simpson_violin_ffmi_v0, filename = "graphs/alphadiversity/simpson_violin_ffmi_v0.pdf", width = 6, height = 5)
@@ -155,7 +140,6 @@ ggsave(simpson_violin_ffmi_v0, filename = "graphs/alphadiversity/simpson_violin_
 ## Richness ##
 # Boxplot
 richness_ffmi_v0 <- alpha_v0 |> 
-  mutate(low_ffmi_v0 = fct_relevel(low_ffmi_v0, "yes", after = 0L)) |> 
   ggplot(aes(x = low_ffmi_v0, y = richness, fill = low_ffmi_v0)) +
   geom_boxplot() +
   #geom_jitter(position = position_dodge(0.75)) +
@@ -168,7 +152,6 @@ ggsave(richness_ffmi_v0, filename = "graphs/alphadiversity/richness_ffmi_v0.pdf"
 
 # Violin
 richness_violin_ffmi_v0 <- alpha_v0 |> 
-  mutate(low_ffmi_v0 = fct_relevel(low_ffmi_v0, "yes", after = 0L)) |>  
   ggplot(aes(x = low_ffmi_v0, y = richness)) +
   geom_violin(aes(fill = low_ffmi_v0), trim = FALSE) +
   geom_boxplot(fill = "white", width = 0.1) +
@@ -181,8 +164,7 @@ richness_violin_ffmi_v0 <- alpha_v0 |>
     label = "p.signif"
   ) + 
   fill_cols_2 +
-  scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
-  scale_x_discrete(labels = c("yes" = "Low FFMI", "no" = "Moderate/high FFMI")) +
+  x_axis_labels_ffmi +
   theme_minimal_custom() +
   theme(legend.position = "none")
 ggsave(richness_violin_ffmi_v0, filename = "graphs/alphadiversity/richness_violin_ffmi_v0.pdf", width = 6, height = 5)
