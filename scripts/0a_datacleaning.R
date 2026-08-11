@@ -362,8 +362,14 @@ bia_abx_v0_ids <- baria_muscle_vars_meds |>
   pull(id) |> 
   unique()
 
-# 3. Available baseline microbiome/shotgun data
-mb_v0_ids <- sample_data(baria_mb) |> 
+# 3. Available & valid baseline microbiome/shotgun data
+# Keep single runs and first run of duplicated samples (after comparing 1st and 2nd runs)
+run1_mb <- prune_samples(
+  sample_data(baria_mb)$Extra_data == "NA" |sample_data(baria_mb)$Extra_data == "rep1",
+  baria_mb
+)
+
+mb_v0_ids <- sample_data(run1_mb) |> 
   data.frame() |> 
   filter(Time_Point == "V-1") |> 
   pull(Subject_ID) |> 
@@ -477,12 +483,6 @@ baria_muscle_wide <- baria_muscle_long |>
   mutate(across(where(is.character) & !matches("^id$"), as.factor))
 
 #### Microbiome Data Cleaning ####
-# Keep single runs and first run of duplicated samples (after comparing 1st and 2nd runs)
-run1_mb <- prune_samples(
-  sample_data(baria_mb)$Extra_data == "NA" |sample_data(baria_mb)$Extra_data == "rep1",
-  baria_mb
-)
-
 # Clean microbiome metadata
 sample_data(run1_mb)$visit <- case_when(
   sample_data(run1_mb)$Time_Point == "V-1" ~ "v0",
