@@ -496,6 +496,18 @@ sample_data(run1_mb)$id <- as.character(sample_data(run1_mb)$Subject_ID)
 # Restrict to final Baria muscle cohort
 baria_mb_clean <- prune_samples(sample_data(run1_mb)$id %in% bia_abx_mb_ids, run1_mb)
 
+# Add relevant metadata to mb
+baria_mb_metadata <- as(sample_data(baria_mb_clean), "data.frame") |> 
+  rownames_to_column(var = "Sample") |> 
+  left_join(
+    baria_muscle_wide |> 
+      select(id, sex, ffmi_v0, low_ffmi_v0),
+    by = "id"
+  ) |> 
+  column_to_rownames("Sample")
+
+sample_data(baria_mb_clean) <- sample_data(baria_mb_metadata)
+
 # Save clinical data as both RDS and csv files
 # Long clinical data
 write.csv(baria_muscle_long, "data/processed_data/260810_BARIA_muscle_long.csv")
