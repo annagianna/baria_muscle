@@ -399,8 +399,16 @@ baria_muscle_long <- baria_muscle_vars_meds |>
     ffmi = if_else(bia_valid, ffm_kg / ((height_cm / 100)^2), NA_real_),
     fmi = if_else(bia_valid, fm_kg / ((height_cm / 100)^2), NA_real_),
     smm_kg = if_else(bia_valid, ((height_cm^2) / bia_resistance_50khz * 0.401) + (age * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0), NA_real_),
-    smm_by_weight = smm_kg / weight_kg
+    smm_by_weight = smm_kg / weight_kg,
+
+    # Changes from baseline
+    perc_change_weight_kg = (weight_kg - weight_kg[visit == "v0"]) / weight_kg[visit == "v0"] * 100,
+    perc_change_ffm_kg = (ffm_kg - ffm_kg[visit == "v0"]) / ffm_kg[visit == "v0"] * 100,
+    perc_change_fm_kg = (fm_kg - fm_kg[visit == "v0"]) / fm_kg[visit == "v0"] * 100,
+    delta_ffmi = ffmi - ffmi[visit == "v0"],
+    perc_change_ffmi = (ffmi - ffmi[visit == "v0"]) / ffmi[visit == "v0"] * 100
   ) |>
+  ungroup() |>
   group_by(sex, visit) |> 
   mutate( # sex-specific tertiles
     ffmi_tertile = quantile(ffmi, probs = 1/3, na.rm = TRUE),
@@ -419,17 +427,11 @@ baria_muscle_wide <- baria_muscle_long |>
     names_from = visit,
     values_from =  c(
       all_of(long_vars), "n_years_from_v0", "age", "hba1c_percent", "homa_ir", "homa_b", "t2d_labs", "prediab_labs",
-      contains("ffmi"), contains("fmi"), contains("smm"), contains("bia_")
+      contains("ffmi"), contains("fmi"), contains("smm"), contains("bia_"), contains("perc_change_"), contains("delta_")
     ),
     names_glue = "{.value}_{visit}"
   ) |> 
   mutate(
-    across(c(weight_kg_v4, weight_kg_v5, weight_kg_v6), ~ (.x - weight_kg_v0) / weight_kg_v0 * 100, .names = "perc_change_{.col}"),
-    across(c(ffm_kg_v4, ffm_kg_v5), ~ (.x - ffm_kg_v0) / ffm_kg_v0 * 100, .names = "perc_change_{.col}"),
-    across(c(fm_kg_v4, fm_kg_v5), ~ (.x - fm_kg_v0) / fm_kg_v0 * 100, .names = "perc_change_{.col}"),
-    across(c(ffmi_v4, ffmi_v5), ~ (.x - ffmi_v0), .names = "delta_{.col}"),
-    across(c(ffmi_v4, ffmi_v5), ~ (.x - ffmi_v0) / ffmi_v0 * 100, .names = "perc_change_{.col}"),
-
     # New prediabetes occurence at follow-up in participants with NGT at baseline
     across(
       c(prediab_labs_v4, prediab_labs_v5),
@@ -494,12 +496,12 @@ sample_data(baria_mb_clean) <- sample_data(baria_mb_metadata)
 
 # Save clinical data as both RDS and csv files
 # Long clinical data
-write.csv(baria_muscle_long, "data/processed_data/260810_BARIA_muscle_long.csv")
-saveRDS(baria_muscle_long, "data/processed_data/260810_BARIA_muscle_long.RDS")
+write.csv(baria_muscle_long, "data/processed_data/260815_BARIA_muscle_long.csv")
+saveRDS(baria_muscle_long, "data/processed_data/260815_BARIA_muscle_long.RDS")
 
 # Wide clinical data
-write.csv(baria_muscle_wide, "data/processed_data/260810_BARIA_muscle_wide.csv")
-saveRDS(baria_muscle_wide, "data/processed_data/260810_BARIA_muscle_wide.RDS")
+write.csv(baria_muscle_wide, "data/processed_data/260815_BARIA_muscle_wide.csv")
+saveRDS(baria_muscle_wide, "data/processed_data/260815_BARIA_muscle_wide.RDS")
 
 # Save mb data
-saveRDS(baria_mb_clean, "data/processed_data/260811_BARIA_mb_clean.RDS")
+saveRDS(baria_mb_clean, "data/processed_data/260815_BARIA_mb_clean.RDS")
