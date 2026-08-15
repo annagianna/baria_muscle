@@ -43,10 +43,7 @@ baria_mb <- readRDS("data/processed_data/260815_BARIA_mb_clean.RDS")
 lm_ffmi_signif_v0 <- readRDS("tables/260811_model_ffmi_v0_1_signif.RDS")
 
 # Filter out poorly annotated ("GGB"-containing) taxa
-baria_mb_species <- prune_taxa(
-  str_detect(rownames(otu_table(baria_mb)), "GGB\\d+", negate = TRUE),
-  baria_mb
-)
+baria_mb_species <- prune_taxa(str_detect(rownames(otu_table(baria_mb)), "GGB\\d+", negate = TRUE), baria_mb)
 
 # Extract abundance matrix
 matrix_mb <- as(otu_table(baria_mb_species), "matrix") |> 
@@ -128,7 +125,7 @@ species_labels <- tibble(species = sort(unique(lmm_data_ffmi$species))) |>
 
 #### Model: Age, sex, %weight change ####
 ##### Model function ####
-run_lmm_ffmi <- function(lmm_data, follow_up) {
+run_lmm_ffmi <- function(lmm_data, follow_up, species_labels) {
 
   lmm_data |>
     filter(visit %in% c("v0", follow_up)) |>
@@ -152,16 +149,34 @@ run_lmm_ffmi <- function(lmm_data, follow_up) {
       visit = follow_up
     ) |>
     left_join(species_labels, by = "species")
-  
+
 }
 
-  # Significant species for each interval
-  lmm_ffmi_signif_species <- lmm_ffmi_results |> 
-    filter(signif == "significant") |> 
-    distinct(species) |> 
-    pull(species)
+# Run the function for each follow-up visit (v4 & v5)
+lmm_ffmi_v4_results <- run_lmm_ffmi(lmm_data = lmm_data_ffmi, follow_up = "v4", species_labels = species_labels)
+lmm_ffmi_v5_results <- run_lmm_ffmi(lmm_data = lmm_data_ffmi, follow_up = "v5", species_labels = species_labels)
 
-  # Unique species labels for significant species in each model
+# Combine results for both intervals
+lmm_ffmi_results <- bind_rows(lmm_ffmi_v4_results, lmm_ffmi_v5_results)
+
+lmm_ffmi_results |> 
+  count(visit, signif)
+
+lmm_ffmi_results |>
+  filter(signif == "significant") |>
+  arrange(visit, desc(abs(estimate))) |>
+  select(
+    visit,
+    species,
+    species_label,
+    estimate,
+    conf.low,
+    conf.high,
+    p.value,
+    p_fdr
+  )  
+
+# Unique species labels for significant species in each model
   lmm_ffmi_species_labels <- species_labels |> 
     filter(species %in% lmm_ffmi_signif_species) |> 
     arrange(species_label, species) |> 
@@ -176,62 +191,31 @@ run_lmm_ffmi <- function(lmm_data, follow_up) {
     ungroup() |> 
     select(species, species_label_unique)
 
-}
-
 # Combine v4 and v5 results
-lmm1_ffmi_results <- bind_rows(lmm1_ffmi_v4_results, lmm1_ffmi_v5_results) |> 
-  mutate(
-    follow_up = case_when(
-      term == "log10_baseline_abundance:visitv4" ~ "Baseline -> 1 year", 
-      #term == "log10_baseline_abundance:visitv5" ~ "Baseline -> 2 years"
-    )
-  )
+lmm1_ffmi_results <- bind_rows(lmm1_ffmi_v4_results, lmm1_ffmi_v5_results)
+  
+# Significant species
+lmm_ffmi_signif <- lmm_ffmi_results |>
+  filter(signif == "significant")
 
+# Species significant at both v4 and v5
+lmm_ffmi_overlap <- lmm_ffmi_signif |>
+  group_by(species) |>
+  filter(n_distinct(visit) == 2) |>
+  ungroup()
 
+# Species significant only at v4
+lmm_ffmi_v4_only <- lmm_ffmi_signif |>
+  group_by(species) |>
+  filter(n_distinct(visit) == 1, visit == "v4") |>
+  ungroup()
 
-## Overlap of significant species between y1 & y2 in model1 (age, sex) ##
-lmm1_ffmi_overlap <- lmm1_ffmi_v4_signif |> 
-  select(
-    species, 
-    term_v4 = term, 
-    estimate_v4 = estimate,
-    p.value_v4 = p.value,
-    p_fdr_v4 = p_fdr
-  ) |> 
-  inner_join(
-    lmm1_ffmi_v5_signif |> 
-      select(
-        species, 
-        term_v5 = term, 
-        estimate_v5 = estimate,
-        p.value_v5 = p.value,
-        p_fdr_v5 = p_fdr
-      ),
-      by = "species"
-  ) |> 
-  left_join(lmm1_ffmi_species_labels, by = "species") |> 
-  relocate(species_label_unique, .after = species) |> 
-  mutate(
-    posneg_v4 = if_else(estimate_v4 > 0, "positive", "negative"),
-    posneg_v5 = if_else(estimate_v5 > 0, "positive", "negative"),
-    consistent_direction = posneg_v4 == posneg_v5
-  ) |> 
-  arrange(p_fdr_v4, p_fdr_v5)
+# Species significant only at v5
+lmm_ffmi_v5_only <- lmm_ffmi_signif |>
+  group_by(species) |>
+  filter(n_distinct(visit) == 1, visit == "v5") |>
+  ungroup()
 
-lmm1_ffmi_overlap_species <- lmm1_ffmi_overlap |> 
-  pull(species)
-
-## Species significant in only one time interval ##
-# 1 year
-lmm1_ffmi_v4_only <- lmm1_ffmi_v4_signif |>
-  anti_join(lmm1_ffmi_v5_signif, by = "species") |> 
-  ungroup() |> 
-  arrange(desc(abs(estimate))) |> 
-  slice_head(n = 6) |> 
-  pull(species)
-
-lmm1_ffmi_plot_species <- c(lmm1_ffmi_overlap_species, lmm1_ffmi_v4_only, lmm1_ffmi_v5_only) |> 
-  unique()
 
 
 #### Plots ####
