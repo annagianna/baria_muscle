@@ -36,6 +36,9 @@ theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
 }
 
 renoir_15 <- met.brewer("Renoir", n = 15)
+color_manual_overlap_species <- scale_color_manual(
+  values = c("1 year" = renoir_15[5], "2 years" = renoir_15[3])
+)
 
 # Data
 baria_muscle_long <- readRDS("data/processed_data/260815_BARIA_muscle_long.RDS")
@@ -174,7 +177,14 @@ lmm_ffmi_overlap <- lmm_ffmi_signif |>
   group_by(species) |>
   filter(n_distinct(visit) == 2) |>
   ungroup() |> 
-  mutate(visit = case_when(visit == "v4" ~ "1 year", visit == "v5" ~ "2 years"))
+  mutate(
+    visit = factor(visit, levels = c("v4", "v5"), labels = c("1 year", "2 years")),
+    signif = factor(signif, levels = c("significant", "not significant"))
+  ) |> 
+  group_by(species_label_unique) |> 
+  mutate(estimate_v4 = estimate[visit == "1 year"]) |> 
+  ungroup() |> 
+  mutate(species_label_unique = fct_reorder(species_label_unique, estimate_v4))
 
 # Species significant only at v4
 lmm_ffmi_v4_only <- lmm_ffmi_signif |>
@@ -212,20 +222,31 @@ plot_ffmi_observed <- baria_muscle_long |>
   theme_minimal_custom()
 ggsave(plot = plot_ffmi_observed, filename = "graphs/lmm_species_ffmi/plot_ffmi_observed.pdf", width = 10, height = 8)
 
-
-#### Forest plot for v4 and v5 overlap species ####
-lmm_ffmi_overlap_plot <- lmm_ffmi_overlap |> 
-  
-
-
-
-
-
-
+#### Forest plots ####
+# Species significant in both v4 and v5
+lmm_ffmi_overlap_forest <- lmm_ffmi_overlap |> 
+  ggplot(aes(x = estimate, y = species_label_unique, group = visit, color = visit)) +
+  geom_vline(xintercept = 0, linetype = "dashed") + 
+  geom_errorbarh(
+    aes(xmin = conf.low, xmax = conf.high),
+    height = 0.5, 
+    position = position_dodge(width = 0.8, reverse = TRUE),
+    show.legend = FALSE
+  ) +
+  labs(
+    x = "Difference in predicted FFMI trajectory (kg/m²) per 1-unit increase in baseline log10 abundance",
+    y = NULL,
+    colour = NULL
+  ) +
+  geom_point(size = 2.5, position = position_dodge(width = 0.8, reverse = TRUE)) + 
+  color_manual_overlap_species +
+  theme_minimal_custom() +
+  theme(legend.position = "bottom", axis.text.y = element_text(face = "italic"))
+ggsave(plot = lmm_ffmi_overlap_forest, filename = "graphs/lmm_species_ffmi/lmm_ffmi_overlap_forest.pdf", width = 13, height = 8)
 
 
 #### Species overlapping with baseline associations ####
-lm_lmm_ffmi_overlap <- lmm1_ffmi_overlap |> 
+lm_lmm_ffmi_overlap <- lmm_ffmi_overlap |> 
   inner_join(
     lm_ffmi_signif_v0 |> 
       select(-species_label), 
