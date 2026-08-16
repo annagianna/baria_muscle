@@ -148,7 +148,7 @@ baria_muscle_vars <- baria_clinical_data_raw |>
       !is.na(bia_kg_diff) &
       bia_perc_diff <= 5 &
       bia_kg_diff <= 5 &
-      bia_resistance_valid %in% TRUE,
+      bia_resistance_valid %in% TRUE &
       !(id == "494" & visit == "v4")
 )
 
