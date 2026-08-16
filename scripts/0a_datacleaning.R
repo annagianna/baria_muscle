@@ -149,8 +149,10 @@ baria_muscle_vars <- baria_clinical_data_raw |>
       bia_perc_diff <= 5 &
       bia_kg_diff <= 5 &
       bia_resistance_valid %in% TRUE &
+      !(id == "30032" & visit == "v0") &
+      !(id == "30036" & visit == "v0") &
       !(id == "494" & visit == "v4") &
-      !(id == "73" & visit == "v4")
+      !(id == "73" & visit == "v4") 
 )
 
 ## Medication textbox cleaning
@@ -405,8 +407,8 @@ baria_muscle_long <- baria_muscle_vars_meds |>
 
     # Changes from baseline
     perc_change_weight_kg = (weight_kg - weight_kg[visit == "v0"]) / weight_kg[visit == "v0"] * 100,
-    perc_change_ffm_kg = (ffm_kg - ffm_kg[visit == "v0"]) / ffm_kg[visit == "v0"] * 100,
-    perc_change_fm_kg = (fm_kg - fm_kg[visit == "v0"]) / fm_kg[visit == "v0"] * 100,
+    perc_change_ffm_kg = if_else(bia_valid, (ffm_kg - ffm_kg[visit == "v0"]) / ffm_kg[visit == "v0"] * 100, NA_real_),
+    perc_change_fm_kg = if_else(bia_valid, (fm_kg - fm_kg[visit == "v0"]) / fm_kg[visit == "v0"] * 100, NA_real_),
     delta_ffmi = ffmi - ffmi[visit == "v0"],
     perc_change_ffmi = (ffmi - ffmi[visit == "v0"]) / ffmi[visit == "v0"] * 100
   ) |>
