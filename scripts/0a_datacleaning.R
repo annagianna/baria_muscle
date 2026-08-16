@@ -149,7 +149,8 @@ baria_muscle_vars <- baria_clinical_data_raw |>
       bia_perc_diff <= 5 &
       bia_kg_diff <= 5 &
       bia_resistance_valid %in% TRUE &
-      !(id == "494" & visit == "v4")
+      !(id == "494" & visit == "v4") &
+      !(id == "73" & visit == "v4")
 )
 
 ## Medication textbox cleaning
