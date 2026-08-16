@@ -41,8 +41,8 @@ color_manual_abundance <- scale_color_manual(values = c("Low baseline abundance"
 fill_manual_abundance <- scale_fill_manual(values = c("Low baseline abundance" = renoir_15[6], "High baseline abundance" = renoir_15[14]))
 
 # Data
-baria_muscle_long <- readRDS("data/processed_data/260815_BARIA_muscle_long.RDS")
-baria_mb <- readRDS("data/processed_data/260815_BARIA_mb_clean.RDS")
+baria_muscle_long <- readRDS("data/processed_data/260816_BARIA_muscle_long.RDS")
+baria_mb <- readRDS("data/processed_data/260816_BARIA_mb_clean.RDS")
 lm_ffmi_signif_v0 <- readRDS("tables/260816_model_ffmi_v0_1_signif.RDS")
 
 # Filter out poorly annotated ("GGB"-containing) taxa
@@ -284,6 +284,7 @@ write.csv(lm_lmm_ffmi_overlap_table, "tables/lm_lmm_ffmi_overlap_table.csv", row
 lm_lmm_plot_data <- lmm_data_ffmi |> 
   filter(species %in% lm_lmm_ffmi_overlap$species) |> 
   group_by(species) |> 
+  filter(any(visit %in% c("v4", "v5"))) |>
   mutate(
     abundance_tertile_low = quantile(baseline_abundance[visit == "v0"], probs = 1/3, na.rm = TRUE),
     abundance_tertile_high = quantile(baseline_abundance[visit == "v0"], probs = 2/3, na.rm = TRUE),
@@ -310,16 +311,19 @@ plot_ffmi_trajectory <- function(species_name, plot_data) {
   species_data <- plot_data |> 
     filter(species == species_name)
 
+  jitter_position <- position_jitter(width = 0.1, height = 0, seed = 2026)
+
   ggplot(species_data, aes(x = visit, y = ffmi, color = abundance_group, fill = abundance_group)) +
 
     # Individual trajectories
-    geom_line(aes(group = id), color = "grey60", alpha = 0.4, linewidth = 0.4) +
+    geom_line(aes(group = id), color = "grey70", alpha = 0.4, linewidth = 0.4, position = jitter_position) +
 
     # FFMI distribution
-    geom_boxplot(width = 0.4, alpha = 1, outlier.shape = NA, color = "black") +
+    stat_boxplot(geom = "errorbar", width = 0.1) +
+    geom_boxplot(width = 0.6, outlier.shape = NA, alpha = 0.4) +
 
     # Individual observations
-    geom_jitter(width = 0.05, colour = "grey70", alpha = 0.6, size = 0.5) +
+    geom_point(aes(color = abundance_group), width = 0.2, alpha = 0.8, size = 1, position = jitter_position) +
     
     facet_wrap(~ abundance_group) +
     
@@ -329,7 +333,7 @@ plot_ffmi_trajectory <- function(species_name, plot_data) {
       color = "Baseline abundance",
       fill = "Baseline abundance"
     ) +
-    #color_manual_abundance +
+    color_manual_abundance +
     fill_manual_abundance +
     theme_minimal_custom() +
     theme(
@@ -340,11 +344,11 @@ plot_ffmi_trajectory <- function(species_name, plot_data) {
 
 }
 
-# then run for each species
-plot_ffmi_trajectory(
-  species_name = lm_lmm_ffmi_overlap$species[1],
-  plot_data = lm_lmm_plot_data
-)
+# Run function for each species
+trajectory_plots <- map(lm_lmm_ffmi_overlap$species, ~ plot_ffmi_trajectory(species_name = .x, plot_data = lm_lmm_plot_data))
 
+# Save plots
+ggsave(plot = trajectory_plots[[1]], "graphs/lmm_species_ffmi/trajectory_species_1.pdf", width = 12, height = 7)
+ggsave(plot = trajectory_plots[[2]], "graphs/lmm_species_ffmi/trajectory_species_1.pdf", width = 12, height = 7)
+ggsave(plot = trajectory_plots[[3]], "graphs/lmm_species_ffmi/trajectory_species_1.pdf", width = 12, height = 7)
 
-# then ggsave
