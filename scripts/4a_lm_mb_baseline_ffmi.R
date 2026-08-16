@@ -311,10 +311,7 @@ forest_model_ffmi_123 <- models_ffmi_v0_123_results |>
     position = position_dodge(width = 0.8, reverse = TRUE),
     show.legend = FALSE
   ) +
-  geom_point(
-  size = 2.5,
-  position = position_dodge(width = 0.8, reverse = TRUE)
-  ) + 
+  geom_point(size = 2.5, position = position_dodge(width = 0.8, reverse = TRUE)) + 
   color_manual_models123 +
   shape_manual_signif +
   labs(
@@ -325,4 +322,4 @@ forest_model_ffmi_123 <- models_ffmi_v0_123_results |>
   ) +
   theme_minimal_custom() +
   theme(legend.position = "bottom", axis.text.y = element_text(face = "italic"))
-ggsave(plot = forest_model_ffmi_123, filename = "graphs/microbe_associations/forest_model_ffmi_123.pdf", device = cairo_pdf, width = 13, height = 8)
+ggsave(plot = forest_model_ffmi_123, filename = "graphs/microbe_associations/forest_model_ffmi_123.pdf", width = 13, height = 8)
