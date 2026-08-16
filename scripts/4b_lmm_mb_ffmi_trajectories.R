@@ -156,59 +156,25 @@ run_lmm_ffmi <- function(lmm_data, follow_up, species_labels) {
 lmm_ffmi_v4_results <- run_lmm_ffmi(lmm_data = lmm_data_ffmi, follow_up = "v4", species_labels = species_labels)
 lmm_ffmi_v5_results <- run_lmm_ffmi(lmm_data = lmm_data_ffmi, follow_up = "v5", species_labels = species_labels)
 
-# Combine results for both intervals
+# Combine results for both intervals (v4 & v5)
 lmm_ffmi_results <- bind_rows(lmm_ffmi_v4_results, lmm_ffmi_v5_results)
 
-lmm_ffmi_results |> 
-  count(visit, signif)
-
-lmm_ffmi_results |>
-  filter(signif == "significant") |>
-  arrange(visit, desc(abs(estimate))) |>
-  select(
-    visit,
-    species,
-    species_label,
-    estimate,
-    conf.low,
-    conf.high,
-    p.value,
-    p_fdr
-  )  
-
-# Unique species labels for significant species in each model
-  lmm_ffmi_species_labels <- species_labels |> 
-    filter(species %in% lmm_ffmi_signif_species) |> 
-    arrange(species_label, species) |> 
-    group_by(species_label) |> 
-    mutate(
-      species_label_unique = if(n() > 1) {
-        paste(species_label, sgb, sep = " ")
-      } else {
-        species_label
-      }
-    ) |> 
-    ungroup() |> 
-    select(species, species_label_unique)
-
-# Combine v4 and v5 results
-lmm1_ffmi_results <- bind_rows(lmm1_ffmi_v4_results, lmm1_ffmi_v5_results)
-  
 ## Significant species
 lmm_ffmi_signif <- lmm_ffmi_results |>
   filter(signif == "significant") |> 
   group_by(species_label) |>
   mutate(
     # add sgb identifier only for species appearing more than once in the significant results in both intervals
-    species_label_unique = if (n_distinct(species) > 1) {paste(species_label, sgb)} else {species_label}
-  ) |> 
+    species_label_unique = case_when(n_distinct(species) > 1 ~ paste(species_label, sgb), TRUE ~ species_label)
+  ) |>
   ungroup()
 
 # Species significant at both v4 and v5
 lmm_ffmi_overlap <- lmm_ffmi_signif |>
   group_by(species) |>
   filter(n_distinct(visit) == 2) |>
-  ungroup()
+  ungroup() |> 
+  mutate(visit = case_when(visit == "v4" ~ "1 year", visit == "v5" ~ "2 years"))
 
 # Species significant only at v4
 lmm_ffmi_v4_only <- lmm_ffmi_signif |>
@@ -221,16 +187,7 @@ lmm_ffmi_v5_only <- lmm_ffmi_signif |>
   group_by(species) |>
   filter(n_distinct(visit) == 1, visit == "v5") |>
   ungroup()
-
-# # Create unique species labels
-lmm_ffmi_overlap <- lmm_ffmi_overlap |>
-  group_by(species_label) |>
-  mutate(species_label_unique = if_else(n_distinct(species) > 1, paste(species_label, sgb), species_label)) |>
-  ungroup()
-
-lmm_ffmi_overlap |>
-  distinct(species, species_label_unique)
-
+  
 #### Plots ####
 #### Plot observed FFMI trajectories ####
 plot_ffmi_observed <- baria_muscle_long |> 
@@ -254,6 +211,13 @@ plot_ffmi_observed <- baria_muscle_long |>
   scale_x_discrete(expand = expansion(mult = c(0, 0.01))) +
   theme_minimal_custom()
 ggsave(plot = plot_ffmi_observed, filename = "graphs/lmm_species_ffmi/plot_ffmi_observed.pdf", width = 10, height = 8)
+
+
+#### Forest plot for v4 and v5 overlap species ####
+lmm_ffmi_overlap_plot <- lmm_ffmi_overlap |> 
+  
+
+
 
 
 
