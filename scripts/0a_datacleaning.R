@@ -148,7 +148,8 @@ baria_muscle_vars <- baria_clinical_data_raw |>
       !is.na(bia_kg_diff) &
       bia_perc_diff <= 5 &
       bia_kg_diff <= 5 &
-      bia_resistance_valid %in% TRUE
+      bia_resistance_valid %in% TRUE,
+      !(id == "494" & visit == "v4")
 )
 
 ## Medication textbox cleaning
@@ -496,12 +497,12 @@ sample_data(baria_mb_clean) <- sample_data(baria_mb_metadata)
 
 # Save clinical data as both RDS and csv files
 # Long clinical data
-write.csv(baria_muscle_long, "data/processed_data/260815_BARIA_muscle_long.csv")
-saveRDS(baria_muscle_long, "data/processed_data/260815_BARIA_muscle_long.RDS")
+write.csv(baria_muscle_long, "data/processed_data/260816_BARIA_muscle_long.csv")
+saveRDS(baria_muscle_long, "data/processed_data/260816_BARIA_muscle_long.RDS")
 
 # Wide clinical data
-write.csv(baria_muscle_wide, "data/processed_data/260815_BARIA_muscle_wide.csv")
-saveRDS(baria_muscle_wide, "data/processed_data/260815_BARIA_muscle_wide.RDS")
+write.csv(baria_muscle_wide, "data/processed_data/260816_BARIA_muscle_wide.csv")
+saveRDS(baria_muscle_wide, "data/processed_data/260816_BARIA_muscle_wide.RDS")
 
 # Save mb data
-saveRDS(baria_mb_clean, "data/processed_data/260815_BARIA_mb_clean.RDS")
+saveRDS(baria_mb_clean, "data/processed_data/260816_BARIA_mb_clean.RDS")
