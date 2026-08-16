@@ -43,8 +43,8 @@ color_manual_models123 <- scale_color_manual(
   ))
 
 # Data
-baria_muscle_wide <- readRDS("data/processed_data/260810_BARIA_muscle_wide.RDS")
-baria_mb <- readRDS("data/processed_data/260811_BARIA_mb_clean.RDS")
+baria_muscle_wide <- readRDS("data/processed_data/260816_BARIA_muscle_wide.RDS")
+baria_mb <- readRDS("data/processed_data/260816_BARIA_mb_clean.RDS")
 
 # Filter out poorly annotated ("GGB"-containing) taxa for species-level associations
 baria_mb_species <- prune_taxa(
@@ -185,7 +185,7 @@ model_ffmi_v0_1_signif <- model_ffmi_v0_1_results |>
   filter(p_fdr < 0.05) |> 
   arrange(p_fdr) |>
   relocate(species_label, .after = species)
-saveRDS(model_ffmi_v0_1_signif, "tables/260811_model_ffmi_v0_1_signif.RDS")
+saveRDS(model_ffmi_v0_1_signif, "tables/260816_model_ffmi_v0_1_signif.RDS")
 
 #### Model  2: Adjusted for age, sex and adiposity (FMI) ####
 # Fit one lm per species
