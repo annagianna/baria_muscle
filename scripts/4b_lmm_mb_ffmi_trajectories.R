@@ -43,7 +43,7 @@ color_manual_overlap_species <- scale_color_manual(
 # Data
 baria_muscle_long <- readRDS("data/processed_data/260815_BARIA_muscle_long.RDS")
 baria_mb <- readRDS("data/processed_data/260815_BARIA_mb_clean.RDS")
-lm_ffmi_signif_v0 <- readRDS("tables/260811_model_ffmi_v0_1_signif.RDS")
+lm_ffmi_signif_v0 <- readRDS("tables/260816_model_ffmi_v0_1_signif.RDS")
 
 # Filter out poorly annotated ("GGB"-containing) taxa
 baria_mb_species <- prune_taxa(str_detect(rownames(otu_table(baria_mb)), "GGB\\d+", negate = TRUE), baria_mb)
@@ -234,7 +234,7 @@ lmm_ffmi_overlap_forest <- lmm_ffmi_overlap |>
     show.legend = FALSE
   ) +
   labs(
-    x = "Difference in predicted FFMI trajectory (kg/m²) per 1-unit increase in baseline log10 abundance",
+    x = "Difference in FFMI change (kg/m²) per 1-unit increase in baseline log10 abundance",
     y = NULL,
     colour = NULL
   ) +
@@ -246,34 +246,37 @@ ggsave(plot = lmm_ffmi_overlap_forest, filename = "graphs/lmm_species_ffmi/lmm_f
 
 
 #### Species overlapping with baseline associations ####
+# Reshape longitudinal overlap results to wide format
 lm_lmm_ffmi_overlap <- lmm_ffmi_overlap |> 
+  mutate(visit = case_when(visit == "1 year" ~ "v4", visit == "2 years" ~ "v5")) |> 
+  select(species, species_label_unique, visit, estimate, p_fdr) |> 
+  pivot_wider(
+    names_from = visit,
+    values_from = c(estimate, p_fdr),
+    names_glue = "{.value}_{visit}"
+  ) |> 
   inner_join(
     lm_ffmi_signif_v0 |> 
-      select(-species_label), 
-    by = "species") |> 
-  rename(
-    estimate_v0 = estimate,
-    p_fdr_v0 = p_fdr
+      select(
+        species,
+        estimate_v0 = estimate,
+        p_fdr_v0 = p_fdr),
+    by = "species"
   ) |> 
-  select(species, species_label_unique, contains("p_fdr_"), contains("estimate")) |> 
-  relocate(contains("v0"), .before = contains("v4")) |> 
-  relocate(contains("v4"), .before = contains("v5"))
+  select(contains("species"), contains("p_fdr"), contains("estimate"))
 
 lm_lmm_ffmi_overlap_table <- lm_lmm_ffmi_overlap |>
+  relocate(contains("v0"), .before = contains("v4")) |> 
+  relocate(contains("v4"), .before = contains("v5")) |> 
   rename(
     Species = species_label_unique,
     `Baseline β` = estimate_v0,
-    `Baseline FDR` = p_fdr_v0,
+    `Baseline FDR p` = p_fdr_v0,
     `1-year β` = estimate_v4,
-    `1-year FDR` = p_fdr_v4,
+    `1-year FDR p` = p_fdr_v4,
     `2-year β` = estimate_v5,
-    `2-year FDR` = p_fdr_v5
+    `2-year FDR p` = p_fdr_v5
   ) |>
   select(-species)
-
-write.csv(
-  lm_lmm_ffmi_overlap_table,
-  "tables/lm_lmm_ffmi_overlap_table.csv",
-  row.names = FALSE
-)
+write.csv(lm_lmm_ffmi_overlap_table, "tables/lm_lmm_ffmi_overlap_table.csv", row.names = FALSE)
 
