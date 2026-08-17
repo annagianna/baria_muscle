@@ -74,13 +74,14 @@ humann_long <- humann |>
 #### Baseline pathway - FFMI associations ####
 # Prepare baseline data
 humann_v0 <- humann_long |>
+  filter(visit == "v0") |>
   left_join(
     baria_muscle_long |>
       filter(visit == "v0") |>
       select(id, age_v0, sex, t2d_v0, dm_meds_v0, statins_v0, ffmi, fmi) |>
       rename(ffmi_v0 = ffmi, fmi_v0 = fmi),
     by = "id"
-  ) 
+  )
 
 # Nest participant-level data separately for each pathway
 model_data_ffmi_v0_nested <- humann_v0 |>
@@ -128,20 +129,15 @@ model_pathway_ffmi_v0_3_signif <- model_pathway_ffmi_v0_3_results |>
   filter(p_fdr < 0.05) |>
   arrange(p_fdr)
 
-## Forest plot - model 2 signif pathways ##
-#### Forest plot for significant Model 2 pathways ####
-model_pathway_ffmi_v0_2_forest <- model_pathway_ffmi_v0_2_signif |>
-  mutate(
-    pathway_name = str_replace(pathway_name, "^.", \(x) str_to_upper(x)),
-    pathway_name = fct_reorder(pathway_name, estimate)
-  ) |>
-  ggplot(aes(x = estimate, y = pathway_name)) +
-  geom_vline(xintercept = 0, linetype = "dashed") +
-  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.5, color = renoir_15[2]) +
-  geom_point(size = 2.5, color = renoir_15[2]) +
-  labs(
-    x = "Difference in baseline FFMI (kg/m²) per 1-unit increase in log10 pathway abundance",
-    y = NULL
-  ) +
-  theme_minimal_custom()
-ggsave(plot = model_pathway_ffmi_v0_2_forest, filename = "graphs/humann/model_pathway_ffmi_v0_2_forest.pdf", width = 13, height = 8)
+# No pathways were significantly associated with baseline FFMI after FDR correction
+
+#### Baseline pathway abundance & FFMI trajectories LMMs ####
+# Prepare baseline pathway abundance
+humann_v0 <- humann_long |>
+  left_join(
+    baria_muscle_long |>
+      filter(visit == "v0") |>
+      select(id, age_v0, sex, t2d_v0, dm_meds_v0, statins_v0, ffmi, fmi) |>
+      rename(ffmi_v0 = ffmi, fmi_v0 = fmi),
+    by = "id"
+  ) 
