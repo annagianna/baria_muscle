@@ -29,6 +29,7 @@ theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
     )
 
 }
+renoir_15 <- met.brewer("Renoir", n = 15)
 
 # Data
 humann <- readRDS("data/raw_data/BARIA.humann4.profiles.2026.581.910.RDS")
@@ -94,6 +95,7 @@ run_pathway_lm <- function(model_data, model_formula) {
       model = map(data, \(x) lm(model_formula, data = x)),
       results = map(model, broom::tidy, conf.int = TRUE)
     ) |>
+    ungroup() |> # Remove pathway grouping before FDR correction across all pathways
     select(pathway_id, pathway_name, results) |>
     unnest(results) |>
     filter(term == "log10_pathway_abundance") |>
@@ -106,9 +108,40 @@ run_pathway_lm <- function(model_data, model_formula) {
 # Model formulas
 model1 <- ffmi_v0 ~ log10_pathway_abundance + age_v0 + sex
 model2 <- ffmi_v0 ~ log10_pathway_abundance + age_v0 + sex + fmi_v0
-model3 <- ffmi_v0 ~ log10_pathway_abundance + age_v0 + sex + fmi_v0 + t2d_v0 + dm_meds_v0 + statins_v0 # FMI/adiposity
+model3 <- ffmi_v0 ~ log10_pathway_abundance + age_v0 + sex + fmi_v0 + t2d_v0 + dm_meds_v0 + statins_v0
 
 # Run pathway LM for each model formula
 model_pathway_ffmi_v0_1_results <- run_pathway_lm(model_data_ffmi_v0_nested, model1)
 model_pathway_ffmi_v0_2_results <- run_pathway_lm(model_data_ffmi_v0_nested, model2)
 model_pathway_ffmi_v0_3_results <- run_pathway_lm(model_data_ffmi_v0_nested, model3)
+
+# Pathways significantly associated with baseline FFMI after FDR correction
+model_pathway_ffmi_v0_1_signif <- model_pathway_ffmi_v0_1_results |>
+  filter(p_fdr < 0.05) |>
+  arrange(p_fdr)
+
+model_pathway_ffmi_v0_2_signif <- model_pathway_ffmi_v0_2_results |>
+  filter(p_fdr < 0.05) |>
+  arrange(p_fdr)
+
+model_pathway_ffmi_v0_3_signif <- model_pathway_ffmi_v0_3_results |>
+  filter(p_fdr < 0.05) |>
+  arrange(p_fdr)
+
+## Forest plot - model 2 signif pathways ##
+#### Forest plot for significant Model 2 pathways ####
+model_pathway_ffmi_v0_2_forest <- model_pathway_ffmi_v0_2_signif |>
+  mutate(
+    pathway_name = str_replace(pathway_name, "^.", \(x) str_to_upper(x)),
+    pathway_name = fct_reorder(pathway_name, estimate)
+  ) |>
+  ggplot(aes(x = estimate, y = pathway_name)) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.5, color = renoir_15[2]) +
+  geom_point(size = 2.5, color = renoir_15[2]) +
+  labs(
+    x = "Difference in baseline FFMI (kg/m²) per 1-unit increase in log10 pathway abundance",
+    y = NULL
+  ) +
+  theme_minimal_custom()
+ggsave(plot = model_pathway_ffmi_v0_2_forest, filename = "graphs/humann/model_pathway_ffmi_v0_2_forest.pdf", width = 13, height = 8)
