@@ -354,7 +354,7 @@ bia_abx_v0_ids <- baria_muscle_vars_meds |>
 # 3. Available & valid baseline microbiome/shotgun data
 # Keep single runs and first run of duplicated samples (after comparing 1st and 2nd runs)
 run1_mb <- prune_samples(
-  sample_data(baria_mb)$Extra_data == "NA" |sample_data(baria_mb)$Extra_data == "rep1" & !str_detect(sample_data(baria_mb)$Time_Point, "^V\\d+re$"),
+  (sample_data(baria_mb)$Extra_data == "NA" | sample_data(baria_mb)$Extra_data == "rep1") & !str_detect(sample_data(baria_mb)$Time_Point, "^V\\d+re$"),
   baria_mb
 )
 
