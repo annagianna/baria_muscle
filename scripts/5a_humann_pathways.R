@@ -66,11 +66,49 @@ humann_long <- humann |>
   ) |> 
   mutate(pathway_abundance = replace_na(pathway_abundance, 0)) |> # Treat undetected pathways as zero abundance
   group_by(pathway_id) |> 
-  mutate(
-    # Keep pathways with at least > 5 CPM in at least 50% of baseline samples
-    prevalence_filter = mean(pathway_abundance[visit == "v0"] > 5, na.rm = TRUE) >= 0.5 
-  ) |> 
+  filter(mean(pathway_abundance[visit == "v0"] > 5) >= 0.5) |> # Keep pathways with >5 CPM in at least 50% of baseline samples
   ungroup() |> 
   mutate(log10_pathway_abundance = log10(pathway_abundance + 1))
 
+#### Baseline pathway - FFMI associations ####
+# Prepare baseline data
+humann_v0 <- humann_long |>
+  left_join(
+    baria_muscle_long |>
+      filter(visit == "v0") |>
+      select(id, age_v0, sex, t2d_v0, dm_meds_v0, statins_v0, ffmi, fmi) |>
+      rename(ffmi_v0 = ffmi, fmi_v0 = fmi),
+    by = "id"
+  ) 
 
+# Nest participant-level data separately for each pathway
+model_data_ffmi_v0_nested <- humann_v0 |>
+  group_by(pathway_id, pathway_name) |>
+  nest()
+
+# Function to run pathway LMs
+run_pathway_lm <- function(model_data, model_formula) {
+  
+  model_data |>
+    mutate(
+      model = map(data, \(x) lm(model_formula, data = x)),
+      results = map(model, broom::tidy, conf.int = TRUE)
+    ) |>
+    select(pathway_id, pathway_name, results) |>
+    unnest(results) |>
+    filter(term == "log10_pathway_abundance") |>
+    mutate(
+      p_fdr = p.adjust(p.value, method = "BH"),
+      signif = if_else(p_fdr < 0.05, "significant", "not significant")
+    )
+}
+
+# Model formulas
+model1 <- ffmi_v0 ~ log10_pathway_abundance + age_v0 + sex
+model2 <- ffmi_v0 ~ log10_pathway_abundance + age_v0 + sex + fmi_v0
+model3 <- ffmi_v0 ~ log10_pathway_abundance + age_v0 + sex + fmi_v0 + t2d_v0 + dm_meds_v0 + statins_v0 # FMI/adiposity
+
+# Run pathway LM for each model formula
+model_pathway_ffmi_v0_1_results <- run_pathway_lm(model_data_ffmi_v0_nested, model1)
+model_pathway_ffmi_v0_2_results <- run_pathway_lm(model_data_ffmi_v0_nested, model2)
+model_pathway_ffmi_v0_3_results <- run_pathway_lm(model_data_ffmi_v0_nested, model3)
