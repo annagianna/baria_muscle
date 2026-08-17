@@ -43,8 +43,8 @@ color_manual_models123 <- scale_color_manual(
   ))
 
 # Data
-baria_muscle_wide <- readRDS("data/processed_data/260816_BARIA_muscle_wide.RDS")
-baria_mb <- readRDS("data/processed_data/260816_BARIA_mb_clean.RDS")
+baria_muscle_wide <- readRDS("data/processed_data/260817_BARIA_muscle_wide.RDS")
+baria_mb <- readRDS("data/processed_data/260817_BARIA_mb_clean.RDS")
 
 # Filter out poorly annotated ("GGB"-containing) taxa for species-level associations
 baria_mb_species <- prune_taxa(
@@ -173,6 +173,7 @@ model_ffmi_v0_1_results <- model_ffmi_v0_1_tidy |>
   select(species, results) |> 
   unnest(results) |> 
   filter(term == "log10_abundance") |> # keep only abundance term
+  ungroup() |> # Remove species grouping before FDR correction across all species
   mutate(
     p_fdr = p.adjust(p.value, method = "BH"), # add FDR-adjusted p-values
     signif = if_else(p_fdr < 0.05, "significant", "not significant") # for plots
@@ -185,7 +186,6 @@ model_ffmi_v0_1_signif <- model_ffmi_v0_1_results |>
   filter(p_fdr < 0.05) |> 
   arrange(p_fdr) |>
   relocate(species_label, .after = species)
-saveRDS(model_ffmi_v0_1_signif, "tables/260816_model_ffmi_v0_1_signif.RDS")
 
 #### Model  2: Adjusted for age, sex and adiposity (FMI) ####
 # Fit one lm per species
@@ -206,6 +206,7 @@ model_ffmi_v0_2_results <- model_ffmi_v0_2_tidy |>
   select(species, results) |> 
   unnest(results) |> 
   filter(term == "log10_abundance") |> # keep only abundance term
+  ungroup() |> 
   mutate(
     p_fdr = p.adjust(p.value, method = "BH"), # add FDR-adjusted p-values
     signif = if_else(p_fdr < 0.05, "significant", "not significant") # for plots
@@ -238,6 +239,7 @@ model_ffmi_v0_3_results <- model_ffmi_v0_3_tidy |>
   select(species, results) |> 
   unnest(results) |> 
   filter(term == "log10_abundance") |> 
+  ungroup() |> 
   mutate(
     p_fdr = p.adjust(p.value, method = "BH"),
     signif = if_else(
@@ -255,71 +257,9 @@ model_ffmi_v0_3_signif <- model_ffmi_v0_3_results |>
   arrange(p_fdr) |> 
   relocate(species_label, .after = species)
 
-#### Prep model 1-3 results for a combined forest plot ####
-# Prepare data and labels to plot models 1-3 together
-# Species significant after FDR correction in at least one model
-models_ffmi_1_2_signif <- union(model_ffmi_v0_1_signif$species, model_ffmi_v0_2_signif$species)
-models_ffmi_123_signif <- union(models_ffmi_1_2_signif, model_ffmi_v0_3_signif$species)
-
-# Create unique labels only among (significant) species included in the combined figure
-models_ffmi_123_species_labels <- species_labels |> 
-  filter(species %in% models_ffmi_123_signif) |> 
-  arrange(species_label, species) |> 
-  group_by(species_label) |> 
-  mutate(
-    species_label_unique = if (n() > 1) {
-      paste(species_label, sgb, sep = " ")
-    } else {
-      species_label
-    }
-  ) |> 
-  ungroup() |> 
-  select(species, species_label_unique)
-
-# Combine estimates from all 3 models for species significant in at least one model
-models_ffmi_v0_123_results <- bind_rows(model_ffmi_v0_1_results, model_ffmi_v0_2_results, model_ffmi_v0_3_results) |> 
-  filter(species %in% models_ffmi_123_signif) |> 
-  select(-species_label) |> 
-  left_join(models_ffmi_123_species_labels, by = "species") |> # use unique labels
-  mutate(
-    model = factor(
-      model, 
-      levels = c("model1", "model2", "model3"), 
-      labels = c("Age and sex", "Age, sex and FMI", "Age, sex, FMI, T2D, antidiabetic medication and statin use"))
-  )
-
-# Order species according to model 1 estimates
-species_order_model1 <- models_ffmi_v0_123_results |> 
-  filter(model == "Age and sex") |> 
-  arrange(estimate) |> 
-  pull(species_label_unique)
-
-# Apply factor order
-models_ffmi_v0_123_results <- models_ffmi_v0_123_results |>
-  mutate(
-    species_label_unique = factor(species_label_unique, levels = species_order_model1),
-    signif = factor(signif, levels = c("significant", "not significant"))
-  )
-
-#### Combined forest plot for models 1-3 ####
-forest_model_ffmi_123 <- models_ffmi_v0_123_results |> 
-  ggplot(aes(x = estimate, y = species_label_unique, color = model, shape = signif, group = model)) +
-  geom_vline(xintercept = 0, linetype = "dashed") +
-  geom_errorbarh(
-    aes(xmin = conf.low, xmax = conf.high), 
-    height = 0.5, 
-    position = position_dodge(width = 0.8, reverse = TRUE),
-    show.legend = FALSE
-  ) +
-  geom_point(size = 2.5, position = position_dodge(width = 0.8, reverse = TRUE)) + 
-  color_manual_models123 +
-  shape_manual_signif +
-  labs(
-    x = "Difference in baseline FFMI (kg/m²) per 1-unit increase in log10 abundance",
-    y = NULL,
-    colour = NULL,
-    shape = "FDR p"
-  ) +
-  theme_minimal_custom() +
-  theme(legend.position = "bottom", axis.text.y = element_text(face = "italic"))
-ggsave(plot = forest_model_ffmi_123, filename = "graphs/microbe_associations/forest_model_ffmi_123.pdf", width = 13, height = 8)
+# Number of FDR-significant species per model
+c(
+  model1 = nrow(model_ffmi_v0_1_signif),
+  model2 = nrow(model_ffmi_v0_2_signif),
+  model3 = nrow(model_ffmi_v0_3_signif)
+)
