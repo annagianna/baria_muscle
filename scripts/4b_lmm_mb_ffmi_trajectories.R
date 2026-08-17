@@ -37,8 +37,14 @@ theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
 
 renoir_15 <- met.brewer("Renoir", n = 15)
 color_manual_overlap_species <- scale_color_manual(values = c("1 year" = renoir_15[5], "2 years" = renoir_15[3]))
-color_manual_abundance <- scale_color_manual(values = c("Low baseline abundance" = renoir_15[6], "High baseline abundance" = renoir_15[14]))
-fill_manual_abundance <- scale_fill_manual(values = c("Low baseline abundance" = renoir_15[6], "High baseline abundance" = renoir_15[14]))
+color_manual_abundance <- scale_color_manual(
+  values = c("Low baseline abundance" = renoir_15[6], "High baseline abundance" = renoir_15[14]),
+  labels = c("Low baseline abundance" = "Low", "High baseline abundance" = "High")
+)
+fill_manual_abundance <- scale_fill_manual(
+  values = c("Low baseline abundance" = renoir_15[6], "High baseline abundance" = renoir_15[14]),
+  labels = c("Low baseline abundance" = "Low", "High baseline abundance" = "High")
+)
 
 # Data
 baria_muscle_long <- readRDS("data/processed_data/260816_BARIA_muscle_long.RDS")
@@ -103,7 +109,7 @@ lmm_data_ffmi <- mb_v0 |>
   select(-visit, -Sample) |> 
   inner_join(
     baria_muscle_lmm |> 
-      select(id, visit, ffmi, perc_change_weight_kg, age_centered_v0, sex),
+      select(id, visit, ffmi, perc_change_weight_kg, perc_change_ffmi, delta_ffmi, age_centered_v0, sex),
     by = "id"
   ) |> 
   group_by(species) |> 
@@ -323,15 +329,15 @@ plot_ffmi_trajectory <- function(species_name, plot_data) {
     geom_boxplot(width = 0.6, outlier.shape = NA, alpha = 0.4) +
 
     # Individual observations
-    geom_point(aes(color = abundance_group), width = 0.2, alpha = 0.8, size = 1, position = jitter_position) +
+    geom_point(aes(color = abundance_group), alpha = 0.8, size = 1, position = jitter_position) +
     
     facet_wrap(~ abundance_group) +
     
     labs(
       title = unique(species_data$species_label_unique),
       x = NULL, y = "FFMI (kg/m²)",
-      color = "Baseline abundance",
-      fill = "Baseline abundance"
+      color = "Baseline log10-abundance",
+      fill = "Baseline log10-abundance"
     ) +
     color_manual_abundance +
     fill_manual_abundance +
@@ -348,7 +354,53 @@ plot_ffmi_trajectory <- function(species_name, plot_data) {
 trajectory_plots <- map(lm_lmm_ffmi_overlap$species, ~ plot_ffmi_trajectory(species_name = .x, plot_data = lm_lmm_plot_data))
 
 # Save plots
-ggsave(plot = trajectory_plots[[1]], "graphs/lmm_species_ffmi/trajectory_species_1.pdf", width = 12, height = 7)
-ggsave(plot = trajectory_plots[[2]], "graphs/lmm_species_ffmi/trajectory_species_1.pdf", width = 12, height = 7)
-ggsave(plot = trajectory_plots[[3]], "graphs/lmm_species_ffmi/trajectory_species_1.pdf", width = 12, height = 7)
+map2(
+  trajectory_plots, seq_along(trajectory_plots), 
+  ~ ggsave(plot = .x, filename = paste0("graphs/lmm_species_ffmi/trajectory_species_", .y, ".pdf"), width = 12, height = 7),
+)
 
+### Plot %FFMI change between high and low abundance groups of significant overlap species ###
+# Plot function
+plot_perc_ffmi_change <- function(species_name, plot_data) {
+
+  species_data <- plot_data |> 
+    filter(
+      species == species_name,
+      visit %in% c("1 year", "2 years")
+    )
+
+  jitterdodge_position <- position_jitterdodge(jitter.width = 0.2, dodge.width = 0.75, seed = 2026)
+
+  ggplot(species_data, aes(x = visit, y = perc_change_ffmi, color = abundance_group, fill = abundance_group)) +
+
+    # FFMI distribution
+    stat_boxplot(geom = "errorbar", width = 0.15, position = position_dodge(width = 0.75)) +
+    geom_boxplot(width = 0.6, outlier.shape = NA, alpha = 0.4, position = position_dodge(width = 0.75)) +
+
+    # Individual observations
+    geom_point(alpha = 0.8, size = 1, position = jitterdodge_position) +
+    
+    labs(
+      title = unique(species_data$species_label_unique),
+      x = NULL, y = "FFMI change from baseline (%)",
+      color = "Baseline log10-abundance",
+      fill = "Baseline log10-abundance"
+    ) +
+    color_manual_abundance +
+    fill_manual_abundance +
+    theme_minimal_custom() +
+    theme(
+      plot.title = element_text(face = "italic"),
+      legend.position = "bottom"
+  )
+
+}
+
+# Run function for each species
+perc_ffmi_change_plots <- map(lm_lmm_ffmi_overlap$species, ~ plot_perc_ffmi_change(species_name = .x, plot_data = lm_lmm_plot_data))
+
+# Save plots
+map2(
+  perc_ffmi_change_plots, seq_along(perc_ffmi_change_plots), 
+  ~ ggsave(plot = .x, filename = paste0("graphs/lmm_species_ffmi/perc_ffmi_change_plots_", .y, ".pdf"), width = 12, height = 7),
+)
