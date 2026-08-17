@@ -354,7 +354,7 @@ bia_abx_v0_ids <- baria_muscle_vars_meds |>
 # 3. Available & valid baseline microbiome/shotgun data
 # Keep single runs and first run of duplicated samples (after comparing 1st and 2nd runs)
 run1_mb <- prune_samples(
-  sample_data(baria_mb)$Extra_data == "NA" |sample_data(baria_mb)$Extra_data == "rep1",
+  sample_data(baria_mb)$Extra_data == "NA" |sample_data(baria_mb)$Extra_data == "rep1" & !str_detect(sample_data(baria_mb)$Time_Point, "^V\\d+re$"),
   baria_mb
 )
 
@@ -500,12 +500,13 @@ sample_data(baria_mb_clean) <- sample_data(baria_mb_metadata)
 
 # Save clinical data as both RDS and csv files
 # Long clinical data
-write.csv(baria_muscle_long, "data/processed_data/260816_BARIA_muscle_long.csv")
-saveRDS(baria_muscle_long, "data/processed_data/260816_BARIA_muscle_long.RDS")
+write.csv(baria_muscle_long, "data/processed_data/260817_BARIA_muscle_long.csv")
+saveRDS(baria_muscle_long, "data/processed_data/260817_BARIA_muscle_long.RDS")
 
 # Wide clinical data
-write.csv(baria_muscle_wide, "data/processed_data/260816_BARIA_muscle_wide.csv")
-saveRDS(baria_muscle_wide, "data/processed_data/260816_BARIA_muscle_wide.RDS")
+write.csv(baria_muscle_wide, "data/processed_data/260817_BARIA_muscle_wide.csv")
+saveRDS(baria_muscle_wide, "data/processed_data/260817_BARIA_muscle_wide.RDS")
 
 # Save mb data
-saveRDS(baria_mb_clean, "data/processed_data/260816_BARIA_mb_clean.RDS")
+saveRDS(baria_mb_clean, "data/processed_data/260817_BARIA_mb_clean.RDS")
+
