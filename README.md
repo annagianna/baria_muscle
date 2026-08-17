@@ -9,14 +9,16 @@ is the **gut–muscle axis**: skeletal muscle as a tissue-level link between
 post-surgical microbiome shifts and metabolic outcomes.
 
 - **Cohort:** BARIA longitudinal bariatric-surgery cohort (Amsterdam UMC)
-- **Microbiome:** shotgun metagenomics — MetaPhlAn taxonomic profiles
+- **Microbiome:** shotgun metagenomics — MetaPhlAn taxonomic profiles and HUMAnN functional-pathway profiles
 - **Clinical:** clinical, anthropometric and BIA-derived measures
 - **Language:** R
 
 The code covers data cleaning and the baseline (cross-sectional) analyses —
 microbiome composition and diversity, and per-species associations with FFMI —
 together with a longitudinal mixed-model layer relating baseline species abundance
-to FFMI trajectory after surgery.
+to FFMI trajectory after surgery. A functional-pathway layer (HUMAnN) is being
+added on top of the taxonomic analyses, starting with pathway cleaning and
+prevalence filtering.
 
 ---
 
@@ -28,14 +30,22 @@ baria_muscle/
 │   ├── 0a_datacleaning.R              # Clinical + microbiome cleaning, derived variables, cohort definition
 │   ├── 1a_tableone.R                  # Table 1, stratified by baseline FFMI status
 │   ├── 2a_mb_alphadiversity.R         # Alpha diversity (Shannon, Simpson, observed richness)
-│   ├── 2b_mb_betadiversity.R          # Beta diversity (Bray–Curtis + PCoA)
+│   ├── 2b_mb_betadiversity.R          # Beta diversity (Bray–Curtis PCoA + PERMANOVA / dispersion)
 │   ├── 2c_mb_composition.R            # Compositional bar plots (top 20 species, by baseline FFMI group)
-│   ├── 4a_lm_mb_baseline_ffmi.R       # Cross-sectional linear models: species abundance ~ FFMI (baseline)
-│   ├── 4b_lmm_mb_ffmi_trajectories.R  # Linear mixed models: baseline abundance ~ FFMI trajectory
-│   └── 4c_lm_lmm_ffmi_dags.R          # DAGs + adjustment sets for the models in 4a / 4b
+│   ├── 4a_lm_mb_baseline_ffmi.R       # Cross-sectional linear models: species abundance ~ baseline FFMI
+│   ├── 4b_lmm_mb_ffmi_trajectories.R  # Mixed models: baseline abundance × FFMI trajectory + overlap with 4a
+│   ├── 4c_lm_lmm_ffmi_dags.R          # DAGs + adjustment sets for the models in 4a / 4b
+│   └── 5a_humann_pathways.R           # Functional pathways (HUMAnN): cleaning + prevalence filtering
 ├── data/
 │   ├── raw_data/                      # Inputs (not tracked — see Data)
-│   └── processed_data/                # Cleaned outputs written by 0a
+│   └── processed_data/                # Cleaned datasets written by 0a
+├── tables/                            # Table 1, saved model-result objects, overlap tables
+├── graphs/                            # Figures, in per-analysis subfolders
+│   ├── alphadiversity/                #   2a
+│   ├── betadiversity/                 #   2b
+│   ├── composition/                   #   2c
+│   ├── microbe_associations/          #   4a combined forest plot
+│   └── lmm_species_ffmi/              #   4b trajectory / overlap plots
 └── README.md
 ```
 
@@ -44,7 +54,11 @@ baria_muscle/
 `0a` runs first — it writes the processed datasets every other script reads.
 `1a` and the `2*` descriptive scripts are independent of one another. The `4*`
 association scripts depend on the processed data from `0a`; `4c` defines the DAGs
-and adjustment sets that the models in `4a` / `4b` implement.
+and adjustment sets that the models in `4a` / `4b` implement. `4a` runs before
+`4b`: it saves the baseline significant-species object that `4b` reads to
+cross-reference the cross-sectional and longitudinal hits. `5a` reads the raw
+HUMAnN profiles together with the processed data from `0a`, and is otherwise
+independent of the taxonomic scripts.
 
 ---
 
@@ -56,6 +70,7 @@ and adjustment sets that the models in `4a` / `4b` implement.
 |------|-------------|
 | `BARIA.clinical.<date>.RDS` | Clinical, anthropometric and BIA data |
 | `ps.BARIA.metaphlan.<...>.RDS` | MetaPhlAn shotgun phyloseq object (per-sample relative abundances) |
+| `BARIA.humann4.profiles.<...>.RDS` | HUMAnN 4.0 community functional-pathway profiles (per-sample pathway abundances, CPM) |
 
 **Outputs** (written by `0a` to `data/processed_data/`):
 
@@ -121,7 +136,9 @@ Applied per baseline record:
   not computed.
 
 Records failing any check at baseline are excluded from the analysis cohort
-(together with the antibiotic and shotgun-availability criteria above).
+(together with the antibiotic and shotgun-availability criteria above). A small
+number of individually reviewed records are additionally hard-excluded (their BIA
+marked invalid) in `0a`, flagged in-line for supervisor review.
 
 ### Permitted manual corrections
 
@@ -281,11 +298,12 @@ Two of these carry into the modelling: **antibiotics** are a cohort exclusion
 
 ### Association models (`4a`, `4b`)
 
-- **Species filtering (for the models only).** A species is kept if detected in
+- **Species set (for the models only).** Poorly annotated taxa (uncharacterised
+  `GGB` genome bins) are dropped first. A species is then kept if detected in
   **≥ 20%** of baseline samples **and** its mean relative abundance is
   **≥ 0.01%**. Abundances enter the models on a `log10` scale with a
-  half-minimum pseudocount, `log10(abundance + min_abundance/2)`. p-values are
-  FDR-adjusted across species.
+  species-specific half-minimum pseudocount, `log10(abundance + min_abundance/2)`.
+  p-values are FDR-adjusted (Benjamini–Hochberg) across species within each model.
 - **Cross-sectional linear models (`4a`).** Fitted per species as
   `FFMI_v0 ~ log10_abundance + covariates`, in three nested specifications that
   implement the three DAGs in `4c`:
@@ -293,9 +311,25 @@ Two of these carry into the modelling: **antibiotics** are a cohort exclusion
   - *Model 2* (adiposity sensitivity) — `+ age + sex + FMI`
   - *Model 3* (extended sensitivity) — `+ age + sex + FMI + T2D + antidiabetic
     medication + statins`
+
+  The three models are drawn together in a combined forest plot
+  (`graphs/microbe_associations/`), and the Model-1 significant-species object is
+  saved to `tables/` for use by `4b`.
 - **Longitudinal mixed models (`4b`).** Baseline abundance against FFMI
-  trajectory, as `FFMI ~ log10_baseline_abundance * visit + age + sex + (1 | id)`
-  (random intercept per participant), fitted with `lmerTest`.
+  trajectory, fitted per species with `lmerTest` (ML) as
+  `FFMI ~ log10_baseline_abundance * visit + age_centred + sex + %weight_change +
+  (1 | id)` (random intercept per participant). The term of interest is the
+  `log10_baseline_abundance × visit` interaction — whether baseline abundance
+  predicts the *change* in FFMI. The model is run separately for each
+  post-surgical follow-up (`v4`, `v5`; labelled 1-year and 2-year in the figures),
+  and species are flagged as significant at each interval, at **both** intervals
+  (overlap), or at one only.
+- **Cross-sectional × longitudinal overlap (`4b`).** The longitudinal overlap
+  hits are then cross-referenced against the baseline hits from `4a`, giving a
+  combined table of baseline, 1-year and 2-year effect sizes
+  (`tables/lm_lmm_ffmi_overlap_table.csv`). For those species, `4b` also draws
+  observed-trajectory and %-FFMI-change plots comparing high vs low
+  baseline-abundance tertile groups (`graphs/lmm_species_ffmi/`).
 
 ### DAG-based adjustment (`4c`)
 
@@ -304,6 +338,21 @@ without conditioning on mediators or colliders. Insulin resistance is treated as
 co-outcome rather than a confounder; BMI is avoided as an over-adjustment, since
 FFMI already height-normalises. Model 2 adds adiposity (FMI); Model 3 additionally
 conditions on T2D, antidiabetic medication and statins.
+
+### Functional pathways (`5a`)
+
+Community-level functional-pathway profiles from **HUMAnN 4.0** (MetaCyc pathways,
+HUMAnN's native output), the encoded-function layer that sits on top of the
+taxonomic analyses. This script currently covers cleaning and filtering; modelling
+against FFMI is not yet implemented.
+
+- Profiles are reshaped to long form; sample names are harmonised to the MetaPhlAn
+  convention and restricted to **faecal** samples present in the cleaned cohort.
+- The `UNMAPPED` and `UNINTEGRATED` categories are removed, and each pathway string
+  is split into its identifier and name.
+- Undetected pathways are set to zero. A pathway is retained if it exceeds
+  **5 CPM** in **≥ 50%** of baseline samples, and abundances are `log10`-transformed
+  with a `+1` pseudocount.
 
 ---
 
