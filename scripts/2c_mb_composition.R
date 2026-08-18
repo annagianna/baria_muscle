@@ -36,7 +36,7 @@ theme_minimal_composition <- function(base_size = 14, base_family = "sans") {
 renoir_20 <- met.brewer("Renoir", n = 20)
 
 # Data
-baria_mb <- readRDS("data/processed_data/260816_BARIA_mb_clean.RDS") # already contains necessary metadata for the grouping
+baria_mb <- readRDS("data/processed_data/260818_BARIA_mb_clean.RDS") # already contains necessary metadata for the grouping
 
 # Melt into df
 melted_mb <- psmelt(baria_mb)
