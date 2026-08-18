@@ -464,7 +464,7 @@ baria_muscle_wide <- baria_muscle_long |>
       starts_with("perc_change_ffmi_v") & !ends_with("_tertile"), 
       ~ if_else(
         .x <= quantile(.x, probs = 1/3, na.rm = TRUE),
-        "high", "low/modest"
+        "high", "modest/low"
       ),
       .names = "{.col}_group"
     )
@@ -489,10 +489,10 @@ baria_mb_clean <- prune_samples(sample_data(run1_mb)$id %in% bia_abx_mb_ids, run
 # Add relevant metadata to mb
 baria_mb_metadata <- as(sample_data(baria_mb_clean), "data.frame") |> 
   rownames_to_column(var = "Sample") |>
-  select(-any_of(c("sex", "ffmi_v0", "low_ffmi_v0"))) |>
+  select(-any_of(c("sex", "ffmi_v0", "low_ffmi_v0", "perc_change_ffmi_v4_group", "perc_change_ffmi_v5_group"))) |>
   left_join(
     baria_muscle_wide |> 
-      select(id, sex, ffmi_v0, low_ffmi_v0),
+      select(id, sex, ffmi_v0, low_ffmi_v0, perc_change_ffmi_v4_group, perc_change_ffmi_v5_group),
     by = "id"
   ) |> 
   column_to_rownames("Sample")
