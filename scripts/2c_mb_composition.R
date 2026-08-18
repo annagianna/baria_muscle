@@ -103,7 +103,7 @@ species_comp_ffmi_v0 <- species_ffmi_v0 |>
     position = position_stack(reverse = TRUE)
   ) +
   scale_fill_manual(values = top20_species_v0_low_colours) +
-  guides(fill = guide_legend(ncol = 1)) +
+  guides(fill = guide_legend(ncol = 1, reverse = TRUE)) +
   labs(x = NULL, y = "Relative abundance (%)", title = "Species", fill = "") +
   scale_x_discrete(labels = c("yes" = "Low FFMI", "no" = "Moderate/high FFMI")) +
   scale_y_continuous(expand = c(0, 0)) +
