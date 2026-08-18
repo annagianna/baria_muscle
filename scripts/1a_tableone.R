@@ -6,7 +6,7 @@ library(tidyverse)
 library(tableone)
 
 # Data
-baria_muscle_wide <- readRDS("data/processed_data/260816_BARIA_muscle_wide.RDS")
+baria_muscle_wide <- readRDS("data/processed_data/260818_BARIA_muscle_wide.RDS")
 
 #### Table 1 grouped by FFMI status at baseline (participants with available shotgun data) ####
 # Choose vars
