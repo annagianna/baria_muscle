@@ -43,8 +43,8 @@ color_manual_models123 <- scale_color_manual(
   ))
 
 # Data
-baria_muscle_wide <- readRDS("data/processed_data/260817_BARIA_muscle_wide.RDS")
-baria_mb <- readRDS("data/processed_data/260817_BARIA_mb_clean.RDS")
+baria_muscle_wide <- readRDS("data/processed_data/260818_BARIA_muscle_wide.RDS")
+baria_mb <- readRDS("data/processed_data/260818_BARIA_mb_clean.RDS")
 
 # Filter out poorly annotated ("GGB"-containing) taxa for species-level associations
 baria_mb_species <- prune_taxa(
@@ -187,7 +187,7 @@ model_ffmi_v0_1_signif <- model_ffmi_v0_1_results |>
   arrange(p_fdr) |>
   relocate(species_label, .after = species)
 
-#### Model  2: Adjusted for age, sex and adiposity (FMI) ####
+#### Model 2: Adjusted for age, sex and adiposity (FMI) ####
 # Fit one lm per species
 model_ffmi_v0_2 <- model_data_ffmi_v0_nested |> 
   mutate( # add model as a new col to the (nested) df
@@ -262,4 +262,12 @@ c(
   model1 = nrow(model_ffmi_v0_1_signif),
   model2 = nrow(model_ffmi_v0_2_signif),
   model3 = nrow(model_ffmi_v0_3_signif)
+)
+
+# checks
+c(
+  n_species_tested = length(species_v0_keep),
+  model1_results = nrow(model_ffmi_v0_1_results),
+  model2_results = nrow(model_ffmi_v0_2_results),
+  model3_results = nrow(model_ffmi_v0_3_results)
 )
