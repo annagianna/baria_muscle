@@ -46,8 +46,8 @@ fill_manual_abundance <- scale_fill_manual(
 )
 
 # Data
-baria_muscle_long <- readRDS("data/processed_data/260817_BARIA_muscle_long.RDS")
-baria_mb <- readRDS("data/processed_data/260817_BARIA_mb_clean.RDS")
+baria_muscle_long <- readRDS("data/processed_data/260818_BARIA_muscle_long.RDS")
+baria_mb <- readRDS("data/processed_data/260818_BARIA_mb_clean.RDS")
 
 # Filter out poorly annotated ("GGB"-containing) taxa
 baria_mb_species <- prune_taxa(str_detect(rownames(otu_table(baria_mb)), "GGB\\d+", negate = TRUE), baria_mb)
@@ -77,7 +77,7 @@ species_v0_prevalence <- colMeans(species_v0 > 0, na.rm = FALSE) # (= proportion
 species_v0_abundance <- colMeans(species_v0, na.rm = FALSE) # mean relative abundance per species
 
 ## Filter
-# Keep species detected in at least 20% of baseline samples, with mean relative abundance >= 0.01%
+# Keep species detected in at least 30% of baseline samples, with mean relative abundance >= 0.01%
 species_v0_keep <- tibble(
   species = names(species_v0_prevalence),
   prevalence_v0 = species_v0_prevalence,
@@ -247,3 +247,11 @@ plot_perc_ffmi_change_v4 <- lmm_v4_plot_data |>
   theme(plot.title = element_text(face = "italic"), legend.position = "none")
 ggsave(plot = plot_perc_ffmi_change_v4, filename = "graphs/lmm_species_ffmi/plot_perc_ffmi_change_v4_signif.pdf", width = 8, height = 7)
 
+
+c(
+  n_species_tested = length(species_v0_keep),
+  v4_results = nrow(lmm_ffmi_v4_results),
+  v5_results = nrow(lmm_ffmi_v5_results),
+  v4_signif = nrow(lmm_ffmi_v4_signif),
+  v5_signif = nrow(lmm_ffmi_v5_signif)
+)
