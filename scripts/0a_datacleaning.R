@@ -43,6 +43,10 @@ baria_muscle_vars <- baria_clinical_data_raw |>
     # v2-v5 (Repeated vars)
     matches("^V[2-5]_(date|bmi|weight|taille|tbf|tbf_percent|ffm|ffm_percent|rawdata_50Khz_Resistance|upperleg|min0gluc|min0insulin|min0glucagon|min0cpept|hba1c|hba1c__IFCC_mmolmol|crp)$"),
 
+    # v4-v5 medication free text
+    medication_list_v4 = Medication_v4_freetext,
+    medication_list_v5 = medication_v5_freetext,
+
     # v6 (5 years)
     date_v6 = V6_date, bmi_v6 = V6_bmi_1, weight_kg_v6 = V6_weight_1, wc_cm_v6 = V6_taille_1, fm_kg_v6 = V6_tbf_1, fm_percent_v6 = V6_tbf_percent_1,
     ffm_kg_v6 = V6_ffm_1, ffm_percent_v6 = V6_ffm_percent_1, bia_resistance_50khz_v6 = V6_rawdata_1_50Khz_Resistance, upperleg_cm_v6 = V6_upperleg_1,
@@ -156,35 +160,38 @@ baria_muscle_vars <- baria_clinical_data_raw |>
 )
 
 ## Medication textbox cleaning
-baria_muscle_vars_meds_notypos <- baria_muscle_vars |>
-  mutate(medication_list_v0 = str_to_lower(medication_list_v0)) |> 
+medication_list_vars <- c("medication_list_v0", "medication_list_v4", "medication_list_v5")
+
+baria_muscle_vars_meds <- baria_muscle_vars |>
   mutate(
-    medication_list_v0 = if_else(
-      medication_list_v0 %in% c("geen", "geen medicatie"),
-      "none",
-      medication_list_v0 # replaced "geen" and "geen medicatie" with english "none"
-      ), # fix typos I noticed in the medication list
-    medication_list_v0 = str_replace_all(medication_list_v0,"\\bamitriptiline\\b", "amitriptyline"),
-    medication_list_v0 = str_replace_all(medication_list_v0,"\\bduloxatine\\b", "duloxetine"),
-    medication_list_v0 = str_replace_all(medication_list_v0,"\\bariprazol\\b", "aripiprazol"),
-    medication_list_v0 = str_replace_all(medication_list_v0,"\\bnifidipine\\b", "nifedipine"),
-    medication_list_v0 = str_replace_all(medication_list_v0,"\\bevothyroxine\\b", "levothyroxine"),
-    medication_list_v0 = str_replace_all(medication_list_v0,"\\bglicliazide\\b", "gliclazide"),
-    medication_list_v0 = str_replace_all(medication_list_v0,"\\bglicazide\\b", "gliclazide"),
-    medication_list_v0 = str_replace_all(medication_list_v0,"\\bamlopdipine\\b", "amlodipine"),
-    medication_list_v0 = str_replace_all(medication_list_v0,"\\bzitalopram\\b", "citalopram"),
-    medication_list_v0 = str_replace_all(medication_list_v0,"\\bperinopril\\b", "perindopril"),
-    medication_list_v0 = str_replace_all(medication_list_v0,"\\bvenlaflaxine\\b", "venlafaxine"),
-    medication_list_v0 = str_replace_all(medication_list_v0,"\\bglimerpiride\\b", "glimepiride"),
-    medication_list_v0 = str_replace_all(medication_list_v0,"\\bhydrchloorthiazide\\b", "hct"),
-    medication_list_v0 = str_replace_all(medication_list_v0,"\\bhydrochloorthiazide\\b", "hct"),
-    medication_list_v0 = str_replace_all(medication_list_v0,"\\bpnatoprazol\\b", "pantoprazole"),
-    medication_list_v0 = str_replace_all(medication_list_v0,"\\bomeprazol\\b", "omeprazole"),
-    medication_list_v0 = str_replace_all(medication_list_v0,"\\besomeprazol\\b", "esomeprazole"),
-    medication_list_v0 = str_replace_all(medication_list_v0,"\\bparvastatine\\b", "pravastatine"),
-    medication_list_v0 = str_replace_all(medication_list_v0,"\\bcandarsetan\\b", "candesartan"),
-    medication_list_v0 = str_replace_all(medication_list_v0,"\\bezatimibe\\b", "ezetimibe")
+    across(all_of(medication_list_vars), str_to_lower),
+    across(all_of(medication_list_vars), ~ case_when(.x %in% c("geen", "geen medicatie", "none") ~ "none", TRUE ~ .x))
   )
+
+baria_muscle_vars_meds_notypos <- baria_muscle_vars_meds |>
+  mutate(across(all_of(medication_list_vars), ~ .x |>
+    str_replace_all("\\bamitriptiline\\b", "amitriptyline") |>
+    str_replace_all("\\bduloxatine\\b", "duloxetine") |>
+    str_replace_all("\\bariprazol\\b", "aripiprazol") |>
+    str_replace_all("\\bnifidipine\\b", "nifedipine") |>
+    str_replace_all("\\bevothyroxine\\b", "levothyroxine") |>
+    str_replace_all("\\bglicliazide\\b", "gliclazide") |>
+    str_replace_all("\\bglicazide\\b", "gliclazide") |>
+    str_replace_all("\\bamlopdipine\\b", "amlodipine") |>
+    str_replace_all("\\bzitalopram\\b", "citalopram") |>
+    str_replace_all("\\bperinopril\\b", "perindopril") |>
+    str_replace_all("\\bvenlaflaxine\\b", "venlafaxine") |>
+    str_replace_all("\\bglimerpiride\\b", "glimepiride") |>
+    str_replace_all("\\bhydrchloorthiazide\\b", "hct") |>
+    str_replace_all("\\bhydrochloorthiazide\\b", "hct") |>
+    str_replace_all("\\bpnatoprazol\\b", "pantoprazole") |>
+    str_replace_all("\\bomeprazol\\b", "omeprazole") |>
+    str_replace_all("\\besomeprazol\\b", "esomeprazole") |>
+    str_replace_all("\\bparvastatine\\b", "pravastatine") |>
+    str_replace_all("\\bcandarsetan\\b", "candesartan") |>
+    str_replace_all("\\bezatimibe\\b", "ezetimibe")
+  )
+)
 
 # Define medication categories
 # Diabetes medication
@@ -292,50 +299,48 @@ antibiotics <- c(
 )
 antibiotics_pattern <- str_c("\\b(", str_c(antibiotics, collapse = "|"), ")\\b")
 
-# Use regex patterns to create clean medication columns for all medication categories and subcategories
-baria_muscle_vars_meds <- baria_muscle_vars_meds_notypos |> 
+# Medication class functions
+medication_classes <- list(
+  metformin = ~ if_else(str_detect(.x, dm_meds_patterns$metformin), "yes", "no"),
+  sus = ~ if_else(str_detect(.x, dm_meds_patterns$sus), "yes", "no"),
+  dpp4is = ~ if_else(str_detect(.x, dm_meds_patterns$dpp4is), "yes", "no"),
+  glp1ras = ~ if_else(str_detect(.x, dm_meds_patterns$glp1ras), "yes", "no"),
+  sglt2is = ~ if_else(str_detect(.x, dm_meds_patterns$sglt2is), "yes", "no"),
+  tzds = ~ if_else(str_detect(.x, dm_meds_patterns$tzds), "yes", "no"),
+  insulin = ~ if_else(str_detect(.x, dm_meds_patterns$insulin), "yes", "no"),
+  dm_meds = ~ if_else(str_detect(.x, dm_meds_any_pattern), "yes", "no"),
+  ace_inhibitors = ~ if_else(str_detect(.x, aht_meds_patterns$ace_inhibitors), "yes", "no"),
+  arbs = ~ if_else(str_detect(.x, aht_meds_patterns$arbs), "yes", "no"),
+  ccbs = ~ if_else(str_detect(.x, aht_meds_patterns$ccbs), "yes", "no"),
+  bblockers = ~ if_else(str_detect(.x, aht_meds_patterns$bblockers), "yes", "no"),
+  a2_agonists = ~ if_else(str_detect(.x, aht_meds_patterns$a2_agonists), "yes", "no"),
+  diuretics = ~ if_else(str_detect(.x, aht_meds_patterns$diuretics), "yes", "no"),
+  combi_aht_meds = ~ if_else(str_detect(.x, aht_meds_patterns$combi_aht_meds), "yes", "no"),
+  aht_meds = ~ if_else(str_detect(.x, aht_meds_any_pattern), "yes", "no"),
+  statins = ~ if_else(str_detect(.x, lipidlowering_meds_patterns$statins), "yes", "no"),
+  lipidlowering_meds = ~ if_else(str_detect(.x, lipidlowering_meds_any_pattern), "yes", "no"),
+  thyroid_meds = ~ if_else(str_detect(.x, thyroid_meds_pattern), "yes", "no"),
+  ssris = ~ if_else(str_detect(.x, psychiatric_meds_patterns$ssris), "yes", "no"),
+  tcas = ~ if_else(str_detect(.x, psychiatric_meds_patterns$tcas), "yes", "no"),
+  snris = ~ if_else(str_detect(.x, psychiatric_meds_patterns$snris), "yes", "no"),
+  ndris = ~ if_else(str_detect(.x, psychiatric_meds_patterns$ndris), "yes", "no"),
+  antipsychotics = ~ if_else(str_detect(.x, psychiatric_meds_patterns$antipsychotics), "yes", "no"),
+  moods = ~ if_else(str_detect(.x, psychiatric_meds_patterns$moods), "yes", "no"),
+  adhd_meds = ~ if_else(str_detect(.x, psychiatric_meds_patterns$adhd_meds), "yes", "no"),
+  hypnotics = ~ if_else(str_detect(.x, psychiatric_meds_patterns$hypnotics), "yes", "no"),
+  psychiatric_meds = ~ if_else(str_detect(.x, psychiatric_meds_any_pattern), "yes", "no"),
+  ppi = ~ if_else(str_detect(.x, ppi_pattern), "yes", "no"),
+  abx = ~ if_else(str_detect(.x, antibiotics_pattern), "yes", "no")
+)
+
+# Create medication categories and subcategories at v0, v4 & v5
+baria_muscle_vars_meds <- baria_muscle_vars_meds_notypos |>
+  mutate(across(all_of(medication_list_vars), medication_classes, .names = "{.fn}_{.col}")) |>
+  rename_with(~ str_replace(.x, "_medication_list_(v[045])$", "_\\1"), matches("_medication_list_v[045]$")) |>
   mutate(
-    # Diabetes medication
-    metformin_v0 = if_else(str_detect(medication_list_v0, dm_meds_patterns$metformin), "yes", "no"),
-    sus_v0 = if_else(str_detect(medication_list_v0, dm_meds_patterns$sus), "yes", "no"),
-    dpp4is_v0 = if_else(str_detect(medication_list_v0, dm_meds_patterns$dpp4is), "yes", "no"),
-    glp1ras_v0 = if_else(str_detect(medication_list_v0, dm_meds_patterns$glp1ras), "yes", "no"),
-    sglt2is_v0 = if_else(str_detect(medication_list_v0, dm_meds_patterns$sglt2is), "yes", "no"),
-    tzds_v0 = if_else(str_detect(medication_list_v0, dm_meds_patterns$tzds), "yes", "no"),
-    insulin_v0 = if_else(str_detect(medication_list_v0, dm_meds_patterns$insulin), "yes", "no"),
-    dm_meds_v0 = if_else(str_detect(medication_list_v0, dm_meds_any_pattern), "yes", "no"), # Use of any diabetes medication
-
-    # Antihypertensive medication
-    ace_inhibitors_v0 = if_else(str_detect(medication_list_v0, aht_meds_patterns$ace_inhibitors), "yes", "no"),
-    arbs_v0 = if_else(str_detect(medication_list_v0, aht_meds_patterns$arbs), "yes", "no"),
-    ccbs_v0 = if_else(str_detect(medication_list_v0, aht_meds_patterns$ccbs), "yes", "no"),
-    bblockers_v0 = if_else(str_detect(medication_list_v0, aht_meds_patterns$bblockers), "yes", "no"),
-    a2_agonists_v0 = if_else(str_detect(medication_list_v0, aht_meds_patterns$a2_agonists), "yes", "no"),
-    diuretics_v0 = if_else(str_detect(medication_list_v0, aht_meds_patterns$diuretics), "yes", "no"),
-    combi_aht_meds_v0 = if_else(str_detect(medication_list_v0, aht_meds_patterns$combi_aht_meds), "yes", "no"),
-    aht_meds_v0 = if_else(str_detect(medication_list_v0, aht_meds_any_pattern), "yes", "no"), # general antihypertensive medication
-
-    # Lipid-lowering medication
-    statins_v0 = if_else(str_detect(medication_list_v0, lipidlowering_meds_patterns$statins), "yes", "no"),
-    lipidlowering_meds_v0 = if_else(str_detect(medication_list_v0, lipidlowering_meds_any_pattern), "yes", "no"), # Use of any lipid-lowering medication
-
-    # thyroid medication
-    thyroid_meds_v0 = if_else(str_detect(medication_list_v0, thyroid_meds_pattern), "yes", "no"),
-
-    # psychiatric medication
-    ssris_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_patterns$ssris), "yes", "no"),
-    tcas_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_patterns$tcas), "yes", "no"),
-    snris_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_patterns$snris), "yes", "no"),
-    ndris_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_patterns$ndris), "yes", "no"),
-    antipsychotics_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_patterns$antipsychotics), "yes", "no"),
-    moods_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_patterns$moods), "yes", "no"),
-    adhd_meds_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_patterns$adhd_meds), "yes", "no"),
-    hypnotics_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_patterns$hypnotics), "yes", "no"),
-    psychiatric_meds_v0 = if_else(str_detect(medication_list_v0, psychiatric_meds_any_pattern), "yes", "no"),
-    ppi_v0 = if_else(str_detect(medication_list_v0, ppi_pattern), "yes", "no"),
-    abx_v0 = if_else(str_detect(medication_list_v0, antibiotics_pattern), "yes", "no")
-  ) |> 
-  select(-medication_list_v0)
+    medication_binary_v4 = case_when(medication_list_v4 == "none" ~ "no", !is.na(medication_list_v4) ~ "yes", TRUE ~ NA_character_),
+    medication_binary_v5 = case_when(medication_list_v5 == "none" ~ "no", !is.na(medication_list_v5) ~ "yes", TRUE ~ NA_character_)
+  )
 
 ### Define final analysis cohort: valid baseline BIA & available baseline shotgun data & not taking antibiotics
 # 1. Valid baseline BIA & 2. no antibiotics
@@ -501,12 +506,12 @@ sample_data(baria_mb_clean) <- sample_data(baria_mb_metadata)
 
 # Save clinical data as both RDS and csv files
 # Long clinical data
-write.csv(baria_muscle_long, "data/processed_data/260818_BARIA_muscle_long.csv")
-saveRDS(baria_muscle_long, "data/processed_data/260818_BARIA_muscle_long.RDS")
+write.csv(baria_muscle_long, "data/processed_data/260823_BARIA_muscle_long.csv")
+saveRDS(baria_muscle_long, "data/processed_data/260823_BARIA_muscle_long.RDS")
 
 # Wide clinical data
-write.csv(baria_muscle_wide, "data/processed_data/260818_BARIA_muscle_wide.csv")
-saveRDS(baria_muscle_wide, "data/processed_data/260818_BARIA_muscle_wide.RDS")
+write.csv(baria_muscle_wide, "data/processed_data/260823_BARIA_muscle_wide.csv")
+saveRDS(baria_muscle_wide, "data/processed_data/260823_BARIA_muscle_wide.RDS")
 
 # Save mb data
-saveRDS(baria_mb_clean, "data/processed_data/260818_BARIA_mb_clean.RDS")
+saveRDS(baria_mb_clean, "data/processed_data/260823_BARIA_mb_clean.RDS")
