@@ -93,15 +93,22 @@ species_v0_fltr_check <- tibble(
 )
 
 ### Filter
-# Keep species detected in at least 20% of baseline samples, with mean relative abundance >= 0.01%
+# Keep species detected in at least 40% of baseline samples, with mean relative abundance >= 0.1%
 species_v0_keep <- species_v0_fltr_check |>
   filter(
-    prevalence >= 0.20,
-    mean_abundance >= 0.01
+    prevalence >= 0.40,
+    mean_abundance >= 0.1
   ) |>
   pull(species)
 
 length(species_v0_keep) # check
+
+species_v0_fltr_check |> 
+  summarize(
+    mean = mean(mean_abundance, na.rm = TRUE),
+    min = min(mean_abundance, na.rm = TRUE),
+    max = max(mean_abundance, na.rm = TRUE)
+  )
 
 # Filter baseline species
 species_v0_fltr <- species_v0 |>
@@ -154,120 +161,59 @@ model_data_ffmi_v0_nested <- model_data_ffmi_v0_long_log |>
   group_by(species) |> 
   nest()
 
-#### Model 1: Adjusted for age and sex #####
-# Fit one lm per species
-model_ffmi_v0_1 <- model_data_ffmi_v0_nested |> 
-  mutate( # add model as a new col to the (nested) df
-    model = map( # applies lm to each nested species-specific df
-      data,
-      \(x) lm(ffmi_v0 ~ log10_abundance + age_v0 + sex, data = x)
-    )
-  )
 
-# Extract coefficient tables for all species models
-model_ffmi_v0_1_tidy <- model_ffmi_v0_1 |> 
-  mutate(results = map(model, broom::tidy, conf.int = TRUE))
+#### Models ####
+##### Cross-sectional FFMI models #####
+# Function to fit one linear model per species and extract the abundance coefficient
+run_ffmi_v0_model <- function(nested_data, model_formula, model_name) {
 
-# Unnest coefficient tables and keep only abundance coefficient, add FDR-adjusted p-values
-model_ffmi_v0_1_results <- model_ffmi_v0_1_tidy |> 
-  select(species, results) |> 
-  unnest(results) |> 
-  filter(term == "log10_abundance") |> # keep only abundance term
-  ungroup() |> # Remove species grouping before FDR correction across all species
-  mutate(
-    p_fdr = p.adjust(p.value, method = "BH"), # add FDR-adjusted p-values
-    signif = if_else(p_fdr < 0.05, "significant", "not significant") # for plots
-  ) |> 
-  left_join(species_labels, by = "species") |> 
-  mutate(model = "model1")
+  nested_data |>
+    mutate(
+      model_fit = map(data, \(x) lm(model_formula, data = x)),
+      results = map(model_fit, broom::tidy, conf.int = TRUE)
+    ) |>
+    select(species, results) |>
+    unnest(results) |>
+    filter(term == "log10_abundance") |>
+    ungroup() |>
+    mutate(
+      p_fdr = p.adjust(p.value, method = "BH"),
+      signif = if_else(p_fdr < 0.05, "significant", "not significant"),
+      model = model_name
+    ) |>
+    left_join(species_labels, by = "species")
+}
 
-# Species significantly associated with baseline FFMI after FDR correction
-model_ffmi_v0_1_signif <- model_ffmi_v0_1_results |> 
-  filter(p_fdr < 0.05) |> 
+# Model formulas
+model1_formula <- ffmi_v0 ~ log10_abundance + age_v0 + sex # adjusted for age and sex
+model2_formula <- ffmi_v0 ~ log10_abundance + age_v0 + sex + fmi_v0 # adjusted for age, sex and adiposity
+model3_formula <- ffmi_v0 ~ log10_abundance + age_v0 + sex + fmi_v0 + t2d_v0 + dm_meds_v0 + statins_v0 # Model 3: extensive/sensitivity model
+
+# Run model function for each model formula
+model_ffmi_v0_1_results <- run_ffmi_v0_model(nested_data = model_data_ffmi_v0_nested, model_formula = model1_formula, model_name = "model1")
+model_ffmi_v0_2_results <- run_ffmi_v0_model(nested_data = model_data_ffmi_v0_nested, model_formula = model2_formula, model_name = "model2")
+model_ffmi_v0_3_results <- run_ffmi_v0_model(nested_data = model_data_ffmi_v0_nested, model_formula = model3_formula, model_name = "model3")
+
+
+# Significant species per model
+model_ffmi_v0_1_signif <- model_ffmi_v0_1_results |>
+  filter(p_fdr < 0.05) |>
   arrange(p_fdr) |>
   relocate(species_label, .after = species)
 
-#### Model 2: Adjusted for age, sex and adiposity (FMI) ####
-# Fit one lm per species
-model_ffmi_v0_2 <- model_data_ffmi_v0_nested |> 
-  mutate( # add model as a new col to the (nested) df
-    model = map( # applies lm to each nested species-specific df
-      data,
-      \(x) lm(ffmi_v0 ~ log10_abundance + age_v0 + sex + fmi_v0, data = x)
-    )
-  )
-
-# Extract coefficient tables for all species models
-model_ffmi_v0_2_tidy <- model_ffmi_v0_2 |> 
-  mutate(results = map(model, broom::tidy, conf.int = TRUE))
-
-# Unnest coefficient tables and keep only abundance coefficient, add FDR-adjusted p-values
-model_ffmi_v0_2_results <- model_ffmi_v0_2_tidy |> 
-  select(species, results) |> 
-  unnest(results) |> 
-  filter(term == "log10_abundance") |> # keep only abundance term
-  ungroup() |> 
-  mutate(
-    p_fdr = p.adjust(p.value, method = "BH"), # add FDR-adjusted p-values
-    signif = if_else(p_fdr < 0.05, "significant", "not significant") # for plots
-  ) |> 
-  left_join(species_labels, by = "species") |> 
-  mutate(model = "model2")
-
-# Species significantly associated with baseline FFMI after FDR correction
-model_ffmi_v0_2_signif <- model_ffmi_v0_2_results |> 
-  filter(p_fdr < 0.05) |> 
+model_ffmi_v0_2_signif <- model_ffmi_v0_2_results |>
+  filter(p_fdr < 0.05) |>
   arrange(p_fdr) |>
   relocate(species_label, .after = species)
 
-#### Model 3: Extensive/Sensitivity model; adjusted for age, sex, adiposity/FMI, T2D, antidiabetic medication, statins
-# Fit one lm per species
-model_ffmi_v0_3 <- model_data_ffmi_v0_nested |> 
-  mutate(
-    model = map(
-      data,
-      \(x) lm(ffmi_v0 ~ log10_abundance + age_v0 + sex + fmi_v0 + t2d_v0 + dm_meds_v0 + statins_v0, data = x)
-    )
-  )
-
-# Extract coefficient tables for all species models
-model_ffmi_v0_3_tidy <- model_ffmi_v0_3 |> 
-  mutate(results = map(model, broom::tidy, conf.int = TRUE))
-
-# Keep abundance coefficient and calculate FDR-adjusted p-values
-model_ffmi_v0_3_results <- model_ffmi_v0_3_tidy |> 
-  select(species, results) |> 
-  unnest(results) |> 
-  filter(term == "log10_abundance") |> 
-  ungroup() |> 
-  mutate(
-    p_fdr = p.adjust(p.value, method = "BH"),
-    signif = if_else(
-      p_fdr < 0.05,
-      "significant",
-      "not significant"
-    )
-  ) |> 
-  left_join(species_labels, by = "species") |> 
-  mutate(model = "model3")
-
-# Species significantly associated with baseline FFMI after FDR correction
-model_ffmi_v0_3_signif <- model_ffmi_v0_3_results |> 
-  filter(p_fdr < 0.05) |> 
-  arrange(p_fdr) |> 
+model_ffmi_v0_3_signif <- model_ffmi_v0_3_results |>
+  filter(p_fdr < 0.05) |>
+  arrange(p_fdr) |>
   relocate(species_label, .after = species)
 
-# Number of FDR-significant species per model
+# Check n of signif species
 c(
   model1 = nrow(model_ffmi_v0_1_signif),
   model2 = nrow(model_ffmi_v0_2_signif),
   model3 = nrow(model_ffmi_v0_3_signif)
-)
-
-# checks
-c(
-  n_species_tested = length(species_v0_keep),
-  model1_results = nrow(model_ffmi_v0_1_results),
-  model2_results = nrow(model_ffmi_v0_2_results),
-  model3_results = nrow(model_ffmi_v0_3_results)
 )
