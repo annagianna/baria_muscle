@@ -12,13 +12,19 @@ baria_mb <- readRDS("data/raw_data/ps.BARIA.metaphlan.706.2548.RDS")
 
 #### Clinical Data ####
 # Longitudinal vars
-long_vars <- c("date",
+mmt_timepoints <- c(0, 10, 20, 30, 60, 90, 120)
+
+long_vars <- c(
+  "date",
+
   # Body composition
   "bmi", "weight_kg", "wc_cm", "fm_kg", "fm_percent", "ffm_kg", "ffm_percent", "bia_resistance_50khz", "upperleg_cm",
 
   # Lab/glycemia parameters
-  "fasting_glucose_mmoll_mmt", "fasting_insulin_pmoll_mmt", "fasting_glucagon_ngl_mmt", "fasting_cpeptide_nmoll_mmt",
-  "hba1c", "hba1c_mmolmol", "crp_mgl",
+  str_c("glucose_mmoll_mmt_", mmt_timepoints),
+  str_c("insulin_pmoll_mmt_", mmt_timepoints),
+  str_c("cpeptide_nmoll_mmt_", mmt_timepoints),
+  "glucagon_ngl_mmt_0", "hba1c", "hba1c_mmolmol", "crp_mgl",
 
   # Nexfin
   "nexfin_hr", "nexfin_dpdt", "nexfin_sv", "nexfin_svi", "nexfin_co", "nexfin_ci", "nexfin_svr", "nexfin_svri"
@@ -35,13 +41,15 @@ baria_muscle_vars <- baria_clinical_data_raw |>
     fm_kg_v0 = tbf, fm_percent_v0 = tbf_percent, ffm_kg_v0 = ffm, ffm_percent_v0 = ffm_percent, bia_resistance_50khz_v0 = rawdata_50Khz_Resistance,
     medication_binary_v0 = meds, medication_list_v0 = medication_v0_freetext, sport_v0 = scre_sport,
     systolic_bp_mmhg_v0 = systolic_pressure_v0, diastolic_bp_mmhg_v0 = diastolic_pressure_v0, aht = hypertension,
-    glucose_mmoll_v0 = glucose, fasting_glucose_mmoll_mmt_v0 = min0gluc, fasting_insulin_pmoll_mmt_v0 = min0insulin, fasting_glucagon_ngl_mmt_v0 = min0glucagon, 
-    fasting_cpeptide_nmoll_mmt_v0 = min0cpept, hba1c_v0 = hba1c, hba1c_mmolmol_v0 = hba1c__IFCC_mmolmol,
+    glucose_mmoll_v0 = glucose, glucose_mmoll_mmt_0_v0 = min0gluc, insulin_pmoll_mmt_0_v0 = min0insulin,
+    glucagon_ngl_mmt_0_v0 = min0glucagon, cpeptide_nmoll_mmt_0_v0 = min0cpept, hba1c_v0 = hba1c, hba1c_mmolmol_v0 = hba1c__IFCC_mmolmol,
+    matches("^min(10|20|30|60|90|120)(gluc|insulin|cpept)$"), # MMT vars
     gammagt_ul_v0 = ggt, alat_ul_v0 = alat, asat_ul_v0 = asat, triglycerides_mmoll_v0 = triglycerides,
     crp_mgl_v0 = crp, tsh_miul_v0 = tsh, ft4_pmoll_v0 = ft4,
 
     # v2-v5 (Repeated vars)
     matches("^V[2-5]_(date|bmi|weight|taille|tbf|tbf_percent|ffm|ffm_percent|rawdata_50Khz_Resistance|upperleg|min0gluc|min0insulin|min0glucagon|min0cpept|hba1c|hba1c__IFCC_mmolmol|crp)$"),
+    matches("^V[2-5]_min(10|20|30|60|90|120)(gluc|insulin|cpept)$"),
 
     # v4-v5 medication free text
     medication_list_v4 = Medication_v4_freetext,
@@ -61,6 +69,7 @@ baria_muscle_vars <- baria_clinical_data_raw |>
     -nexfin_HR_v0
   ) |>
   rename_with(~ str_replace(.x, "^V([2-5])_(.+)$", "\\2_v\\1"), matches("^V[2-5]_")) |> 
+  rename_with(~ str_c(.x, "_v0"), matches("^min(10|20|30|60|90|120)(gluc|insulin|cpept)$")) |>
   rename_with(
     ~ .x |>
       str_replace("^weight_", "weight_kg_") |>
@@ -70,10 +79,10 @@ baria_muscle_vars <- baria_clinical_data_raw |>
       str_replace("^ffm_v", "ffm_kg_v") |>
       str_replace("^rawdata_50Khz_Resistance_", "bia_resistance_50khz_") |>
       str_replace("^upperleg_", "upperleg_cm_") |>
-      str_replace("^min0gluc_", "fasting_glucose_mmoll_mmt_") |>
-      str_replace("^min0insulin_", "fasting_insulin_pmoll_mmt_") |>
-      str_replace("^min0glucagon_", "fasting_glucagon_ngl_mmt_") |>
-      str_replace("^min0cpept_", "fasting_cpeptide_nmoll_mmt_") |>
+      str_replace("^min(0|10|20|30|60|90|120)gluc_", "glucose_mmoll_mmt_\\1_") |>
+      str_replace("^min(0|10|20|30|60|90|120)insulin_", "insulin_pmoll_mmt_\\1_") |>
+      str_replace("^min(0|10|20|30|60|90|120)cpept_", "cpeptide_nmoll_mmt_\\1_") |>
+      str_replace("^min0glucagon_", "glucagon_ngl_mmt_0_") |>
       str_replace("^hba1c__IFCC_mmolmol_", "hba1c_mmolmol_") |>
       str_replace("^crp_", "crp_mgl_"),
     matches("_v[2-5]$")
@@ -388,21 +397,21 @@ baria_muscle_long <- baria_muscle_vars_meds |>
     hba1c_mmolmol = if_else(is.na(hba1c_mmolmol) == FALSE, hba1c_mmolmol, 10.93 * hba1c_percent - 23.5),
 
     # HOMA-IR & HOMA-2B (insulin unit conversion from pmol/l to uU/ml)
-    homa_ir = (fasting_insulin_pmoll_mmt / 6.945) * fasting_glucose_mmoll_mmt / 22.5,
-    homa_b = (20 * (fasting_insulin_pmoll_mmt / 6.945)) / (fasting_glucose_mmoll_mmt - 3.5),
+    homa_ir = (insulin_pmoll_mmt_0 / 6.945) * glucose_mmoll_mmt_0 / 22.5,
+    homa_b = (20 * (insulin_pmoll_mmt_0 / 6.945)) / (glucose_mmoll_mmt_0 - 3.5),
 
     # T2D incidence based on lab values at follow-up
     t2d_labs = case_when(
-      is.na(hba1c_percent) & is.na(fasting_glucose_mmoll_mmt) ~ NA_character_,
-      hba1c_percent >= 6.5 | fasting_glucose_mmoll_mmt >= 7.0 ~ "yes",
+      is.na(hba1c_percent) & is.na(glucose_mmoll_mmt_0) ~ NA_character_,
+      hba1c_percent >= 6.5 | glucose_mmoll_mmt_0 >= 7.0 ~ "yes",
       TRUE ~ "no"
     ),
 
     # Prediabetes based on lab values
     prediab_labs = case_when(
       t2d_labs == "yes" ~ "no",
-      is.na(hba1c_percent) & is.na(fasting_glucose_mmoll_mmt) ~ NA_character_,
-      (hba1c_percent >= 5.7 & hba1c_percent <= 6.4) | (fasting_glucose_mmoll_mmt >= 5.6 & fasting_glucose_mmoll_mmt <= 6.9) ~ "yes",
+      is.na(hba1c_percent) & is.na(glucose_mmoll_mmt_0) ~ NA_character_,
+      (hba1c_percent >= 5.7 & hba1c_percent <= 6.4) | (glucose_mmoll_mmt_0 >= 5.6 & glucose_mmoll_mmt_0 <= 6.9) ~ "yes",
       TRUE ~ "no"
     ),
     ffmi = if_else(bia_valid, ffm_kg / ((height_cm / 100)^2), NA_real_),
@@ -506,12 +515,12 @@ sample_data(baria_mb_clean) <- sample_data(baria_mb_metadata)
 
 # Save clinical data as both RDS and csv files
 # Long clinical data
-write.csv(baria_muscle_long, "data/processed_data/260823_BARIA_muscle_long.csv")
-saveRDS(baria_muscle_long, "data/processed_data/260823_BARIA_muscle_long.RDS")
+write.csv(baria_muscle_long, "data/processed_data/260824_BARIA_muscle_long.csv")
+saveRDS(baria_muscle_long, "data/processed_data/260824_BARIA_muscle_long.RDS")
 
 # Wide clinical data
-write.csv(baria_muscle_wide, "data/processed_data/260823_BARIA_muscle_wide.csv")
-saveRDS(baria_muscle_wide, "data/processed_data/260823_BARIA_muscle_wide.RDS")
+write.csv(baria_muscle_wide, "data/processed_data/260824_BARIA_muscle_wide.csv")
+saveRDS(baria_muscle_wide, "data/processed_data/260824_BARIA_muscle_wide.RDS")
 
 # Save mb data
-saveRDS(baria_mb_clean, "data/processed_data/260823_BARIA_mb_clean.RDS")
+saveRDS(baria_mb_clean, "data/processed_data/260824_BARIA_mb_clean.RDS")
