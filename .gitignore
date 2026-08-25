@@ -2,6 +2,9 @@
 .pixi/*
 !.pixi/config.toml
 
+# scripts
+scripts/archive
+
 # data
 data/
 
