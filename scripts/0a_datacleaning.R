@@ -20,11 +20,14 @@ long_vars <- c(
   # Body composition
   "bmi", "weight_kg", "wc_cm", "fm_kg", "fm_percent", "ffm_kg", "ffm_percent", "bia_resistance_50khz", "upperleg_cm",
 
-  # Lab/glycemia parameters
-  str_c("glucose_mmoll_mmt_", mmt_timepoints),
-  str_c("insulin_pmoll_mmt_", mmt_timepoints),
-  str_c("cpeptide_nmoll_mmt_", mmt_timepoints),
+  # Cardiometabolic/lab parameters
+  str_c("glucose_mmoll_mmt_", mmt_timepoints), str_c("insulin_pmoll_mmt_", mmt_timepoints), str_c("cpeptide_nmoll_mmt_", mmt_timepoints),
   "glucagon_ngl_mmt_0", "hba1c", "hba1c_mmolmol", "crp_mgl",
+  "systolic_bp_mmhg", "diastolic_bp_mmhg",
+  "gammagt_ul", "asat_ul", "alat_ul", "triglycerides_mmoll", "tsh_miul", "ft4_pmoll",
+
+  # Medication
+  "medication_list", "medication_binary",
 
   # Nexfin
   "nexfin_hr", "nexfin_dpdt", "nexfin_sv", "nexfin_svi", "nexfin_co", "nexfin_ci", "nexfin_svr", "nexfin_svri"
@@ -48,8 +51,10 @@ baria_muscle_vars <- baria_clinical_data_raw |>
     crp_mgl_v0 = crp, tsh_miul_v0 = tsh, ft4_pmoll_v0 = ft4,
 
     # v2-v5 (Repeated vars)
-    matches("^V[2-5]_(date|bmi|weight|taille|tbf|tbf_percent|ffm|ffm_percent|rawdata_50Khz_Resistance|upperleg|min0gluc|min0insulin|min0glucagon|min0cpept|hba1c|hba1c__IFCC_mmolmol|crp)$"),
+    matches("^V[2-5]_(date|bmi|weight|taille|tbf|tbf_percent|ffm|ffm_percent|rawdata_50Khz_Resistance|upperleg|min0gluc|min0insulin|min0glucagon|min0cpept|hba1c|hba1c__IFCC_mmolmol|crp|ggt|asat|alat|triglycerides|tsh|ft4)$"),
     matches("^V[2-5]_min(10|20|30|60|90|120)(gluc|insulin|cpept)$"),
+    matches("^(systolic|diastolic)_pressure_v[45]$"),
+
 
     # v4-v5 medication free text
     medication_list_v4 = Medication_v4_freetext,
@@ -84,9 +89,17 @@ baria_muscle_vars <- baria_clinical_data_raw |>
       str_replace("^min(0|10|20|30|60|90|120)cpept_", "cpeptide_nmoll_mmt_\\1_") |>
       str_replace("^min0glucagon_", "glucagon_ngl_mmt_0_") |>
       str_replace("^hba1c__IFCC_mmolmol_", "hba1c_mmolmol_") |>
-      str_replace("^crp_", "crp_mgl_"),
+      str_replace("^crp_", "crp_mgl_") |>
+      str_replace("^ggt_", "gammagt_ul_") |>
+      str_replace("^asat_", "asat_ul_") |>
+      str_replace("^alat_", "alat_ul_") |>
+      str_replace("^triglycerides_", "triglycerides_mmoll_") |>
+      str_replace("^tsh_", "tsh_miul_") |>
+      str_replace("^ft4_", "ft4_pmoll_") |>
+      str_replace("^systolic_pressure_", "systolic_bp_mmhg_") |>
+      str_replace("^diastolic_pressure_", "diastolic_bp_mmhg_"),
     matches("_v[2-5]$")
-  ) |> 
+) |> 
   rename_with(
     ~ .x |> 
       str_to_lower() |> # inconsistencies in Nexfin data nomenclature
@@ -169,16 +182,14 @@ baria_muscle_vars <- baria_clinical_data_raw |>
 )
 
 ## Medication textbox cleaning
-medication_list_vars <- c("medication_list_v0", "medication_list_v4", "medication_list_v5")
-
 baria_muscle_vars_meds <- baria_muscle_vars |>
   mutate(
-    across(all_of(medication_list_vars), str_to_lower),
-    across(all_of(medication_list_vars), ~ case_when(.x %in% c("geen", "geen medicatie", "none") ~ "none", TRUE ~ .x))
+    medication_list = str_to_lower(medication_list),
+    medication_list = case_when(medication_list %in% c("geen", "geen medicatie", "none") ~ "none", TRUE ~ medication_list)
   )
 
 baria_muscle_vars_meds_notypos <- baria_muscle_vars_meds |>
-  mutate(across(all_of(medication_list_vars), ~ .x |>
+  mutate(medication_list = medication_list |> 
     str_replace_all("\\bamitriptiline\\b", "amitriptyline") |>
     str_replace_all("\\bduloxatine\\b", "duloxetine") |>
     str_replace_all("\\bariprazol\\b", "aripiprazol") |>
@@ -200,7 +211,6 @@ baria_muscle_vars_meds_notypos <- baria_muscle_vars_meds |>
     str_replace_all("\\bcandarsetan\\b", "candesartan") |>
     str_replace_all("\\bezatimibe\\b", "ezetimibe")
   )
-)
 
 # Define medication categories
 # Diabetes medication
@@ -342,13 +352,11 @@ medication_classes <- list(
   abx = ~ if_else(str_detect(.x, antibiotics_pattern), "yes", "no")
 )
 
-# Create medication categories and subcategories at v0, v4 & v5
+# Create medication categories and subcategories
 baria_muscle_vars_meds <- baria_muscle_vars_meds_notypos |>
-  mutate(across(all_of(medication_list_vars), medication_classes, .names = "{.fn}_{.col}")) |>
-  rename_with(~ str_replace(.x, "_medication_list_(v[045])$", "_\\1"), matches("_medication_list_v[045]$")) |>
   mutate(
-    medication_binary_v4 = case_when(medication_list_v4 == "none" ~ "no", !is.na(medication_list_v4) ~ "yes", TRUE ~ NA_character_),
-    medication_binary_v5 = case_when(medication_list_v5 == "none" ~ "no", !is.na(medication_list_v5) ~ "yes", TRUE ~ NA_character_)
+    across(medication_list, medication_classes, .names = "{.fn}"),
+    medication_binary = case_when(visit == "v0" ~ medication_binary, medication_list == "none" ~ "no", !is.na(medication_list) ~ "yes", TRUE ~ NA_character_)
   )
 
 ### Define final analysis cohort: valid baseline BIA & available baseline shotgun data & not taking antibiotics
@@ -360,7 +368,7 @@ bia_abx_v0_ids <- baria_muscle_vars_meds |>
     bia_valid,
 
     # No antibiotics
-    abx_v0 == "no"
+    abx == "no"
   ) |>
   pull(id) |> 
   unique()
@@ -382,7 +390,7 @@ mb_v0_ids <- sample_data(run1_mb) |>
 bia_abx_mb_ids <- intersect(bia_abx_v0_ids, mb_v0_ids)
 
 ## Long dataset ##
-baria_muscle_long <- baria_muscle_vars_meds |> 
+baria_muscle_long_all <- baria_muscle_vars_meds |> 
   filter(id %in% bia_abx_mb_ids) |> 
   mutate(date = dmy(date)) |> 
   group_by(id) |> 
@@ -436,15 +444,15 @@ baria_muscle_long <- baria_muscle_vars_meds |>
     low_smm = if_else(smm_kg <= smm_kg_tertile, "yes", "no"),
     low_smm_by_weight = if_else(smm_by_weight <= smm_by_weight_tertile, "yes", "no")
   ) |> 
-  ungroup() 
+  ungroup()
 
 ## Wide dataset ##
-baria_muscle_wide <- baria_muscle_long |> 
+baria_muscle_wide <- baria_muscle_long_all |> 
   select(-age_v0) |> # to avoid collision
   pivot_wider(
     names_from = visit,
     values_from =  c(
-      all_of(long_vars), "n_years_from_v0", "age", "hba1c_percent", "homa_ir", "homa_b", "t2d_labs", "prediab_labs",
+      all_of(long_vars), all_of(names(medication_classes)), "n_years_from_v0", "age", "hba1c_percent", "homa_ir", "homa_b", "t2d_labs", "prediab_labs",
       contains("ffmi"), contains("fmi"), contains("smm"), contains("bia_"), contains("perc_change_"), contains("delta_")
     ),
     names_glue = "{.value}_{visit}"
@@ -486,6 +494,21 @@ baria_muscle_wide <- baria_muscle_long |>
   ungroup() |> 
   mutate(across(where(is.character) & !matches("^id$"), as.factor))
 
+# Long dataset cleaned up
+baria_muscle_long <- baria_muscle_long_all |> 
+  select(
+    id,visit,
+
+    # Static/baseline covariates intentionally retained
+    age_v0, sex, t2d_v0, height_cm, sg_type,
+
+    # Longitudinal variables
+    all_of(long_vars), all_of(names(medication_classes)),
+    date_baseline, n_years_from_v0, age,
+    hba1c_percent, homa_ir, homa_b, t2d_labs, prediab_labs,
+    contains("ffmi"), contains("fmi"), contains("smm"), contains("bia_"), contains("perc_change_"), contains("delta_"), starts_with("low_")
+  )
+
 #### Microbiome Data Cleaning ####
 # Clean microbiome metadata
 sample_data(run1_mb)$visit <- case_when(
@@ -515,12 +538,12 @@ sample_data(baria_mb_clean) <- sample_data(baria_mb_metadata)
 
 # Save clinical data as both RDS and csv files
 # Long clinical data
-write.csv(baria_muscle_long, "data/processed_data/260824_BARIA_muscle_long.csv")
-saveRDS(baria_muscle_long, "data/processed_data/260824_BARIA_muscle_long.RDS")
+write.csv(baria_muscle_long, "data/processed_data/BARIA_muscle_long.csv")
+saveRDS(baria_muscle_long, "data/processed_data/BARIA_muscle_long.RDS")
 
 # Wide clinical data
-write.csv(baria_muscle_wide, "data/processed_data/260824_BARIA_muscle_wide.csv")
-saveRDS(baria_muscle_wide, "data/processed_data/260824_BARIA_muscle_wide.RDS")
+write.csv(baria_muscle_wide, "data/processed_data/BARIA_muscle_wide.csv")
+saveRDS(baria_muscle_wide, "data/processed_data/BARIA_muscle_wide.RDS")
 
 # Save mb data
-saveRDS(baria_mb_clean, "data/processed_data/260824_BARIA_mb_clean.RDS")
+saveRDS(baria_mb_clean, "data/processed_data/BARIA_mb_clean.RDS")
