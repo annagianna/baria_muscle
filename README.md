@@ -13,12 +13,42 @@ post-surgical microbiome shifts and metabolic outcomes.
 - **Clinical:** clinical, anthropometric and BIA-derived measures
 - **Language:** R
 
-The code covers data cleaning and the baseline (cross-sectional) analyses —
-microbiome composition and diversity, and per-species associations with FFMI —
-together with a longitudinal mixed-model layer relating baseline species abundance
-to FFMI trajectory after surgery. A functional-pathway layer (HUMAnN) is being
-added on top of the taxonomic analyses, starting with pathway cleaning and
-prevalence filtering.
+The code covers data cleaning, the baseline descriptive analyses (microbiome
+composition and diversity), a longitudinal mixed-model layer (`4b`) relating
+baseline species abundance to FFMI trajectory after surgery, and a
+functional-pathway layer (HUMAnN) at the cleaning/filtering stage.
+
+The per-species association strategy is being reworked (Aug 2026): the earlier
+cross-sectional linear-model and DAG scripts have been archived, and the
+candidate-species shortlist is moving to differential-abundance testing (LinDA)
+and ML-based feature selection, which handle the multiple-testing burden better
+than per-species FDR correction at this sample size. See **Current direction**
+below.
+
+---
+
+## Current direction (Aug 2026)
+
+The analysis is organised **microbe-first**: derive a compact candidate-species
+shortlist, then bring in the other omics layers for that shortlist rather than
+leading with them.
+
+1. **Candidate shortlist** — differential-abundance testing (**LinDA**) and
+   **ML-based feature selection** (feature ranking, then linear models on the top
+   hits), which handle multiple testing better than per-species FDR at this `n`.
+   The cross-sectional LM / DAG scripts are archived; the LMM (`4b`) is retained as
+   a robustness result.
+2. **Microbiome change** — per-participant **Bray–Curtis distance**
+   (baseline → follow-up) correlated with FFMI change.
+3. **Metabolites** — the Metabolon layer, examined for the shortlisted species
+   only (not led with).
+4. **Baseline dietary data** — combined with microbes and metabolites for
+   interpretation.
+
+**Clinical outcomes.** Glycaemic outcomes (HbA1c, HOMA-IR) returned precise nulls
+and are deprioritised as a primary axis; the derived glycaemic and MMT variables
+remain in the cleaned data. Better-powered clinical outcomes (e.g. lipids) are the
+current target, shown cross-sectionally where possible.
 
 ---
 
@@ -32,33 +62,29 @@ baria_muscle/
 │   ├── 2a_mb_alphadiversity.R         # Alpha diversity (Shannon, Simpson, observed richness)
 │   ├── 2b_mb_betadiversity.R          # Beta diversity (Bray–Curtis PCoA + PERMANOVA / dispersion)
 │   ├── 2c_mb_composition.R            # Compositional bar plots (top 20 species, by baseline FFMI group)
-│   ├── 4a_lm_mb_baseline_ffmi.R       # Cross-sectional linear models: species abundance ~ baseline FFMI
-│   ├── 4b_lmm_mb_ffmi_trajectories.R  # Mixed models: baseline abundance × FFMI trajectory + overlap with 4a
-│   ├── 4c_lm_lmm_ffmi_dags.R          # DAGs + adjustment sets for the models in 4a / 4b
-│   └── 5a_humann_pathways.R           # Functional pathways (HUMAnN): cleaning + prevalence filtering
+│   ├── 4b_lmm_mb_ffmi_trajectories.R  # Mixed models: baseline species abundance × FFMI trajectory
+│   ├── 5a_humann_pathways.R           # Functional pathways (HUMAnN): cleaning + prevalence filtering
+│   └── archive/                       # superseded scripts (cross-sectional LM, DAGs) — gitignored
 ├── data/
 │   ├── raw_data/                      # Inputs (not tracked — see Data)
 │   └── processed_data/                # Cleaned datasets written by 0a
-├── tables/                            # Table 1, saved model-result objects, overlap tables
+├── tables/                            # Table 1, saved model-result objects
 ├── graphs/                            # Figures, in per-analysis subfolders
 │   ├── alphadiversity/                #   2a
 │   ├── betadiversity/                 #   2b
 │   ├── composition/                   #   2c
-│   ├── microbe_associations/          #   4a combined forest plot
-│   └── lmm_species_ffmi/              #   4b trajectory / overlap plots
+│   └── lmm_species_ffmi/              #   4b trajectory / %-change plots
 └── README.md
 ```
 
 ### Order of execution
 
 `0a` runs first — it writes the processed datasets every other script reads.
-`1a` and the `2*` descriptive scripts are independent of one another. The `4*`
-association scripts depend on the processed data from `0a`; `4c` defines the DAGs
-and adjustment sets that the models in `4a` / `4b` implement. `4a` runs before
-`4b`: it saves the baseline significant-species object that `4b` reads to
-cross-reference the cross-sectional and longitudinal hits. `5a` reads the raw
-HUMAnN profiles together with the processed data from `0a`, and is otherwise
-independent of the taxonomic scripts.
+`1a` and the `2*` descriptive scripts are independent of one another. `4b` depends
+on the processed data from `0a` (`..._muscle_long.RDS` and `..._mb_clean.RDS`) and
+fits the per-species longitudinal models on its own — it no longer reads a
+cross-sectional object. `5a` reads the raw HUMAnN profiles together with the
+processed data from `0a`, and is otherwise independent of the taxonomic scripts.
 
 ---
 
@@ -296,48 +322,33 @@ Two of these carry into the modelling: **antibiotics** are a cohort exclusion
   Bray–Curtis distances with PCoA. Composition: the top 20 species, stratified by
   baseline FFMI group.
 
-### Association models (`4a`, `4b`)
+### Longitudinal association model (`4b`)
 
-- **Species set (for the models only).** Poorly annotated taxa (uncharacterised
-  `GGB` genome bins) are dropped first. A species is then kept if detected in
-  **≥ 20%** of baseline samples **and** its mean relative abundance is
-  **≥ 0.01%**. Abundances enter the models on a `log10` scale with a
-  species-specific half-minimum pseudocount, `log10(abundance + min_abundance/2)`.
-  p-values are FDR-adjusted (Benjamini–Hochberg) across species within each model.
-- **Cross-sectional linear models (`4a`).** Fitted per species as
-  `FFMI_v0 ~ log10_abundance + covariates`, in three nested specifications that
-  implement the three DAGs in `4c`:
-  - *Model 1* — `+ age + sex`
-  - *Model 2* (adiposity sensitivity) — `+ age + sex + FMI`
-  - *Model 3* (extended sensitivity) — `+ age + sex + FMI + T2D + antidiabetic
-    medication + statins`
-
-  The three models are drawn together in a combined forest plot
-  (`graphs/microbe_associations/`), and the Model-1 significant-species object is
-  saved to `tables/` for use by `4b`.
-- **Longitudinal mixed models (`4b`).** Baseline abundance against FFMI
-  trajectory, fitted per species with `lmerTest` (ML) as
+- **Species set (for the model).** Poorly annotated taxa (uncharacterised `GGB`
+  genome bins) are dropped first. A species is then kept if detected in **≥ 20%**
+  of baseline samples **and** above a mean relative-abundance floor. Prevalence and
+  abundance thresholds are set blind to the FFMI results (independent filtering)
+  and locked before any inferential step. Abundances enter on a `log10` scale with
+  a species-specific half-minimum pseudocount, `log10(abundance + min_abundance/2)`.
+- **Mixed models (`4b`).** Baseline abundance against FFMI trajectory, fitted per
+  species with `lmerTest` (ML) as
   `FFMI ~ log10_baseline_abundance * visit + age_centred + sex + %weight_change +
   (1 | id)` (random intercept per participant). The term of interest is the
   `log10_baseline_abundance × visit` interaction — whether baseline abundance
-  predicts the *change* in FFMI. The model is run separately for each
-  post-surgical follow-up (`v4`, `v5`; labelled 1-year and 2-year in the figures),
-  and species are flagged as significant at each interval, at **both** intervals
-  (overlap), or at one only.
-- **Cross-sectional × longitudinal overlap (`4b`).** The longitudinal overlap
-  hits are then cross-referenced against the baseline hits from `4a`, giving a
-  combined table of baseline, 1-year and 2-year effect sizes
-  (`tables/lm_lmm_ffmi_overlap_table.csv`). For those species, `4b` also draws
-  observed-trajectory and %-FFMI-change plots comparing high vs low
-  baseline-abundance tertile groups (`graphs/lmm_species_ffmi/`).
+  predicts the *change* in FFMI. The model is run separately for each post-surgical
+  follow-up (`v4`, `v5`; 1-year and 2-year), with p-values FDR-adjusted
+  (Benjamini–Hochberg) across species — ungrouped — within each interval.
+- **Result carried forward.** One species is significant at 1 year (`v4`), robust
+  across prevalence/abundance thresholds; the earlier cross-sectional models were
+  null. For the significant species `4b` draws observed-trajectory and
+  %-FFMI-change plots comparing high vs low baseline-abundance tertile groups
+  (`graphs/lmm_species_ffmi/`). This is retained as a robustness result alongside
+  the differential-abundance / ML shortlist (see **Current direction**).
 
-### DAG-based adjustment (`4c`)
-
-Adjustment sets are **DAG-derived**, blocking back-door paths from microbe → FFMI
-without conditioning on mediators or colliders. Insulin resistance is treated as a
-co-outcome rather than a confounder; BMI is avoided as an over-adjustment, since
-FFMI already height-normalises. Model 2 adds adiposity (FMI); Model 3 additionally
-conditions on T2D, antidiabetic medication and statins.
+DAG-derived reasoning still informs covariate choice — blocking back-door paths
+from microbe → FFMI without conditioning on mediators or colliders, treating
+insulin resistance as a co-outcome, and avoiding BMI as an over-adjustment since
+FFMI already height-normalises. The standalone DAG script has been archived.
 
 ### Functional pathways (`5a`)
 
