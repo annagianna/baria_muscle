@@ -37,12 +37,12 @@ theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
 
 renoir_15 <- met.brewer("Renoir", n = 15)
 color_manual_abundance <- scale_color_manual(
-  values = c("Low baseline abundance" = renoir_15[6], "High baseline abundance" = renoir_15[14]),
-  labels = c("Low baseline abundance" = "Low", "High baseline abundance" = "High")
+  values = c("Low" = renoir_15[6], "High" = renoir_15[14]),
+  labels = c("Low" = "Low", "High" = "High")
 )
 fill_manual_abundance <- scale_fill_manual(
-  values = c("Low baseline abundance" = renoir_15[6], "High baseline abundance" = renoir_15[14]),
-  labels = c("Low baseline abundance" = "Low", "High baseline abundance" = "High")
+  values = c("Low" = renoir_15[6], "High" = renoir_15[14]),
+  labels = c("Low" = "Low", "High" = "High")
 )
 
 # Data
@@ -77,17 +77,19 @@ species_v0_prevalence <- colMeans(species_v0 > 0, na.rm = FALSE) # (= proportion
 species_v0_abundance <- colMeans(species_v0, na.rm = FALSE) # mean relative abundance per species
 
 ## Filter
-# Keep species detected in at least 30% of baseline samples, with mean relative abundance >= 0.01%
+# Keep species detected in at least 20% of baseline samples, with mean relative abundance >= 0.01%
 species_v0_keep <- tibble(
   species = names(species_v0_prevalence),
   prevalence_v0 = species_v0_prevalence,
   mean_abundance_v0 = species_v0_abundance
 ) |>
   filter(
-    prevalence_v0 >= 0.20,
-    mean_abundance_v0 >= 0.01
+    prevalence_v0 >= 0.50,
+    mean_abundance_v0 >= 0.1
   ) |>
   pull(species)
+
+length(species_v0_keep)
 
 # Prepare subset needed for lmm
 baria_muscle_lmm <- baria_muscle_long |>
@@ -130,7 +132,7 @@ species_labels <- tibble(species = sort(unique(lmm_data_ffmi$species))) |>
     sgb = str_remove(sgb, "^t__")
   )
 
-#### Model: Age, sex, %weight change ####
+#### Models ####
 ##### Model function ####
 run_lmm_ffmi <- function(lmm_data, follow_up, species_labels) {
 
@@ -197,7 +199,7 @@ plot_ffmi_observed <- baria_muscle_long |>
   stat_summary(aes(group = 1), fun = mean, geom = "point", color = "black", size = 1.5) +
   labs(
     title = "Observed FFMI trajectories",
-    x = NULL,
+    x = "Baseline log10-abundance",
     y = "FFMI (kg/m²)"
   ) +
   scale_x_discrete(expand = expansion(mult = c(0, 0.01))) +
@@ -215,8 +217,8 @@ lmm_v4_plot_data <- lmm_data_ffmi |>
     abundance_tertile_low = quantile(baseline_abundance[visit == "v0"], probs = 1/3, na.rm = TRUE),
     abundance_tertile_high = quantile(baseline_abundance[visit == "v0"], probs = 2/3, na.rm = TRUE),
     abundance_group = case_when(
-      baseline_abundance <= abundance_tertile_low ~ "Low baseline abundance",
-      baseline_abundance >= abundance_tertile_high ~ "High baseline abundance"
+      baseline_abundance <= abundance_tertile_low ~ "Low",
+      baseline_abundance >= abundance_tertile_high ~ "High"
     )
   ) |>
   ungroup() |>
@@ -245,7 +247,7 @@ plot_perc_ffmi_change_v4 <- lmm_v4_plot_data |>
   fill_manual_abundance +
   theme_minimal_custom() +
   theme(plot.title = element_text(face = "italic"), legend.position = "none")
-ggsave(plot = plot_perc_ffmi_change_v4, filename = "graphs/lmm_species_ffmi/plot_perc_ffmi_change_v4_signif.pdf", width = 8, height = 7)
+ggsave(plot = plot_perc_ffmi_change_v4, filename = "graphs/lmm_species_ffmi/plot_perc_ffmi_change_v4_signif.pdf", width = 10, height = 7)
 
 
 c(
