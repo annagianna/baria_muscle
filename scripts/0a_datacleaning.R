@@ -1,4 +1,5 @@
-# Baria project: Muscle mass trajectories and gut microbiota following bariatric surgery - Data cleaning
+# Baria project: Muscle mass trajectories and gut microbiota following bariatric surgery
+# Data cleaning
 # Anna Giannakogeorgou, a.gianna@amsterdamumc.nl
 
 # Libraries
@@ -397,10 +398,7 @@ baria_muscle_long_all <- baria_muscle_vars_meds |>
   mutate(
     date_baseline = date[visit == "v0"],
     n_years_from_v0 = as.numeric(date - date_baseline) / 365.25,
-    age = age_v0 + n_years_from_v0
-  ) |> 
-  ungroup() |> 
-  mutate(
+    age = age_v0 + n_years_from_v0,
     hba1c_percent = if_else(hba1c < 15, hba1c, hba1c * 0.0915 + 2.15),
     hba1c_mmolmol = if_else(is.na(hba1c_mmolmol) == FALSE, hba1c_mmolmol, 10.93 * hba1c_percent - 23.5),
 
