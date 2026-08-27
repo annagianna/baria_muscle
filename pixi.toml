@@ -6,6 +6,24 @@ platforms = ["osx-arm64"]
 version = "0.1.0"
 
 [tasks]
+datacleaning = "Rscript scripts/0a_datacleaning.R"
+table1 = "Rscript scripts/1a_tableone_v0.R"
+alphadiv = "Rscript scripts/2a_mb_alphadiversity_v0.R"
+betadiv = "Rscript scripts/2b_mb_betadiversity_v0.R"
+composition = "Rscript scripts/2c_mb_composition_v0.R"
+lmm = "Rscript scripts/4b_lmm_mb_ffmi_trajectories.R"
+humann = "Rscript scripts/5a_humann_pathways.R"
+ml-prep = "Rscript scripts/6a_ml_prep.R"
+ml-run = "sbatch scripts/6b_ml_run.sh"
+ml-process = "Rscript scripts/6c_ml_process.R"
+
+[tasks.mb]
+depends-on = ["alphadiv", "betadiv", "composition"]
+description = "Baseline microbiome descriptive analyses: alpha diversity, beta diversity, composition."
+
+[tasks.ml]
+depends-on = ["ml-prep", "ml-run", "ml-process"]
+description = "ML pipeline: prep XGBeast input data, submit model-fitting job, process results."
 
 [dependencies]
 r-tidyverse = ">=2.0.0,<3"
