@@ -518,23 +518,43 @@ sample_data(run1_mb)$visit <- case_when(
   TRUE ~ NA_character_
 )
 
+# Clean sample IDs in compositional table
 sample_data(run1_mb)$id <- as.character(sample_data(run1_mb)$Subject_ID)
+sample_names(run1_mb) <- str_c("BARIA_", str_remove(str_remove(str_remove(sample_names(run1_mb), "BARIA.Metagenome."), ".Fecal"), ".NA"))
+sample_names(run1_mb) <- str_replace(str_replace(str_replace(sample_names(run1_mb), "V-1", "v0"), "V4", "v4"), "V5", "v5")
+sample_names(run1_mb) <- str_replace(sample_names(run1_mb), "\\.", "_")
+sample_names(run1_mb) <- str_replace(sample_names(run1_mb), ".rep\\d", "") # to remove .rep1
+
+all(sample_names(run1_mb) == str_c("BARIA_", sample_data(run1_mb)$id, "_", sample_data(run1_mb)$visit))
+# so we couldve also done sample_names(run1_mb) <- str_c("BARIA_", sample_data(run1_mb)$id, "_", sample_data(run1_mb)$visit)
+# but that feels less safe
 
 # Restrict to final Baria muscle cohort
 baria_mb_clean <- prune_samples(sample_data(run1_mb)$id %in% bia_abx_mb_ids, run1_mb)
 
 # Add relevant metadata to mb
-baria_mb_metadata <- as(sample_data(baria_mb_clean), "data.frame") |> 
+baria_mb_metadata <- as(sample_data(baria_mb_clean), "data.frame") |>
   rownames_to_column(var = "Sample") |>
   select(-any_of(c("sex", "ffmi_v0", "low_ffmi_v0", "perc_change_ffmi_v4_group", "perc_change_ffmi_v5_group"))) |>
   left_join(
-    baria_muscle_wide |> 
+    baria_muscle_wide |>
       select(id, sex, ffmi_v0, low_ffmi_v0, perc_change_ffmi_v4_group, perc_change_ffmi_v5_group),
     by = "id"
-  ) |> 
+  ) |>
   column_to_rownames("Sample")
 
 sample_data(baria_mb_clean) <- sample_data(baria_mb_metadata)
+
+# Add a clean, human-readable species label as its own column in the tax table
+tax_table(baria_mb_clean) <- cbind(
+  tax_table(baria_mb_clean),
+  Tax = tax_table(baria_mb_clean)[, "Species"] |>
+    str_remove("^s__") |>
+    str_replace_all("_", " ")
+)
+
+baria_mb_baseline <- prune_samples(baria_mb_clean@sam_data$visit == "v0", baria_mb_clean)
+baria_mb_baseline
 
 # Save clinical data as both RDS and csv files
 # Long clinical data
@@ -547,3 +567,4 @@ saveRDS(baria_muscle_wide, "data/processed_data/BARIA_muscle_wide.RDS")
 
 # Save mb data
 saveRDS(baria_mb_clean, "data/processed_data/BARIA_mb_clean.RDS")
+saveRDS(baria_mb_baseline, "data/processed_data/BARIA_mb_baseline.RDS")
