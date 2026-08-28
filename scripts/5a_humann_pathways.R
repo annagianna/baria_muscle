@@ -34,43 +34,14 @@ theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
 renoir_15 <- met.brewer("Renoir", n = 15)
 
 # Data
-humann <- readRDS("data/raw_data/BARIA.humann4.profiles.2026.581.910.RDS")
-baria_mb <- readRDS("data/processed_data/260818_BARIA_mb_clean.RDS")
-baria_muscle_long <- readRDS("data/processed_data/260818_BARIA_muscle_long.RDS")
+humann_long <- readRDS("data/processed_data/BARIA_humann_pathways_long.RDS")
+baria_muscle_long <- readRDS("data/processed_data/BARIA_muscle_long.RDS")
 
-# Clean up
-humann_long <- humann |> 
-  rownames_to_column(var = "pathway") |> 
-  pivot_longer(
-    cols = -pathway,
-    names_to = "Sample",
-    values_to = "pathway_abundance"
-  ) |> 
-  mutate(
-    Sample = Sample |> 
-      str_remove("_Abundance$") |> 
-      str_replace("V\\.1", "V-1")
-  ) |> 
-  filter(
-    str_detect(Sample, "\\.Fecal\\."),
-    Sample %in% sample_names(baria_mb),
-    !pathway %in% c("UNMAPPED", "UNINTEGRATED")
-  ) |> 
-  mutate(
-    pathway_id = str_extract(pathway, "[A-Z0-9-]+(?=:)"),
-    pathway_name = str_extract(pathway, "(?<=:).*") 
-      |> trimws()
-  ) |> 
-  left_join(
-    as(sample_data(baria_mb), "data.frame") |> 
-      rownames_to_column(var = "Sample") |> 
-      select(Sample, id, visit),
-    by = "Sample"
-  ) |> 
-  mutate(pathway_abundance = replace_na(pathway_abundance, 0)) |> # Treat undetected pathways as zero abundance
-  group_by(pathway_id) |> 
-  filter(mean(pathway_abundance[visit == "v0"] > 5) >= 0.5) |> # Keep pathways with >5 CPM in at least 50% of baseline samples
-  ungroup() |> 
+# Feature selection & transform for this analysis
+humann_long <- humann_long |>
+  group_by(pathway_id) |>
+  filter(mean(pathway_abundance[visit == "v0"] > 5) >= 0.2) |>
+  ungroup() |>
   mutate(log10_pathway_abundance = log10(pathway_abundance + 1))
 
 #### Baseline pathway - FFMI associations ####
@@ -80,8 +51,8 @@ humann_v0 <- humann_long |>
   left_join(
     baria_muscle_long |>
       filter(visit == "v0") |>
-      select(id, age_v0, sex, t2d_v0, dm_meds_v0, statins_v0, ffmi, fmi) |>
-      rename(ffmi_v0 = ffmi, fmi_v0 = fmi),
+      select(id, age_v0, sex, t2d_v0, dm_meds, statins, ffmi, fmi) |>
+      rename(dm_meds_v0 = dm_meds, statins_v0 = statins, ffmi_v0 = ffmi, fmi_v0 = fmi),
     by = "id"
   )
 
@@ -146,7 +117,8 @@ model_data_pathway_lmm <- humann_v0 |>
         age_centered_v0 = age_v0 - mean(age_v0, na.rm = TRUE)
       ) |>
       select(id, visit, ffmi, age_centered_v0, sex, perc_change_weight_kg),
-    by = "id"
+    by = "id",
+    relationship = "many-to-many" # expected: each id fans out across pathway x visit
   )
 
 # Function for pathway LMMs

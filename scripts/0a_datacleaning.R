@@ -576,6 +576,54 @@ baria_mb_clean <- subset_taxa(baria_mb_clean, !str_detect(Genus, "^g__GGB"))
 baria_mb_baseline <- prune_samples(baria_mb_clean@sam_data$visit == "v0", baria_mb_clean)
 baria_mb_baseline
 
+#### Pathway data cleaning ####
+humann <- readRDS("data/raw_data/BARIA.humann4.profiles.2026.581.910.RDS")
+
+humann_long <- humann |>
+  rownames_to_column(var = "pathway") |>
+  pivot_longer(
+    cols = -pathway,
+    names_to = "Sample",
+    values_to = "pathway_abundance"
+  ) |>
+  mutate(
+    # Raw column names look like "BARIA.Metagenome.<id>.Fecal.V.1.NA_Abundance";
+    # rebuild them into the same "BARIA_<id>_<visit>" ids used for the mb
+    # sample_names (see the run1_mb renaming above)
+    fecal_sample = str_detect(Sample, "\\.Fecal\\."),
+    Sample = Sample |>
+      str_remove("_Abundance$") |>
+      str_replace("V\\.1", "V-1") |>
+      str_remove("BARIA.Metagenome.") |>
+      str_remove(".Fecal") |>
+      str_remove(".NA"),
+    Sample = str_c("BARIA_", Sample),
+    Sample = Sample |>
+      str_replace("V-1", "v0") |>
+      str_replace("V4", "v4") |>
+      str_replace("V5", "v5") |>
+      str_replace("\\.", "_") |>
+      str_replace(".rep\\d", "")
+  ) |>
+  filter(
+    fecal_sample,
+    Sample %in% sample_names(baria_mb_clean),
+    !pathway %in% c("UNMAPPED", "UNINTEGRATED")
+  ) |>
+  select(-fecal_sample) |>
+  mutate(
+    pathway_id = str_extract(pathway, "[A-Z0-9-]+(?=:)"),
+    pathway_name = str_extract(pathway, "(?<=:).*")
+      |> trimws()
+  ) |>
+  left_join(
+    as(sample_data(baria_mb_clean), "data.frame") |>
+      rownames_to_column(var = "Sample") |>
+      select(Sample, id, visit),
+    by = "Sample"
+  ) |>
+  mutate(pathway_abundance = replace_na(pathway_abundance, 0)) # Treat undetected pathways as zero abundance
+
 # Save clinical data as both RDS and csv files
 # Long clinical data
 write.csv(baria_muscle_long, "data/processed_data/BARIA_muscle_long.csv")
@@ -589,3 +637,6 @@ saveRDS(baria_muscle_wide, "data/processed_data/BARIA_muscle_wide.RDS")
 saveRDS(baria_mb_clean, "data/processed_data/BARIA_mb_clean.RDS")
 saveRDS(baria_mb_unfiltered, "data/processed_data/BARIA_mb_clean_unfiltered.RDS")
 saveRDS(baria_mb_baseline, "data/processed_data/BARIA_mb_baseline.RDS")
+
+# Save pathway data
+saveRDS(humann_long, "data/processed_data/BARIA_humann_pathways_long.RDS")
