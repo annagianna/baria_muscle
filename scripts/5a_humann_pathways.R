@@ -41,8 +41,9 @@ baria_muscle_long <- readRDS("data/processed_data/BARIA_muscle_long.RDS")
 humann_long <- humann_long |>
   group_by(pathway_id) |>
   filter(mean(pathway_abundance[visit == "v0"] > 5) >= 0.2) |>
+  mutate(pseudocount = min(pathway_abundance[pathway_abundance > 0]) / 2) |>
   ungroup() |>
-  mutate(log10_pathway_abundance = log10(pathway_abundance + 1))
+  mutate(log10_pathway_abundance = log10(pathway_abundance + pseudocount))
 
 #### Baseline pathway - FFMI associations ####
 # Prepare baseline data
