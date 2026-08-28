@@ -552,6 +552,22 @@ tax_table(baria_mb_clean) <- cbind(
     str_replace_all("_", " ")
 )
 
+# Shorten taxa names from the full taxonomy string to "species_SGB####"
+species_label <- taxa_names(baria_mb_clean) |>
+  str_extract("s__[^|]+") |>
+  str_remove("^s__")
+sgb <- taxa_names(baria_mb_clean) |>
+  str_extract("t__.*$") |>
+  str_remove("^t__")
+taxa_names(baria_mb_clean) <- if_else(
+  str_ends(species_label, sgb), species_label, str_c(species_label, "_", sgb)
+)
+
+# Drop eukaryotes
+baria_mb <- subset_taxa(baria_mb, Kingdom != "k__Eukaryota")
+# Drop GGB genera (without proper taxonomy)
+baria_mb <- subset_taxa(baria_mb, !str_detect(Genus, "^g__GGB"))
+
 baria_mb_baseline <- prune_samples(baria_mb_clean@sam_data$visit == "v0", baria_mb_clean)
 baria_mb_baseline
 
