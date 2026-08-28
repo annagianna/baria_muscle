@@ -46,8 +46,8 @@ fill_manual_abundance <- scale_fill_manual(
 )
 
 # Data
-baria_muscle_long <- readRDS("data/processed_data/260818_BARIA_muscle_long.RDS")
-baria_mb <- readRDS("data/processed_data/260818_BARIA_mb_clean.RDS")
+baria_muscle_long <- readRDS("data/processed_data/BARIA_muscle_long.RDS")
+baria_mb <- readRDS("data/processed_data/BARIA_mb_clean.RDS")
 
 # Filter out poorly annotated ("GGB"-containing) taxa
 baria_mb_species <- prune_taxa(str_detect(rownames(otu_table(baria_mb)), "GGB\\d+", negate = TRUE), baria_mb)
@@ -248,12 +248,3 @@ plot_perc_ffmi_change_v4 <- lmm_v4_plot_data |>
   theme_minimal_custom() +
   theme(plot.title = element_text(face = "italic"), legend.position = "none")
 ggsave(plot = plot_perc_ffmi_change_v4, filename = "graphs/lmm_species_ffmi/plot_perc_ffmi_change_v4_signif.pdf", width = 10, height = 7)
-
-
-c(
-  n_species_tested = length(species_v0_keep),
-  v4_results = nrow(lmm_ffmi_v4_results),
-  v5_results = nrow(lmm_ffmi_v5_results),
-  v4_signif = nrow(lmm_ffmi_v4_signif),
-  v5_signif = nrow(lmm_ffmi_v5_signif)
-)
