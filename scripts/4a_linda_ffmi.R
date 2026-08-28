@@ -32,6 +32,7 @@ theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
 }
 
 renoir_15 <- met.brewer("Renoir", n = 15)
+model_color_manual <- scale_color_manual(values = c(renoir_15[6], renoir_15[14]))
 
 # Data
 baria_mb <- readRDS("data/processed_data/BARIA_mb_clean.RDS")
@@ -53,7 +54,7 @@ linda_meta_long <- mb_sample_data |>
   filter(visit %in% c("v0", "v4", "v5")) |>
   rownames_to_column("Sample") |>
   left_join(
-    baria_muscle_long |> 
+    baria_muscle_long |>
       filter(visit %in% c("v0", "v4", "v5")) |> 
       select(id, visit, age_v0, ffmi, fmi, perc_change_weight_kg, t2d_v0, t2d_labs, dm_meds),
     by = c("visit", "id")
@@ -96,7 +97,6 @@ species_keep <- tibble(
 length(species_keep)
 
 # Create species labels
-# Create species labels
 species_labels <- tibble(species = species_keep) |>
   mutate(
     species_label = str_extract(species, "(?<=s__)[^|]+"),
@@ -109,14 +109,14 @@ mb_otu_keep <- mb_otu_long[species_keep, , drop = FALSE]
 #### LinDA ####
 # Define formulas
 linda_formulas <- list(
-  model_1 = "~ ffmi_within + ffmi_between + visit + age_v0 + sex + perc_change_weight_kg + (1 | id)",
-  model_2 = "~ ffmi_within + ffmi_between + visit + age_v0 + sex + perc_change_weight_kg + t2d_v0 + dm_meds + (1 | id)"
+  model1 = "~ ffmi_within + ffmi_between + visit + age_v0 + sex + perc_change_weight_kg + (1 | id)",
+  model2 = "~ ffmi_within + ffmi_between + visit + age_v0 + sex + perc_change_weight_kg + t2d_v0 + dm_meds_v0 + (1 | id)"
 )
 
 # LinDA function
 run_linda_ffmi <- function(formula, model_name) {
 
-  linda <- linda(
+  linda <- MicrobiomeStat::linda(
     feature.dat = mb_otu_keep, meta.dat = linda_meta_long, formula = formula, feature.dat.type = "proportion",
     prev.filter = 0, mean.abund.filter = 0, p.adj.method = "BH", alpha = 0.05
   )
@@ -134,16 +134,42 @@ run_linda_ffmi <- function(formula, model_name) {
 }
 
 # Run LinDA function for each formula
-linda_ffmi_results <- imap_dfr(linda_formulas, ~ run_linda_ffmi(formula = .x,model_name = .y))
+linda_ffmi_results <- imap_dfr(linda_formulas, ~ run_linda_ffmi(formula = .x, model_name = .y))
 
 # Extract significant species at least one model
 species_linda_signif <- linda_ffmi_results |>
   filter(signif) |>
-  arrange(model, padj) |> 
+  arrange(model, log2FoldChange) |> 
   distinct(species) |>
   pull(species)
 
 ### Plot ###
 linda_plot_data <- linda_ffmi_results |>
-  filter(species %in% species_linda_signif)
+  filter(species %in% species_linda_signif) |> 
+  mutate(
+    model = factor(model, levels = c("model1", "model2"), labels = c("Age + sex + % weight change from baseline", "+ baseline T2D + diabetes medication"))
+  )
 
+## Save signif results
+# Vector of significant species in at least one model
+saveRDS(species_linda_signif,"data/processed_data/LinDA_significant_species.RDS")
+
+# Save signif results table
+linda_species_summary <- linda_ffmi_results |>
+  filter(species %in% species_linda_signif) |>
+  select(model, species, species_label, log2FoldChange, lfcSE, ci_lower, ci_upper, pvalue, padj, signif) |>
+  arrange(species_label, model)
+write_csv(linda_species_summary, "results/tables/LinDA_significant_species.csv")
+
+### Forest plot of signif species ###
+linda_forest_plot <- linda_plot_data |> 
+  ggplot(aes(x = log2FoldChange, y = species_label, color = model)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray70") +
+  geom_errorbar(aes(xmin = ci_lower, xmax = ci_upper), width = 0.5, position = position_dodge(width = 0.5)) +
+  geom_point(size = 3, position = position_dodge(width = 0.5)) +
+  labs(x = expression("Change in log"[2]*" abundance per 1 kg/m"^2*" higher FFMI"), y = NULL, color = "Model") +
+  guides(color = guide_legend(ncol = 1)) +
+  model_color_manual +
+  theme_minimal_custom() +
+  theme(axis.text.y = element_text(face = "italic"))
+ggsave("results/figures/linda/LinDA_ffmi_forest_plot.pdf", linda_forest_plot, width = 12, height = 8)
