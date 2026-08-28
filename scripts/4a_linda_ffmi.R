@@ -92,6 +92,14 @@ species_keep <- tibble(
 
 length(species_keep)
 
+# Create species labels
+# Create species labels
+species_labels <- tibble(species = species_keep) |>
+  mutate(
+    species_label = str_extract(species, "(?<=s__)[^|]+"),
+    species_label = str_replace_all(species_label, "_", " ")
+  )
+
 # Filter abundance matrix
 mb_otu_keep <- mb_otu_long[species_keep, , drop = FALSE]
 
@@ -114,11 +122,12 @@ run_linda_ffmi <- function(formula, model_name) {
 
   linda$output$ffmi_within |>
     rownames_to_column("species") |>
+    left_join(species_labels, by = "species") |>
     mutate(
       model = model_name,
       signif = padj < 0.05
-    ) |>
-    relocate(model, species)
+    )
+  
 }
 
 # Run LinDA function for each formula
@@ -129,3 +138,5 @@ linda_signif <- linda_ffmi_results |>
   filter(signif) |>
   arrange(model, padj)
 
+linda_signif |>
+  select(model, species, log2FoldChange, lfcSE, pvalue, padj)
