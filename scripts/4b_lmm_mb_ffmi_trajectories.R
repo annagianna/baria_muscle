@@ -45,6 +45,10 @@ fill_manual_abundance <- scale_fill_manual(
   labels = c("Low" = "Low", "High" = "High")
 )
 
+fill_manual_timepoint <- scale_fill_manual(
+  values = c("Baseline" = renoir_15[3], "1 year" = renoir_15[9], "2 years" = renoir_15[13])
+)
+
 # Data
 baria_muscle_long <- readRDS("data/processed_data/BARIA_muscle_long.RDS")
 baria_mb <- readRDS("data/processed_data/BARIA_mb_clean.RDS")
@@ -200,6 +204,24 @@ plot_ffmi_observed <- baria_muscle_long |>
   scale_x_discrete(expand = expansion(mult = c(0, 0.01))) +
   theme_minimal_custom()
 ggsave(plot = plot_ffmi_observed, filename = "graphs/lmm_species_ffmi/plot_ffmi_observed.pdf", width = 10, height = 8)
+
+# Plot FFMI trajectories as violin+boxplots per timepoint
+ffmi_boxplot <- baria_muscle_long |>
+  filter(visit %in% c("v0", "v4", "v5"), !is.na(ffmi)) |>
+  dplyr::select(id, visit, ffmi) |>
+  mutate(visit = factor(visit, levels = c("v0", "v4", "v5"), labels = c("Baseline", "1 year", "2 years")))
+
+pl_ffmi_box <- ggplot(ffmi_boxplot, aes(x = visit, y = ffmi)) +
+  geom_violin(aes(fill = visit), color = "black", alpha = 0.7, width = 0.7, trim = TRUE) +
+  geom_line(aes(group = id), color = "grey50", alpha = 0.25, linewidth = 0.3) +
+  geom_point(aes(group = id), color = "grey30", alpha = 0.35, size = 0.7) +
+  geom_boxplot(width = 0.15, outlier.shape = NA, fill = "white", color = "black", notchwidth = 0) +
+  fill_manual_timepoint +
+  labs(title = "Observed FFMI trajectories", x = NULL, y = "FFMI (kg/m²)") +
+  # scale_x_discrete(expand = expansion(add = c(0.9, 0.6))) +
+  theme_minimal_custom() +
+  theme(legend.position = "none")
+ggsave(pl_ffmi_box, filename = "graphs/lmm_species_ffmi/plot_ffmi_boxplot.pdf", width = 6, height = 7)
 
 # Prepare plotting data for significant v4 species
 lmm_v4_plot_data <- lmm_data_ffmi |>
