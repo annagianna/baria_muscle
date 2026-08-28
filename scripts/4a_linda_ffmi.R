@@ -7,6 +7,7 @@ library(MicrobiomeStat)
 library(phyloseq)
 library(grid)
 library(MetBrewer)
+library(car)
 
 # Theme
 theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
@@ -65,10 +66,16 @@ linda_meta_long <- mb_sample_data |>
     ffmi_between = mean(ffmi, na.rm = TRUE),
     ffmi_within = ffmi - ffmi_between,
     fmi_between = mean(fmi, na.rm = TRUE),
-    fmi_within = fmi - fmi_between,
-    dm_meds_v0 = dm_meds[visit == "v0"][1]
+    fmi_within = fmi - fmi_between
   ) |> 
   ungroup() |> 
+  left_join(
+    baria_muscle_long |> 
+      filter(visit == "v0") |> 
+      distinct(id, .keep_all = TRUE) |> 
+      select(id, dm_meds_v0 = dm_meds),
+    by = "id"
+  ) |> 
   mutate(
     visit = factor(visit, levels = c("v0", "v4", "v5")),
     id = factor(id)
@@ -155,21 +162,23 @@ linda_plot_data <- linda_ffmi_results |>
 saveRDS(species_linda_signif,"data/processed_data/LinDA_significant_species.RDS")
 
 # Save signif results table
-linda_species_summary <- linda_ffmi_results |>
+species_linda_signif_summary <- linda_ffmi_results |>
   filter(species %in% species_linda_signif) |>
   select(model, species, species_label, log2FoldChange, lfcSE, ci_lower, ci_upper, pvalue, padj, signif) |>
   arrange(species_label, model)
-write_csv(linda_species_summary, "results/tables/LinDA_significant_species.csv")
+write_csv(species_linda_signif_summary, "results/tables/LinDA_significant_species.csv")
 
 ### Forest plot of signif species ###
 linda_forest_plot <- linda_plot_data |> 
-  ggplot(aes(x = log2FoldChange, y = species_label, color = model)) +
+  ggplot(aes(x = log2FoldChange, y = species_label, color = model, group = model)) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "gray70") +
   geom_errorbar(aes(xmin = ci_lower, xmax = ci_upper), width = 0.5, position = position_dodge(width = 0.5)) +
-  geom_point(size = 3, position = position_dodge(width = 0.5)) +
+  geom_point(aes(shape = signif), size = 3, position = position_dodge(width = 0.5)) +
+  scale_shape_manual(values = c("TRUE" = 16, "FALSE" = 1), guide = "none") + 
   labs(x = expression("Change in log"[2]*" abundance per 1 kg/m"^2*" higher FFMI"), y = NULL, color = "Model") +
   guides(color = guide_legend(ncol = 1)) +
   model_color_manual +
   theme_minimal_custom() +
   theme(axis.text.y = element_text(face = "italic"))
 ggsave("results/figures/linda/LinDA_ffmi_forest_plot.pdf", linda_forest_plot, width = 12, height = 8)
+
