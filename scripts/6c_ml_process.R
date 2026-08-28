@@ -83,6 +83,7 @@ for (i in seq_len(nrow(model_defs))) {
   timepoint    <- model_defs$timepoint[i]
   is_adj       <- model_defs$is_adj[i]
   base <- file.path("results/mlmodels", outcome)
+  dir.create(base, recursive = TRUE, showWarnings = FALSE)
   cat("\n====", label, "====\n")
 
   ## Aggregate metrics + explained variance summary across subgroups
@@ -115,6 +116,7 @@ for (i in seq_len(nrow(model_defs))) {
     feats <- fi_top$FeatName
     subtitle <- paste0(label, " (", g, ")")
 
+    dir.create(model_path, recursive = TRUE, showWarnings = FALSE)
     p_imp <- plot_feature_importance(fi_top, title = subtitle)
     ggsave(file.path(model_path, "feature_importance_top15.pdf"), p_imp, width = 7, height = 5)
 

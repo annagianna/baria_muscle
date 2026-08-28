@@ -43,6 +43,9 @@ x_axis_labels_ffmi <- scale_x_discrete(labels = c("yes" = "Low FFMI", "no" = "Mo
 # reflect the full profiled community, not just the taxonomically annotated subset
 baria_mb <- readRDS("data/processed_data/BARIA_mb_clean_unfiltered.RDS") # already contains necessary metadata for the grouping
 
+# Output folder
+dir.create("results/graphs/alphadiversity", recursive = TRUE, showWarnings = FALSE)
+
 # Diversity metrics
 # Convert OTU table to matrix and transpose 
 matrix_mb <- as(otu_table(baria_mb), "matrix") |> 
@@ -86,7 +89,7 @@ shannon_ffmi_v0 <- alpha_v0 |>
   fill_cols_2 +
   labs(fill = "Low baseline FFMI") + 
   theme_minimal_custom()
-ggsave(shannon_ffmi_v0, filename = "graphs/alphadiversity/shannon_ffmi_v0.pdf", width = 7, height = 5)
+ggsave(shannon_ffmi_v0, filename = "results/graphs/alphadiversity/shannon_ffmi_v0.pdf", width = 7, height = 5)
 
 # Violin
 shannon_violin_ffmi_v0 <- alpha_v0 |> 
@@ -105,7 +108,7 @@ shannon_violin_ffmi_v0 <- alpha_v0 |>
   x_axis_labels_ffmi + 
   theme_minimal_custom() +
   theme(legend.position = "none")
-ggsave(shannon_violin_ffmi_v0, filename = "graphs/alphadiversity/shannon_violin_ffmi_v0.pdf", width = 6, height = 5)
+ggsave(shannon_violin_ffmi_v0, filename = "results/graphs/alphadiversity/shannon_violin_ffmi_v0.pdf", width = 6, height = 5)
 
 ## Simpson ##
 # Boxplot
@@ -118,7 +121,7 @@ simpson_ffmi_v0 <- alpha_v0 |>
   fill_cols_2 +
   labs(fill = "Low baseline FFMI") + 
   theme_minimal_custom()
-ggsave(simpson_ffmi_v0, filename = "graphs/alphadiversity/simpson_ffmi_v0.pdf", width = 7, height = 5)
+ggsave(simpson_ffmi_v0, filename = "results/graphs/alphadiversity/simpson_ffmi_v0.pdf", width = 7, height = 5)
 
 # Violin
 simpson_violin_ffmi_v0 <- alpha_v0 |> 
@@ -137,7 +140,7 @@ simpson_violin_ffmi_v0 <- alpha_v0 |>
   x_axis_labels_ffmi +
   theme_minimal_custom() +
   theme(legend.position = "none")
-ggsave(simpson_violin_ffmi_v0, filename = "graphs/alphadiversity/simpson_violin_ffmi_v0.pdf", width = 6, height = 5)
+ggsave(simpson_violin_ffmi_v0, filename = "results/graphs/alphadiversity/simpson_violin_ffmi_v0.pdf", width = 6, height = 5)
 
 ## Richness ##
 # Boxplot
@@ -150,7 +153,7 @@ richness_ffmi_v0 <- alpha_v0 |>
   fill_cols_2 +
   labs(fill = "Low baseline FFMI") + 
   theme_minimal_custom()
-ggsave(richness_ffmi_v0, filename = "graphs/alphadiversity/richness_ffmi_v0.pdf", width = 7, height = 5)
+ggsave(richness_ffmi_v0, filename = "results/graphs/alphadiversity/richness_ffmi_v0.pdf", width = 7, height = 5)
 
 # Violin
 richness_violin_ffmi_v0 <- alpha_v0 |> 
@@ -169,7 +172,7 @@ richness_violin_ffmi_v0 <- alpha_v0 |>
   x_axis_labels_ffmi +
   theme_minimal_custom() +
   theme(legend.position = "none")
-ggsave(richness_violin_ffmi_v0, filename = "graphs/alphadiversity/richness_violin_ffmi_v0.pdf", width = 6, height = 5)
+ggsave(richness_violin_ffmi_v0, filename = "results/graphs/alphadiversity/richness_violin_ffmi_v0.pdf", width = 6, height = 5)
 
 ## Combine into a panel 
 # Horizontal
@@ -180,7 +183,7 @@ alpha_panel_ffmi_v0 <-
   plot_layout(guides = "collect") &
   # theme(legend.position = "bottom") &
   theme(aspect.ratio = 0.8)
-ggsave(alpha_panel_ffmi_v0, filename = "graphs/alphadiversity/alpha_panel_ffmi_v0.pdf", width = 12, height = 8)
+ggsave(alpha_panel_ffmi_v0, filename = "results/graphs/alphadiversity/alpha_panel_ffmi_v0.pdf", width = 12, height = 8)
 
 # Vertical (for pptx)
 alpha_panel_ffmi_v0_vertical <-
@@ -189,4 +192,4 @@ alpha_panel_ffmi_v0_vertical <-
   richness_violin_ffmi_v0 +
   plot_layout(guides = "collect") &
   theme(legend.position = "none", plot.title = element_blank())
-ggsave(alpha_panel_ffmi_v0_vertical, filename = "graphs/alphadiversity/alpha_panel_ffmi_v0_vertical.pdf", width = 3.8, height = 8)
+ggsave(alpha_panel_ffmi_v0_vertical, filename = "results/graphs/alphadiversity/alpha_panel_ffmi_v0_vertical.pdf", width = 3.8, height = 8)

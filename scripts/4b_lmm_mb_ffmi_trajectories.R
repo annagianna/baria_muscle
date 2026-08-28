@@ -53,6 +53,9 @@ fill_manual_timepoint <- scale_fill_manual(
 baria_muscle_long <- readRDS("data/processed_data/BARIA_muscle_long.RDS")
 baria_mb <- readRDS("data/processed_data/BARIA_mb_clean.RDS")
 
+# Output folder
+dir.create("results/graphs/lmm_species_ffmi", recursive = TRUE, showWarnings = FALSE)
+
 # Extract abundance matrix
 matrix_mb <- as(otu_table(baria_mb), "matrix") |>
   t()
@@ -203,7 +206,7 @@ plot_ffmi_observed <- baria_muscle_long |>
   ) +
   scale_x_discrete(expand = expansion(mult = c(0, 0.01))) +
   theme_minimal_custom()
-ggsave(plot = plot_ffmi_observed, filename = "graphs/lmm_species_ffmi/plot_ffmi_observed.pdf", width = 10, height = 8)
+ggsave(plot = plot_ffmi_observed, filename = "results/graphs/lmm_species_ffmi/plot_ffmi_observed.pdf", width = 10, height = 8)
 
 # Plot FFMI trajectories as violin+boxplots per timepoint
 ffmi_boxplot <- baria_muscle_long |>
@@ -221,7 +224,7 @@ pl_ffmi_box <- ggplot(ffmi_boxplot, aes(x = visit, y = ffmi)) +
   # scale_x_discrete(expand = expansion(add = c(0.9, 0.6))) +
   theme_minimal_custom() +
   theme(legend.position = "none")
-ggsave(pl_ffmi_box, filename = "graphs/lmm_species_ffmi/plot_ffmi_boxplot.pdf", width = 6, height = 7)
+ggsave(pl_ffmi_box, filename = "results/graphs/lmm_species_ffmi/plot_ffmi_boxplot.pdf", width = 6, height = 7)
 
 # Prepare plotting data for significant v4 species
 lmm_v4_plot_data <- lmm_data_ffmi |>
@@ -264,7 +267,7 @@ plot_perc_ffmi_change_v4 <- lmm_v4_plot_data |>
   fill_manual_abundance +
   theme_minimal_custom() +
   theme(plot.title = element_text(face = "italic"), legend.position = "none")
-ggsave(plot = plot_perc_ffmi_change_v4, filename = "graphs/lmm_species_ffmi/plot_perc_ffmi_change_v4_signif.pdf", width = 6, height = 7)
+ggsave(plot = plot_perc_ffmi_change_v4, filename = "results/graphs/lmm_species_ffmi/plot_perc_ffmi_change_v4_signif.pdf", width = 6, height = 7)
 
 
 c(

@@ -9,8 +9,6 @@ scripts/archive
 data/
 
 # results
-graphs/
-tables/
 results
 
 #vscode

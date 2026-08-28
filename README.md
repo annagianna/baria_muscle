@@ -43,7 +43,7 @@ Scripts are numbered and run in that order. Gaps in the numbering (there is no
 `4a`) correspond to superseded scripts kept locally in a **git-ignored**
 `scripts/archive/` and are not tracked in this repository.
 
-The `data/`, `graphs/` and `tables/` directories, and the pixi environment
+The `data/` and `results/` directories, and the pixi environment
 (`.pixi/`), are also git-ignored: they are created and populated locally when the
 scripts run (see **Data** below) and are not part of the repository.
 
@@ -304,7 +304,7 @@ Two of these carry into the modelling: **antibiotics** are a cohort exclusion
 - **Plots.** An observed-FFMI-trajectory plot across baseline / 1 year / 2 years;
   and, for any species significant at 1 year (`v4`), a plot of %FFMI change by
   baseline-abundance tertile group (low vs high). Figures are written to
-  `graphs/lmm_species_ffmi/`.
+  `results/graphs/lmm_species_ffmi/`.
 
 Covariate choice adjusts for age, sex and %weight change; BMI is deliberately not
 added, since FFMI already height-normalises and adjusting for it would be an
@@ -345,11 +345,15 @@ descriptive-analysis stack; the modelling scripts (`4b`, `5a`) additionally load
 Expected working-directory layout (script paths are relative to the repo root):
 
 ```
-data/raw_data/         # inputs (see Data)
-data/processed_data/   # created by 0a
-graphs/                # figures, in per-analysis subfolders
-tables/                # Table 1 output
+data/raw_data/          # inputs (see Data)
+data/processed_data/    # created by 0a
+results/graphs/         # figures, in per-analysis subfolders
+results/tables/         # Table 1 output
+results/mlmodels/       # ML input data + XGBeast output, per outcome/subgroup
 ```
+
+Each script creates its own output folders (via `dir.create(..., recursive = TRUE)`)
+before writing to them, so `results/` does not need to exist beforehand.
 
 ---
 

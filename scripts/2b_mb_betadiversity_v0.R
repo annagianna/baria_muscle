@@ -49,7 +49,10 @@ color_cols_2 <- scale_color_manual(
 # reflect the full profiled community, not just the taxonomically annotated subset
 baria_mb <- readRDS("data/processed_data/BARIA_mb_clean_unfiltered.RDS") # already contains necessary metadata for the grouping
 
-# Convert OTU table to matrix and transpose 
+# Output folder
+dir.create("results/graphs/betadiversity", recursive = TRUE, showWarnings = FALSE)
+
+# Convert OTU table to matrix and transpose
 matrix_mb <- as(otu_table(baria_mb), "matrix") |> 
   t() # vegan requires a matrix with samples as rows and taxa as cols
 
@@ -123,4 +126,4 @@ bray_ffmi_v0 <- bray_2_v0 |>
   color_cols_2 +
   theme_minimal_custom() +
   theme(legend.position = "left") 
-ggsave(bray_ffmi_v0, filename = "graphs/betadiversity/bray_ffmi_v0.pdf", width = 10, height = 7)
+ggsave(bray_ffmi_v0, filename = "results/graphs/betadiversity/bray_ffmi_v0.pdf", width = 10, height = 7)

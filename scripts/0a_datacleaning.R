@@ -625,6 +625,8 @@ humann_long <- humann |>
   mutate(pathway_abundance = replace_na(pathway_abundance, 0)) # Treat undetected pathways as zero abundance
 
 # Save clinical data as both RDS and csv files
+dir.create("data/processed_data", recursive = TRUE, showWarnings = FALSE)
+
 # Long clinical data
 write.csv(baria_muscle_long, "data/processed_data/BARIA_muscle_long.csv")
 saveRDS(baria_muscle_long, "data/processed_data/BARIA_muscle_long.RDS")
