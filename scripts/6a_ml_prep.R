@@ -44,11 +44,48 @@ build_input_data(meta_var_fmi,        mb2, "ffmi_adj_fmi", file.path(base_adj, "
 build_input_data(meta_var_fmi_male,   mb2, "ffmi_adj_fmi", file.path(base_adj, "male"),   mode = "reg")
 build_input_data(meta_var_fmi_female, mb2, "ffmi_adj_fmi", file.path(base_adj, "female"), mode = "reg")
 
-#### Delta FFMI v0 -> v4 ####
-# Outcome: change in FFMI from baseline to v4; predictors: baseline (v0) species (mb2)
+#### FMI at v0 ####
+# Outcome: baseline FMI (fat mass index); predictors: baseline (v0) species
+# (mb2). Alongside ffmi/ffmi_v4/fmi_v4, lets us compare how well the baseline
+# microbiome predicts muscle vs. fat mass, before vs. after bariatric surgery.
+meta_fmi_var <- meta |> filter(!is.na(fmi))
+meta_fmi_var_male <- meta_fmi_var |> filter(sex == "male")
+meta_fmi_var_female <- meta_fmi_var |> filter(sex == "female")
+
+base_fmi_v0 <- file.path("results/mlmodels/fmi_v0")
+build_input_data(meta_fmi_var,        mb2, "fmi", file.path(base_fmi_v0, "all"),    mode = "reg")
+build_input_data(meta_fmi_var_male,   mb2, "fmi", file.path(base_fmi_v0, "male"),   mode = "reg")
+build_input_data(meta_fmi_var_female, mb2, "fmi", file.path(base_fmi_v0, "female"), mode = "reg")
+
+#### Cross-sectional at v4 (post-surgery), predicted from baseline (v0) species ####
 meta_delta <- readRDS("data/processed_data/BARIA_muscle_long.RDS") |> filter(visit == "v4")
 meta_delta$sampleid <- str_c("BARIA_", meta_delta$id, "_v0") # match against baseline mb sample ids
 meta_delta <- meta_delta |> left_join(baseline_fmi, by = "id")
+
+# FFMI at v4
+cat("ffmi_v4: ", sum(!is.na(meta_delta[["ffmi"]])), "/", nrow(meta_delta), "non-missing\n")
+meta_v4_ffmi_var <- meta_delta |> filter(!is.na(ffmi))
+meta_v4_ffmi_var_male <- meta_v4_ffmi_var |> filter(sex == "male")
+meta_v4_ffmi_var_female <- meta_v4_ffmi_var |> filter(sex == "female")
+
+base_ffmi_v4 <- file.path("results/mlmodels/ffmi_v4")
+build_input_data(meta_v4_ffmi_var,        mb2, "ffmi", file.path(base_ffmi_v4, "all"),    mode = "reg")
+build_input_data(meta_v4_ffmi_var_male,   mb2, "ffmi", file.path(base_ffmi_v4, "male"),   mode = "reg")
+build_input_data(meta_v4_ffmi_var_female, mb2, "ffmi", file.path(base_ffmi_v4, "female"), mode = "reg")
+
+# FMI at v4
+cat("fmi_v4: ", sum(!is.na(meta_delta[["fmi"]])), "/", nrow(meta_delta), "non-missing\n")
+meta_v4_fmi_var <- meta_delta |> filter(!is.na(fmi))
+meta_v4_fmi_var_male <- meta_v4_fmi_var |> filter(sex == "male")
+meta_v4_fmi_var_female <- meta_v4_fmi_var |> filter(sex == "female")
+
+base_fmi_v4 <- file.path("results/mlmodels/fmi_v4")
+build_input_data(meta_v4_fmi_var,        mb2, "fmi", file.path(base_fmi_v4, "all"),    mode = "reg")
+build_input_data(meta_v4_fmi_var_male,   mb2, "fmi", file.path(base_fmi_v4, "male"),   mode = "reg")
+build_input_data(meta_v4_fmi_var_female, mb2, "fmi", file.path(base_fmi_v4, "female"), mode = "reg")
+
+#### Delta FFMI v0 -> v4 ####
+# Outcome: change in FFMI from baseline to v4; predictors: baseline (v0) species (mb2)
 cat("delta_ffmi_v4: ", sum(!is.na(meta_delta[["delta_ffmi"]])), "/", nrow(meta_delta), "non-missing\n")
 
 meta_delta_var <- meta_delta |> filter(!is.na(delta_ffmi))

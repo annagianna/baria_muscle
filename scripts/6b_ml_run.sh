@@ -17,6 +17,9 @@ PARAM=$BASE/scripts/assets/param_grid.json
 OUTCOMES=(
     ffmi
     ffmi_adj_fmi
+    fmi_v0
+    ffmi_v4
+    fmi_v4
     delta_ffmi_v4
     delta_ffmi_v4_adj_fmi
     perc_change_ffmi_v4
