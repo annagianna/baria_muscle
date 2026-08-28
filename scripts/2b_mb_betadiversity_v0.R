@@ -45,7 +45,9 @@ color_cols_2 <- scale_color_manual(
 )
 
 # Data
-baria_mb <- readRDS("data/processed_data/BARIA_mb_clean.RDS") # already contains necessary metadata for the grouping
+# Unfiltered (incl. Eukaryota & GGB-labelled genera): diversity metrics should
+# reflect the full profiled community, not just the taxonomically annotated subset
+baria_mb <- readRDS("data/processed_data/BARIA_mb_clean_unfiltered.RDS") # already contains necessary metadata for the grouping
 
 # Convert OTU table to matrix and transpose 
 matrix_mb <- as(otu_table(baria_mb), "matrix") |> 
