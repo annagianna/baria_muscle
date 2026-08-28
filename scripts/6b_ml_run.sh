@@ -13,29 +13,26 @@ export PATH="$HOME/.pixi/bin:$PATH"   # SLURM batch shells don't source ~/.bashr
 SCRIPT=$BASE/scripts/assets/XGBeast_new.py
 PARAM=$BASE/scripts/assets/param_grid.json
 
-pixi run python $SCRIPT \
-    -name ffmi_all \
-    -path $BASE/results/mlmodels/ffmi/all \
-    -x reg \
-    -n 200 \
-    -t 8 \
-    -rand_seed 1234 \
-    -param $PARAM
+# Every outcome produced by 6a_ml_prep.R, each split into all/male/female
+OUTCOMES=(
+    ffmi
+    ffmi_adj_fmi
+    delta_ffmi_v4
+    delta_ffmi_v4_adj_fmi
+    perc_change_ffmi_v4
+    perc_change_ffmi_v4_adj_fmi
+)
+SUBGROUPS=(all male female)
 
-pixi run python $SCRIPT \
-    -name ffmi_male \
-    -path $BASE/results/mlmodels/ffmi/male \
-    -x reg \
-    -n 200 \
-    -t 8 \
-    -rand_seed 1234 \
-    -param $PARAM
-
-pixi run python $SCRIPT \
-    -name ffmi_female \
-    -path $BASE/results/mlmodels/ffmi/female \
-    -x reg \
-    -n 200 \
-    -t 8 \
-    -rand_seed 1234 \
-    -param $PARAM
+for outcome in "${OUTCOMES[@]}"; do
+    for group in "${SUBGROUPS[@]}"; do
+        pixi run python $SCRIPT \
+            -name "${outcome}_${group}" \
+            -path "$BASE/results/mlmodels/${outcome}/${group}" \
+            -x reg \
+            -n 200 \
+            -t 8 \
+            -rand_seed 1234 \
+            -param $PARAM
+    done
+done
