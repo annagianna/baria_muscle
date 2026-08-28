@@ -531,6 +531,11 @@ all(sample_names(run1_mb) == str_c("BARIA_", sample_data(run1_mb)$id, "_", sampl
 # Restrict to final Baria muscle cohort
 baria_mb_clean <- prune_samples(sample_data(run1_mb)$id %in% bia_abx_mb_ids, run1_mb)
 
+# Drop eukaryotes
+baria_mb_clean <- subset_taxa(baria_mb_clean, Kingdom != "k__Eukaryota")
+# Drop GGB genera (without proper taxonomy)
+baria_mb_clean <- subset_taxa(baria_mb_clean, !str_detect(Genus, "^g__GGB"))
+
 # Add relevant metadata to mb
 baria_mb_metadata <- as(sample_data(baria_mb_clean), "data.frame") |>
   rownames_to_column(var = "Sample") |>
@@ -562,11 +567,6 @@ sgb <- taxa_names(baria_mb_clean) |>
 taxa_names(baria_mb_clean) <- if_else(
   str_ends(species_label, sgb), species_label, str_c(species_label, "_", sgb)
 )
-
-# Drop eukaryotes
-baria_mb <- subset_taxa(baria_mb, Kingdom != "k__Eukaryota")
-# Drop GGB genera (without proper taxonomy)
-baria_mb <- subset_taxa(baria_mb, !str_detect(Genus, "^g__GGB"))
 
 baria_mb_baseline <- prune_samples(baria_mb_clean@sam_data$visit == "v0", baria_mb_clean)
 baria_mb_baseline
