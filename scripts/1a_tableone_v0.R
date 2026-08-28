@@ -70,4 +70,4 @@ t1_v0_mb_matrix <- print(
   )
 
 # Write table
-write.csv(t1_v0_mb_matrix, file = "tables/t1_v0_mb_matrix.csv", row.names = TRUE)
+write.csv(t1_v0_mb_matrix, file = "results/tables/t1_v0_mb_matrix.csv", row.names = TRUE)
