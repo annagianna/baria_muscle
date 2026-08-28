@@ -46,14 +46,11 @@ fill_manual_abundance <- scale_fill_manual(
 )
 
 # Data
-baria_muscle_long <- readRDS("data/processed_data/260818_BARIA_muscle_long.RDS")
-baria_mb <- readRDS("data/processed_data/260818_BARIA_mb_clean.RDS")
-
-# Filter out poorly annotated ("GGB"-containing) taxa
-baria_mb_species <- prune_taxa(str_detect(rownames(otu_table(baria_mb)), "GGB\\d+", negate = TRUE), baria_mb)
+baria_muscle_long <- readRDS("data/processed_data/BARIA_muscle_long.RDS")
+baria_mb <- readRDS("data/processed_data/BARIA_mb_clean.RDS")
 
 # Extract abundance matrix
-matrix_mb <- as(otu_table(baria_mb_species), "matrix") |> 
+matrix_mb <- as(otu_table(baria_mb), "matrix") |>
   t()
 
 # Create baseline mb data
@@ -61,7 +58,7 @@ mb_v0 <- matrix_mb |>
   as.data.frame() |>
   rownames_to_column(var = "Sample") |>
   left_join(
-    as(sample_data(baria_mb_species), "data.frame") |>
+    as(sample_data(baria_mb), "data.frame") |>
       rownames_to_column(var = "Sample") |>
       select(Sample, id, visit),
     by = "Sample"
@@ -77,15 +74,14 @@ species_v0_prevalence <- colMeans(species_v0 > 0, na.rm = FALSE) # (= proportion
 species_v0_abundance <- colMeans(species_v0, na.rm = FALSE) # mean relative abundance per species
 
 ## Filter
-# Keep species detected in at least 20% of baseline samples, with mean relative abundance >= 0.01%
 species_v0_keep <- tibble(
   species = names(species_v0_prevalence),
   prevalence_v0 = species_v0_prevalence,
   mean_abundance_v0 = species_v0_abundance
 ) |>
   filter(
-    prevalence_v0 >= 0.50,
-    mean_abundance_v0 >= 0.1
+    prevalence_v0 >= 0.30,
+    mean_abundance_v0 >= 0.05
   ) |>
   pull(species)
 
@@ -106,12 +102,13 @@ lmm_data_ffmi <- mb_v0 |>
     names_to = "species",
     values_to = "baseline_abundance"
   ) |> 
-  select(-visit, -Sample) |> 
+  select(-visit, -Sample) |>
   inner_join(
-    baria_muscle_lmm |> 
+    baria_muscle_lmm |>
       select(id, visit, ffmi, perc_change_weight_kg, perc_change_ffmi, delta_ffmi, age_centered_v0, sex),
-    by = "id"
-  ) |> 
+    by = "id",
+    relationship = "many-to-many" # expected: each id fans out across species x visit
+  ) |>
   group_by(species) |> 
   mutate(
     # Log10-transform abundance and calculate a species-specific pseudocount
@@ -121,15 +118,13 @@ lmm_data_ffmi <- mb_v0 |>
   ungroup()
 
 # Create consistent species labels for use across all models
+# `species` values are now short "Genus_species_SGB####" taxon names (see
+# 0a_datacleaning.R), so split off the trailing SGB id instead of parsing a
+# full "k__|...|s__...|t__..." taxonomy string
 species_labels <- tibble(species = sort(unique(lmm_data_ffmi$species))) |>
   mutate(
-    species_label = str_extract(species, "s__[^|]+"),
-    species_label = str_remove(species_label, "^s__"),
-    #species_label = str_remove(species_label, "_SGB\\d+$"),
-    species_label = str_replace_all(species_label, "_", " "),
-
-    sgb = str_extract(species, "t__SGB\\d+"),
-    sgb = str_remove(sgb, "^t__")
+    sgb = str_extract(species, "SGB\\d+$"),
+    species_label = str_remove(species, "_SGB\\d+$") |> str_replace_all("_", " ")
   )
 
 #### Models ####
@@ -247,7 +242,7 @@ plot_perc_ffmi_change_v4 <- lmm_v4_plot_data |>
   fill_manual_abundance +
   theme_minimal_custom() +
   theme(plot.title = element_text(face = "italic"), legend.position = "none")
-ggsave(plot = plot_perc_ffmi_change_v4, filename = "graphs/lmm_species_ffmi/plot_perc_ffmi_change_v4_signif.pdf", width = 10, height = 7)
+ggsave(plot = plot_perc_ffmi_change_v4, filename = "graphs/lmm_species_ffmi/plot_perc_ffmi_change_v4_signif.pdf", width = 6, height = 7)
 
 
 c(
