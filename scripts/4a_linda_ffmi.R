@@ -33,7 +33,6 @@ theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
 
 # Data
 baria_mb <- readRDS("data/processed_data/BARIA_mb_clean.RDS")
-baria_muscle_wide <- readRDS("data/processed_data/BARIA_muscle_wide.RDS")
 baria_muscle_long <- readRDS("data/processed_data/BARIA_muscle_long.RDS")
 
 ### Prepare data for LinDA ###
@@ -60,9 +59,10 @@ linda_meta_long <- mb_sample_data |>
   filter(!is.na(ffmi), !is.na(perc_change_weight_kg)) |> 
   group_by(id) |> 
   mutate(
-    # Create between and within vars for LinDA
-    ffmi_between = mean(ffmi),
-    ffmi_within = ffmi - ffmi_between
+    ffmi_between = mean(ffmi, na.rm = TRUE),
+    ffmi_within = ffmi - ffmi_between,
+    fmi_between = mean(fmi, na.rm = TRUE),
+    fmi_within = fmi - fmi_between
   ) |> 
   ungroup() |> 
   mutate(
@@ -78,14 +78,14 @@ species_prevalence <- rowMeans(mb_otu_long > 0)
 species_abundance <- rowMeans(mb_otu_long)
 
 ## Filter
-# Keep species detected in at least 50% of samples, with mean relative abundance >= 0.01%
+# Keep species detected in at least 20% of samples, with mean relative abundance >= 0.01%
 species_keep <- tibble(
   species = names(species_prevalence),
   prevalence = species_prevalence,
   mean_abundance = species_abundance
 ) |>
   filter(
-    prevalence >= 0.50,
+    prevalence >= 0.20,
     mean_abundance >= 0.01
   ) |>
   pull(species)
@@ -95,13 +95,37 @@ length(species_keep)
 # Filter abundance matrix
 mb_otu_keep <- mb_otu_long[species_keep, , drop = FALSE]
 
-#### Run LinDA ####
-linda_ffmi <- linda(
-  feature.dat = mb_otu_keep,
-  meta.dat = linda_meta_long,
-  formula = "~ ffmi_within + ffmi_between + visit + age_v0 + sex + perc_change_weight_kg + (1 | id)",
-  feature.dat.type = "proportion",
-  prev.filter = 0, mean.abund.filter = 0, # already set filters above
-  p.adj.method = "BH",
-  alpha = 0.05
+#### LinDA ####
+# Define formulas
+linda_formulas <- list(
+  model_1 = "~ ffmi_within + ffmi_between + visit + age_v0 + sex + perc_change_weight_kg + (1 | id)",
+  model_2 = "~ ffmi_within + ffmi_between + visit + age_v0 + sex + perc_change_weight_kg + t2d_v0 + dm_meds + (1 | id)",
+  model_3 = "~ ffmi_within + ffmi_between + visit + age_v0 + sex + fmi_within + fmi_between + (1 | id)",
+  model_4 = "~ ffmi_within + ffmi_between + visit + age_v0 + sex + fmi_within + fmi_between + t2d_v0 + dm_meds + (1 | id)"
 )
+
+# LinDA function
+run_linda_ffmi <- function(formula, model_name) {
+
+  linda <- linda(
+    feature.dat = mb_otu_keep, meta.dat = linda_meta_long, formula = formula, feature.dat.type = "proportion",
+    prev.filter = 0, mean.abund.filter = 0, p.adj.method = "BH", alpha = 0.05
+  )
+
+  linda$output$ffmi_within |>
+    rownames_to_column("species") |>
+    mutate(
+      model = model_name,
+      signif = padj < 0.05
+    ) |>
+    relocate(model, species)
+}
+
+# Run LinDA function for each formula
+linda_ffmi_results <- imap_dfr(linda_formulas, ~ run_linda_ffmi(formula = .x,model_name = .y))
+
+# Extract significant results
+linda_signif <- linda_ffmi_results |>
+  filter(signif) |>
+  arrange(model, padj)
+
