@@ -31,6 +31,8 @@ theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
 
 }
 
+renoir_15 <- met.brewer("Renoir", n = 15)
+
 # Data
 baria_mb <- readRDS("data/processed_data/BARIA_mb_clean.RDS")
 baria_muscle_long <- readRDS("data/processed_data/BARIA_muscle_long.RDS")
@@ -62,7 +64,8 @@ linda_meta_long <- mb_sample_data |>
     ffmi_between = mean(ffmi, na.rm = TRUE),
     ffmi_within = ffmi - ffmi_between,
     fmi_between = mean(fmi, na.rm = TRUE),
-    fmi_within = fmi - fmi_between
+    fmi_within = fmi - fmi_between,
+    dm_meds_v0 = dm_meds[visit == "v0"][1]
   ) |> 
   ungroup() |> 
   mutate(
@@ -107,9 +110,7 @@ mb_otu_keep <- mb_otu_long[species_keep, , drop = FALSE]
 # Define formulas
 linda_formulas <- list(
   model_1 = "~ ffmi_within + ffmi_between + visit + age_v0 + sex + perc_change_weight_kg + (1 | id)",
-  model_2 = "~ ffmi_within + ffmi_between + visit + age_v0 + sex + perc_change_weight_kg + t2d_v0 + dm_meds + (1 | id)",
-  model_3 = "~ ffmi_within + ffmi_between + visit + age_v0 + sex + fmi_within + fmi_between + (1 | id)",
-  model_4 = "~ ffmi_within + ffmi_between + visit + age_v0 + sex + fmi_within + fmi_between + t2d_v0 + dm_meds + (1 | id)"
+  model_2 = "~ ffmi_within + ffmi_between + visit + age_v0 + sex + perc_change_weight_kg + t2d_v0 + dm_meds + (1 | id)"
 )
 
 # LinDA function
@@ -125,7 +126,9 @@ run_linda_ffmi <- function(formula, model_name) {
     left_join(species_labels, by = "species") |>
     mutate(
       model = model_name,
-      signif = padj < 0.05
+      signif = padj < 0.05,
+      ci_lower = log2FoldChange - 1.96 * lfcSE,
+      ci_upper = log2FoldChange + 1.96 * lfcSE
     )
   
 }
@@ -133,10 +136,14 @@ run_linda_ffmi <- function(formula, model_name) {
 # Run LinDA function for each formula
 linda_ffmi_results <- imap_dfr(linda_formulas, ~ run_linda_ffmi(formula = .x,model_name = .y))
 
-# Extract significant results
-linda_signif <- linda_ffmi_results |>
+# Extract significant species at least one model
+species_linda_signif <- linda_ffmi_results |>
   filter(signif) |>
-  arrange(model, padj)
+  arrange(model, padj) |> 
+  distinct(species) |>
+  pull(species)
 
-linda_signif |>
-  select(model, species, log2FoldChange, lfcSE, pvalue, padj)
+### Plot ###
+linda_plot_data <- linda_ffmi_results |>
+  filter(species %in% species_linda_signif)
+
