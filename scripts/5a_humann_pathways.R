@@ -56,6 +56,7 @@ humann_long <- humann_clean |>
     names_to = "Sample",
     values_to = "pathway_abundance"
   ) |> 
+  filter(str_detect(Sample, "\\.Fecal\\.")) |> 
   mutate(
     id = str_extract(Sample, "(?<=BARIA\\.Metagenome\\.)\\d+"),
     visit = case_when(
@@ -87,7 +88,4 @@ linda_species_long <- as(otu_table(baria_mb), "matrix") |>
   )
 
 
-linda_species_long |>
-  count(species, visit)
 
-n_distinct(linda_species_long$species)
