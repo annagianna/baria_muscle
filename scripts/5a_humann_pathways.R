@@ -34,193 +34,60 @@ theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
 renoir_15 <- met.brewer("Renoir", n = 15)
 
 # Data
-humann <- readRDS("data/raw_data/BARIA.humann4.profiles.2026.581.910.RDS")
-baria_mb <- readRDS("data/processed_data/260818_BARIA_mb_clean.RDS")
-baria_muscle_long <- readRDS("data/processed_data/260818_BARIA_muscle_long.RDS")
+baria_humann <- readRDS("data/raw_data/BARIA.humann4.profiles.2026.581.910.RDS")
+baria_mb <- readRDS("data/processed_data/BARIA_mb_clean.RDS")
+linda_species_signif <- readRDS("data/processed_data/LinDA_significant_species.RDS")
 
-# Clean up
-humann_long <- humann |> 
-  rownames_to_column(var = "pathway") |> 
+# HUMAnN cleaning
+humann_clean <- baria_humann |>
+  rownames_to_column(var = "pathway") |>
+  mutate(
+    pathway_id = str_extract(pathway, "^[^:]+"),
+    pathway_name = str_remove(pathway, "^[^:]+:\\s*"),
+    pathway_name = str_replace(pathway_name, "^.", toupper),
+    pathway_type = case_when(pathway %in% c("UNMAPPED", "UNINTEGRATED") ~ "non-pathway", TRUE ~ "pathway")
+  )
+
+# Long dataset
+humann_long <- humann_clean |> 
+  filter(pathway_type == "pathway") |> 
   pivot_longer(
-    cols = -pathway,
+    cols = -c(pathway, pathway_id, pathway_name, pathway_type),
     names_to = "Sample",
     values_to = "pathway_abundance"
   ) |> 
   mutate(
-    Sample = Sample |> 
-      str_remove("_Abundance$") |> 
-      str_replace("V\\.1", "V-1")
+    id = str_extract(Sample, "(?<=BARIA\\.Metagenome\\.)\\d+"),
+    visit = case_when(
+      str_detect(Sample, "\\.V\\.1\\.") ~ "v0",
+      str_detect(Sample, "\\.V4\\.") ~ "v4",
+      str_detect(Sample, "\\.V5\\.") ~ "v5",
+      str_detect(Sample, "\\.V6\\.") ~ "v6",
+      TRUE ~ NA_character_
+    )
   ) |> 
-  filter(
-    str_detect(Sample, "\\.Fecal\\."),
-    Sample %in% sample_names(baria_mb),
-    !pathway %in% c("UNMAPPED", "UNINTEGRATED")
-  ) |> 
-  mutate(
-    pathway_id = str_extract(pathway, "[A-Z0-9-]+(?=:)"),
-    pathway_name = str_extract(pathway, "(?<=:).*") 
-      |> trimws()
-  ) |> 
+  select(-pathway_type) |> 
+  filter(visit %in% c("v0", "v4", "v5"))
+
+# Extract significant species from LinDA
+linda_species_long <- as(otu_table(baria_mb), "matrix") |>
+  as.data.frame() |>
+  rownames_to_column(var = "species") |>
+  filter(species %in% linda_species_signif) |>
+  pivot_longer(
+    cols = -species,
+    names_to = "Sample",
+    values_to = "species_abundance"
+  ) |>
   left_join(
-    as(sample_data(baria_mb), "data.frame") |> 
-      rownames_to_column(var = "Sample") |> 
+    as(sample_data(baria_mb), "data.frame") |>
+      rownames_to_column("Sample") |>
       select(Sample, id, visit),
     by = "Sample"
-  ) |> 
-  mutate(pathway_abundance = replace_na(pathway_abundance, 0)) |> # Treat undetected pathways as zero abundance
-  group_by(pathway_id) |> 
-  filter(mean(pathway_abundance[visit == "v0"] > 5) >= 0.5) |> # Keep pathways with >5 CPM in at least 50% of baseline samples
-  ungroup() |> 
-  mutate(log10_pathway_abundance = log10(pathway_abundance + 1))
-
-#### Baseline pathway - FFMI associations ####
-# Prepare baseline data
-humann_v0 <- humann_long |>
-  filter(visit == "v0") |>
-  left_join(
-    baria_muscle_long |>
-      filter(visit == "v0") |>
-      select(id, age_v0, sex, t2d_v0, dm_meds_v0, statins_v0, ffmi, fmi) |>
-      rename(ffmi_v0 = ffmi, fmi_v0 = fmi),
-    by = "id"
   )
 
-# Nest participant-level data separately for each pathway
-model_data_ffmi_v0_nested <- humann_v0 |>
-  group_by(pathway_id, pathway_name) |>
-  nest()
 
-# Function to run pathway LMs
-run_pathway_lm <- function(model_data, model_formula) {
-  
-  model_data |>
-    mutate(
-      model = map(data, \(x) lm(model_formula, data = x)),
-      results = map(model, broom::tidy, conf.int = TRUE)
-    ) |>
-    select(pathway_id, pathway_name, results) |>
-    unnest(results) |>
-    filter(term == "log10_pathway_abundance") |>
-    ungroup() |> # Remove pathway grouping before FDR correction across all pathways
-    mutate(
-      p_fdr = p.adjust(p.value, method = "BH"),
-      signif = if_else(p_fdr < 0.05, "significant", "not significant")
-    )
-}
+linda_species_long |>
+  count(species, visit)
 
-# Model formulas
-model1 <- ffmi_v0 ~ log10_pathway_abundance + age_v0 + sex
-model2 <- ffmi_v0 ~ log10_pathway_abundance + age_v0 + sex + fmi_v0
-model3 <- ffmi_v0 ~ log10_pathway_abundance + age_v0 + sex + fmi_v0 + t2d_v0 + dm_meds_v0 + statins_v0
-
-# Run pathway LM for each model formula
-model_pathway_ffmi_v0_1_results <- run_pathway_lm(model_data_ffmi_v0_nested, model1)
-model_pathway_ffmi_v0_2_results <- run_pathway_lm(model_data_ffmi_v0_nested, model2)
-model_pathway_ffmi_v0_3_results <- run_pathway_lm(model_data_ffmi_v0_nested, model3)
-
-# Pathways significantly associated with baseline FFMI after FDR correction
-model_pathway_ffmi_v0_1_signif <- model_pathway_ffmi_v0_1_results |>
-  filter(p_fdr < 0.05) |>
-  arrange(p_fdr)
-
-model_pathway_ffmi_v0_2_signif <- model_pathway_ffmi_v0_2_results |>
-  filter(p_fdr < 0.05) |>
-  arrange(p_fdr)
-
-model_pathway_ffmi_v0_3_signif <- model_pathway_ffmi_v0_3_results |>
-  filter(p_fdr < 0.05) |>
-  arrange(p_fdr)
-
-# No pathways were significantly associated with baseline FFMI after FDR correction
-
-#### Baseline pathway abundance & FFMI trajectories LMMs ####
-# Merge baseline pathway abundance with longitudinal FFMI data
-# Prepare LMM data
-model_data_pathway_lmm <- humann_v0 |>
-  select(id, pathway_id, pathway_name, baseline_pathway_abundance = pathway_abundance, log10_baseline_pathway_abundance = log10_pathway_abundance) |>
-  inner_join(
-    baria_muscle_long |>
-      filter(visit %in% c("v0", "v4", "v5"), !is.na(ffmi)) |>
-      mutate(
-        visit = factor(visit, levels = c("v0", "v4", "v5")),
-        age_centered_v0 = age_v0 - mean(age_v0, na.rm = TRUE)
-      ) |>
-      select(id, visit, ffmi, age_centered_v0, sex, perc_change_weight_kg),
-    by = "id"
-  )
-
-# Function for pathway LMMs
-run_pathway_lmm <- function(lmm_data, follow_up) {
-
-  lmm_data |>
-    filter(visit %in% c("v0", follow_up)) |>
-    droplevels() |>
-    group_by(pathway_id, pathway_name) |>
-    nest() |>
-    mutate(
-      model = map(
-        data,
-        ~ lmerTest::lmer(ffmi ~ log10_baseline_pathway_abundance * visit + age_centered_v0 + sex + perc_change_weight_kg + (1 | id),
-        data = .x, REML = FALSE
-        )
-      ),
-      results = map(model, ~ broom.mixed::tidy(.x, effects = "fixed", conf.int = TRUE))
-    ) |>
-    select(pathway_id, pathway_name, results) |>
-    unnest(results) |>
-    filter(str_detect(term, "log10_baseline_pathway_abundance:visit")) |>
-    ungroup() |> # Remove pathway grouping before FDR correction across all pathways
-    mutate(
-      p_fdr = p.adjust(p.value, method = "BH"),
-      signif = if_else(p_fdr < 0.05, "significant", "not significant"),
-      visit = follow_up
-    )
-}
-
-# Run pathway LMM for each follow-up visit
-lmm_pathway_v4_results <- run_pathway_lmm(model_data_pathway_lmm, "v4")
-lmm_pathway_v5_results <- run_pathway_lmm(model_data_pathway_lmm, "v5")
-
-# Significant pathways
-lmm_pathway_v4_signif <- lmm_pathway_v4_results |>
-  filter(p_fdr < 0.05) |>
-  arrange(p_fdr)
-
-lmm_pathway_v5_signif <- lmm_pathway_v5_results |>
-  filter(p_fdr < 0.05) |>
-  arrange(p_fdr)
-
-c(
-  n_pathways_tested = n_distinct(model_data_pathway_lmm$pathway_id),
-  v4_results = nrow(lmm_pathway_v4_results),
-  v5_results = nrow(lmm_pathway_v5_results),
-  v4_signif = nrow(lmm_pathway_v4_signif),
-  v5_signif = nrow(lmm_pathway_v5_signif)
-)
-
-pathway_lmm_nominal_overlap <- lmm_pathway_v4_results |>
-  filter(p.value < 0.05) |>
-  select(
-    pathway_id,
-    pathway_name,
-    estimate_v4 = estimate,
-    p_v4 = p.value,
-    p_fdr_v4 = p_fdr
-  ) |>
-  inner_join(
-    lmm_pathway_v5_results |>
-      filter(p.value < 0.05) |>
-      select(
-        pathway_id,
-        estimate_v5 = estimate,
-        p_v5 = p.value,
-        p_fdr_v5 = p_fdr
-      ),
-    by = "pathway_id"
-  ) |>
-  mutate(
-    same_direction = sign(estimate_v4) == sign(estimate_v5)
-  )
-
-nrow(pathway_lmm_nominal_overlap)
-pathway_lmm_nominal_overlap
+n_distinct(linda_species_long$species)
