@@ -49,26 +49,26 @@ humann_clean <- baria_humann |>
   )
 
 # Long dataset
-humann_long <- humann_clean |> 
-  filter(pathway_type == "pathway") |> 
+humann_long <- humann_clean |>
+  filter(pathway_type == "pathway") |>
   pivot_longer(
     cols = -c(pathway, pathway_id, pathway_name, pathway_type),
-    names_to = "Sample",
+    names_to = "Sample_humann",
     values_to = "pathway_abundance"
-  ) |> 
-  filter(str_detect(Sample, "\\.Fecal\\.")) |> 
+  ) |>
   mutate(
-    id = str_extract(Sample, "(?<=BARIA\\.Metagenome\\.)\\d+"),
-    visit = case_when(
-      str_detect(Sample, "\\.V\\.1\\.") ~ "v0",
-      str_detect(Sample, "\\.V4\\.") ~ "v4",
-      str_detect(Sample, "\\.V5\\.") ~ "v5",
-      str_detect(Sample, "\\.V6\\.") ~ "v6",
-      TRUE ~ NA_character_
-    )
-  ) |> 
-  select(-pathway_type) |> 
-  filter(visit %in% c("v0", "v4", "v5"))
+    Sample = Sample_humann |>
+      str_remove("_Abundance$") |>
+      str_replace("\\.V\\.1\\.", ".V-1.") # HUMAnN data baseline V1, shotgun V-1
+  ) |>
+  inner_join(
+    as(sample_data(baria_mb), "data.frame") |>
+      rownames_to_column("Sample") |>
+      select(Sample, id, visit),
+    by = "Sample"
+  ) |>
+  filter(visit %in% c("v0", "v4", "v5")) |>
+  select(Sample, Sample_humann, id, visit, pathway, pathway_id, pathway_name, pathway_abundance)
 
 # Extract significant species from LinDA
 linda_species_long <- as(otu_table(baria_mb), "matrix") |>
@@ -88,4 +88,6 @@ linda_species_long <- as(otu_table(baria_mb), "matrix") |>
   )
 
 
+
+head(
 
