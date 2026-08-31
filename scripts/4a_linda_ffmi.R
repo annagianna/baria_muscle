@@ -7,7 +7,6 @@ library(MicrobiomeStat)
 library(phyloseq)
 library(grid)
 library(MetBrewer)
-library(car)
 
 # Theme
 theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
@@ -143,16 +142,14 @@ run_linda_ffmi <- function(formula, model_name) {
 # Run LinDA function for each formula
 linda_ffmi_results <- imap_dfr(linda_formulas, ~ run_linda_ffmi(formula = .x, model_name = .y))
 
-# Extract significant species at least one model
+# Extract significant species with clean labels
 species_linda_signif <- linda_ffmi_results |>
   filter(signif) |>
-  arrange(model, log2FoldChange) |> 
-  distinct(species) |>
-  pull(species)
+  distinct(species, species_label)
 
 ### Plot ###
 linda_plot_data <- linda_ffmi_results |>
-  filter(species %in% species_linda_signif) |> 
+  filter(species %in% species_linda_signif$species) |> 
   mutate(
     model = factor(model, levels = c("model1", "model2"), labels = c("Age + sex + % weight change from baseline", "+ baseline T2D + diabetes medication"))
   )
@@ -163,7 +160,7 @@ saveRDS(species_linda_signif,"data/processed_data/LinDA_significant_species.RDS"
 
 # Save signif results table
 species_linda_signif_summary <- linda_ffmi_results |>
-  filter(species %in% species_linda_signif) |>
+  filter(species %in% species_linda_signif$species) |>
   select(model, species, species_label, log2FoldChange, lfcSE, ci_lower, ci_upper, pvalue, padj, signif) |>
   arrange(species_label, model)
 write_csv(species_linda_signif_summary, "results/tables/LinDA_significant_species.csv")
