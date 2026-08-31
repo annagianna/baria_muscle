@@ -32,6 +32,7 @@ theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
 
 }
 renoir_15 <- met.brewer("Renoir", n = 15)
+fill_cor_manual <- scale_fill_gradient2(low = renoir_15[15], mid = "white", high = renoir_15[6], midpoint = 0, name = "Spearman\nrho")
 
 # Data
 baria_humann <- readRDS("data/raw_data/BARIA.humann4.profiles.2026.581.910.RDS")
@@ -45,7 +46,8 @@ humann_clean <- baria_humann |>
     pathway_id = str_extract(pathway, "^[^:]+"),
     pathway_name = str_remove(pathway, "^[^:]+:\\s*"),
     pathway_name = str_replace(pathway_name, "^.", toupper),
-    pathway_type = case_when(pathway %in% c("UNMAPPED", "UNINTEGRATED") ~ "non-pathway", TRUE ~ "pathway")
+    pathway_type = case_when(pathway %in% c("UNMAPPED", "UNINTEGRATED") ~ "non-pathway", TRUE ~ "pathway"), 
+    across(where(is.numeric), ~ replace_na(.x, 0))
   )
 
 # Long dataset
@@ -74,12 +76,9 @@ humann_long <- humann_clean |>
 linda_species_long <- as(otu_table(baria_mb), "matrix") |>
   as.data.frame() |>
   rownames_to_column(var = "species") |>
-  filter(species %in% linda_species_signif) |>
-  pivot_longer(
-    cols = -species,
-    names_to = "Sample",
-    values_to = "species_abundance"
-  ) |>
+  filter(species %in% linda_species_signif$species) |>
+  pivot_longer(cols = -species, names_to = "Sample", values_to = "species_abundance") |>
+  left_join(linda_species_signif, by = "species") |>
   left_join(
     as(sample_data(baria_mb), "data.frame") |>
       rownames_to_column("Sample") |>
@@ -87,7 +86,94 @@ linda_species_long <- as(otu_table(baria_mb), "matrix") |>
     by = "Sample"
   )
 
+# Filter HUMAnN pathways based on baseline prevalence (>5 CPM in at least 50% of samples)
+humann_keep_v0 <- humann_long |> 
+  filter(visit == "v0") |> 
+  group_by(pathway_id, pathway_name) |> 
+  summarize(prevalence = mean(pathway_abundance > 5), .groups = "drop") |> 
+  filter(prevalence >= 0.50)
 
+# Keep filtered baseline pathways accross all visits (v0, v4, v5) & join significant LinDA species
+humann_linda <- humann_long |>
+  filter(pathway_id %in% humann_keep_v0$pathway_id) |> 
+  inner_join(linda_species_long, by = c("Sample", "id", "visit"))
 
-head(
+### Correlations ###
+# Species-pathway correlations per visit
+# Species-pathway Spearman correlations per visit
+humann_linda_cor <- humann_linda |>
+  group_by(visit, species, species_label, pathway_id, pathway_name) |>
+  summarise(
+    n = sum(complete.cases(species_abundance, pathway_abundance)),
+    test = list(cor.test(species_abundance, pathway_abundance, method = "spearman", exact = FALSE)),
+    .groups = "drop"
+  ) |>
+  mutate(
+    rho = map_dbl(test, ~ unname(.x$estimate)),
+    p = map_dbl(test, ~ .x$p.value)
+  ) |>
+  select(-test) |>
+  group_by(visit, species) |>
+  mutate(padj = p.adjust(p, method = "BH")) |>
+  ungroup()
 
+# Strongest significant baseline pathway associations per species
+humann_linda_cor_top10 <- humann_linda_cor |>
+  filter(visit == "v0",padj < 0.05) |>
+  mutate(direction = if_else(rho > 0, "positive", "negative")) |>
+  group_by(species_label, direction) |> 
+  arrange(desc(abs(rho)), .by_group = TRUE) |> 
+  slice_head(n = 10) |> 
+  mutate(rank_direction = row_number()) |> 
+  ungroup() |> 
+  group_by(species_label) |> 
+  mutate(priority = if_else(rank_direction <= 5, 1L, 2L)) |> # if there are less than 5 signif pathways for each direction take other
+  arrange(priority, desc(abs(rho)), ,by_group = TRUE) |> 
+  slice_head(n = 10) |> 
+  ungroup() |> 
+  select(species_label, pathway_name, rho, padj) |> 
+  print(n = 40)
+
+# Pull union of pathways
+pathways_top <- humann_linda_cor_top |>
+  distinct(pathway_id) |>
+  pull(pathway_id)
+
+### Plot ###
+# Plot data
+humann_linda_plot_data <- humann_linda_cor |>
+  filter(visit == "v0", pathway_id %in% pathways_top) |>
+  mutate(
+    signif = padj < 0.05,
+    species_label = factor(species_label, levels = linda_species_signif$species_label
+    )
+  )
+
+# Heatmap
+humann_linda_heatmap <- humann_linda_plot_data |> 
+  ggplot(aes(x = species_label, y = pathway_name, fill = rho)) +
+  geom_tile(colour = "white", linewidth = 0.3) +
+  geom_text(aes(label = if_else(signif, "*", "")),size = 4) +
+  fill_cor_manual +
+  labs(x = NULL, y = NULL) +
+  theme_minimal_custom(base_size = 11) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, face = "italic"),
+    axis.text.y = element_text(size = 7),
+    panel.grid = element_blank(),
+    legend.position = "right"
+  )
+
+# Bubble plot
+humann_linda_bubble <- humann_linda_plot_data |> 
+  ggplot(aes(x = species_label,y = pathway_name)) +
+  geom_point(aes(size = abs(rho), fill = rho), shape = 21, colour = "grey30", stroke = 0.3) +
+  geom_text(aes(label = if_else(signif, "*", "")), size = 3) +
+  scale_size_continuous(name = "|Spearman rho|", range = c(1, 7)) +
+  fill_cor_manual +
+  labs(x = NULL, y = NULL) +
+  theme_minimal_custom(base_size = 11) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, face = "italic"),
+    axis.text.y = element_text(size = 7),
+    panel.grid = element_blank(),
+    legend.position = "right"
+  )
