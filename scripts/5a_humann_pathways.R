@@ -99,7 +99,6 @@ humann_linda <- humann_long |>
   inner_join(linda_species_long, by = c("Sample", "id", "visit"))
 
 ### Correlations ###
-# Species-pathway correlations per visit
 # Species-pathway Spearman correlations per visit
 humann_linda_cor <- humann_linda |>
   group_by(visit, species, species_label, pathway_id, pathway_name) |>
@@ -127,15 +126,17 @@ humann_linda_cor_top10 <- humann_linda_cor |>
   mutate(rank_direction = row_number()) |> 
   ungroup() |> 
   group_by(species_label) |> 
-  mutate(priority = if_else(rank_direction <= 5, 1L, 2L)) |> # if there are less than 5 signif pathways for each direction take other
-  arrange(priority, desc(abs(rho)), ,by_group = TRUE) |> 
+  mutate(# Select up to 10 strongest signif baseline pathway associations per species (up to 5 from each direction where available)
+    priority = if_else(rank_direction <= 5, 1L, 2L)
+  ) |>
+  arrange(priority, desc(abs(rho)), .by_group = TRUE) |> 
   slice_head(n = 10) |> 
   ungroup() |> 
-  select(species_label, pathway_name, rho, padj) |> 
+  select(species_label, pathway_id, pathway_name, rho, padj) |> 
   print(n = 40)
 
 # Pull union of pathways
-pathways_top <- humann_linda_cor_top |>
+pathways_top <- humann_linda_cor_top10 |>
   distinct(pathway_id) |>
   pull(pathway_id)
 
@@ -153,27 +154,32 @@ humann_linda_plot_data <- humann_linda_cor |>
 humann_linda_heatmap <- humann_linda_plot_data |> 
   ggplot(aes(x = species_label, y = pathway_name, fill = rho)) +
   geom_tile(colour = "white", linewidth = 0.3) +
-  geom_text(aes(label = if_else(signif, "*", "")),size = 4) +
+  geom_text(aes(label = if_else(signif, "*", "")), hjust = 0.5, vjust = 0.5, size = 4) +
   fill_cor_manual +
   labs(x = NULL, y = NULL) +
+  coord_fixed() +
   theme_minimal_custom(base_size = 11) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, face = "italic"),
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1,face = "italic"),
     axis.text.y = element_text(size = 7),
     panel.grid = element_blank(),
     legend.position = "right"
   )
+ggsave("results/figures/HUMAnN_LinDA_pathway_heatmap.pdf", humann_linda_heatmap, width = 8, height = 10)
 
 # Bubble plot
 humann_linda_bubble <- humann_linda_plot_data |> 
-  ggplot(aes(x = species_label,y = pathway_name)) +
+  ggplot(aes(x = species_label, y = pathway_name)) +
   geom_point(aes(size = abs(rho), fill = rho), shape = 21, colour = "grey30", stroke = 0.3) +
   geom_text(aes(label = if_else(signif, "*", "")), size = 3) +
-  scale_size_continuous(name = "|Spearman rho|", range = c(1, 7)) +
+  scale_size_continuous(range = c(1, 7), guide = "none") +
   fill_cor_manual +
   labs(x = NULL, y = NULL) +
   theme_minimal_custom(base_size = 11) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, face = "italic"),
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, face = "italic"),
     axis.text.y = element_text(size = 7),
     panel.grid = element_blank(),
     legend.position = "right"
   )
+ggsave("results/figures/HUMAnN_LinDA_pathway_bubble.pdf", humann_linda_bubble, width = 8, height = 10)
