@@ -38,8 +38,9 @@ renoir_15 <- met.brewer("Renoir", n = 15)
 # Data
 baria_diet <- readRDS("data/raw_data/251002_BARIA_macronutrients.RDS")
 baria_mb <- readRDS("data/processed_data/BARIA_mb_clean.RDS")
-baria_humann <- readRDS("data/raw_data/BARIA.humann4.profiles.2026.581.910.RDS")
+humann_long <- readRDS("data/processed_data/BARIA_humann_pathways_long.RDS")
 linda_species_signif <- readRDS("data/processed_data/LinDA_significant_species.RDS")
+humann_pathways_top <- readRDS("data/processed_data/HUMAnN_selected_pathways.RDS")
 
 # Clean dietary data
 baria_diet_clean <- baria_diet |> 
@@ -115,10 +116,7 @@ diet_species_plot_data <- diet_species_cor |>
 # Symmetric colour scale
 rho_max_diet <- max(abs(diet_species_plot_data$rho), na.rm = TRUE)
 fill_cor_diet <- scale_fill_gradient2(
-  low = renoir_15[14],
-  mid = "white",
-  high = renoir_15[6],
-  midpoint = 0,
+  low = renoir_15[14], mid = "white", high = renoir_15[6], midpoint = 0,
   limits = c(-rho_max_diet, rho_max_diet),
   name = "Spearman\nrho"
 )
@@ -139,3 +137,34 @@ diet_species_heatmap <- ggplot(
     legend.position = "right"
   )
 ggsave("results/figures/Diet_LinDA_species_heatmap.pdf", diet_species_heatmap, width = 8, height = 4)
+
+#### Correlations dietary intake - HUMAnN pathways ####
+
+# Join selected baseline HUMAnN pathways with dietary intake
+diet_pathways_long <- humann_long |>
+  filter(
+    visit == "v0",
+    pathway_id %in% humann_pathways_top$pathway_id
+  ) |>
+  inner_join(
+    diet_mb |>
+      select(Sample, id, visit, all_of(diet_vars)),
+    by = c("Sample", "id", "visit")
+  ) |>
+  pivot_longer(cols = all_of(diet_vars), names_to = "diet_feature", values_to = "diet_value")
+
+# Spearman correlations between dietary intake and selected HUMAnN pathways
+diet_pathways_cor <- diet_pathways_long |>
+  group_by(pathway_id, pathway_name, diet_feature) |>
+  summarise(
+    n = sum(complete.cases(pathway_abundance, diet_value)),
+    test = list(
+      cor.test(pathway_abundance, diet_value, method = "spearman", exact = FALSE)),
+    .groups = "drop"
+  ) |>
+  mutate(
+    rho = map_dbl(test, ~ unname(.x$estimate)),
+    p = map_dbl(test, ~ .x$p.value)
+  ) |>
+  select(-test) |>
+  mutate(padj = p.adjust(p, method = "BH"))
