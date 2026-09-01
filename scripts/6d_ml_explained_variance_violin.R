@@ -29,12 +29,8 @@ fill_colors <- c(
   "%Delta FFMI.TRUE"   = "#eb6834"
 )
 
-# outcome_suffix: "" for the species-abundance models, "_path" for the
-# pathway-abundance models (same outcome set, different input_data).
-plot_ev_violin <- function(outcome_suffix, plot_title, out_file) {
-  model_defs <- model_defs_base |> mutate(outcome = paste0(outcome, outcome_suffix))
-
-  df <- pmap_dfr(model_defs, function(outcome, label, group, adj) {
+plot_ev_violin <- function(plot_title, out_file) {
+  df <- pmap_dfr(model_defs_base, function(outcome, label, group, adj) {
     it <- get_iterations_reg(file.path("results/mlmodels", outcome, "all"), paste0(outcome, "_all"))
     if (is.null(it)) {
       cat("  no XGBeast output found for", outcome, "(all), skipping\n")
@@ -43,14 +39,14 @@ plot_ev_violin <- function(outcome_suffix, plot_title, out_file) {
     tibble(label = label, group = group, adj = adj, explained_variance = it$Explained.Variance * 100)
   })
   if (nrow(df) == 0) {
-    cat("  no models found for suffix '", outcome_suffix, "', skipping plot\n", sep = "")
+    cat("  no models found, skipping plot\n")
     return(invisible(NULL))
   }
 
   df <- df |>
     mutate(
       # reversed so, after coord_flip(), FFMI (v0) reads at the top
-      label = factor(label, levels = rev(model_defs$label)),
+      label = factor(label, levels = rev(model_defs_base$label)),
       fill_key = paste(group, adj, sep = ".")
     )
 
@@ -79,12 +75,8 @@ plot_ev_violin <- function(outcome_suffix, plot_title, out_file) {
 }
 
 plot_ev_violin(
-  "", "Explained variance across CV iterations - FFMI models, species (all subjects)",
+  "Explained variance across CV iterations - FFMI models, species (all subjects)",
   "ffmi_models_explained_variance_violin.pdf"
-)
-plot_ev_violin(
-  "_path", "Explained variance across CV iterations - FFMI models, pathways (all subjects)",
-  "ffmi_path_models_explained_variance_violin.pdf"
 )
 
 cat("Done. Output in", out_dir, "\n")

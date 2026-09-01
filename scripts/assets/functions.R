@@ -191,28 +191,6 @@ species_label <- function(x) {
   make.unique(base, sep = " ")
 }
 
-# Human-readable label for a HUMAnN pathway_id (e.g. "PWY-7238"), looked up
-# from BARIA_humann_pathways_long.RDS's pathway_id -> pathway_name mapping
-# (unlike species SGB ids, pathway ids carry no parseable structure, so this
-# can't be a string transform like species_label()). Cached across calls
-# since the lookup is rebuilt from a long (many-rows-per-pathway) table.
-.pathway_lookup_cache <- new.env(parent = emptyenv())
-# Spelled out rather than the Unicode Greek letters: those silently corrupt
-# under the pdf() device's default (single-byte) font encoding, the same
-# mbcsToSbcs issue non-ASCII characters hit elsewhere in these plots.
-.pathway_html_entities <- c(
-  "&alpha;" = "alpha", "&beta;" = "beta", "&gamma;" = "gamma", "&delta;" = "delta"
-)
-pathway_label <- function(x) {
-  if (is.null(.pathway_lookup_cache$map)) {
-    .pathway_lookup_cache$map <- readRDS("data/processed_data/BARIA_humann_pathways_long.RDS") |>
-      distinct(pathway_id, pathway_name) |>
-      mutate(pathway_name = str_replace_all(pathway_name, .pathway_html_entities)) |>
-      tibble::deframe()
-  }
-  unname(.pathway_lookup_cache$map[x])
-}
-
 # Cross-sectional confirmatory model: for each feature, lm(outcome ~
 # log10(abundance) + covariates), returning the log10_abundance term as one
 # forest-plot row per feature (species, estimate, conf.low/high, p.value,
@@ -268,13 +246,11 @@ run_lmm_forest <- function(species_wide, long_data, feats, outcome, follow_up, c
 }
 
 # Forest plot of a run_lm_forest()/run_lmm_forest() result: one row per
-# feature, point estimate + 95% CI, ordered by effect size. `label_fn` maps
-# feature ids to display labels - species_label() for species (default) or
-# pathway_label() for HUMAnN pathways.
-plot_forest <- function(forest, title = "", label_fn = species_label) {
+# feature, point estimate + 95% CI, ordered by effect size.
+plot_forest <- function(forest, title = "") {
   forest |>
     mutate(
-      label = label_fn(species),
+      label = species_label(species),
       label = forcats::fct_reorder(label, estimate, .desc = TRUE)
     ) |>
     ggplot(aes(x = estimate, y = label, color = p_fdr < 0.05)) +
@@ -286,13 +262,11 @@ plot_forest <- function(forest, title = "", label_fn = species_label) {
     theme_Publication()
 }
 
-# Tidy top-n feature importance bar plot from top_features(). `label_fn` maps
-# feature ids to display labels - species_label() for species (default) or
-# pathway_label() for HUMAnN pathways.
-plot_feature_importance <- function(fi_top, title = "", label_fn = species_label) {
+# Tidy top-n feature importance bar plot from top_features().
+plot_feature_importance <- function(fi_top, title = "") {
   fi_top |>
     mutate(
-      label = label_fn(FeatName),
+      label = species_label(FeatName),
       label = forcats::fct_reorder(label, RelFeatImp)
     ) |>
     ggplot(aes(x = RelFeatImp, y = label)) +
@@ -304,13 +278,11 @@ plot_feature_importance <- function(fi_top, title = "", label_fn = species_label
 # Sanity-check scatter grid: the outcome actually used by the model (from
 # read_input_data()$y) against each top feature's abundance (from
 # read_input_data()$X), one panel per feature, annotated with Spearman rho.
-# `label_fn` maps feature ids to display labels - species_label() for species
-# (default) or pathway_label() for HUMAnN pathways.
-plot_feature_correlations <- function(X, y, feats, title = "", label_fn = species_label) {
-  # label_fn() is called against the distinct feature ids (length(feats));
+plot_feature_correlations <- function(X, y, feats, title = "") {
+  # species_label() is called against the distinct feature ids (length(feats));
   # calling it after pivot_longer() below would see each id repeated once per
-  # subject, which breaks species_label()'s make.unique() disambiguation.
-  labels <- label_fn(feats)
+  # subject, which breaks its make.unique() disambiguation.
+  labels <- species_label(feats)
   names(labels) <- feats
 
   df <- as.data.frame(X[, feats, drop = FALSE])

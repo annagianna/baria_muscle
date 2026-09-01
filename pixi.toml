@@ -20,8 +20,6 @@ ml-process = "Rscript scripts/6c_ml_process.R"
 ml-violin = "Rscript scripts/6d_ml_explained_variance_violin.R"
 mb-metabolome = "Rscript scripts/7a_mb_metabolome_correlations.R"
 mb-diet = "Rscript scripts/7b_mb_diet_correlations.R"
-path-metabolome = "Rscript scripts/7c_path_metabolome_correlations.R"
-path-diet = "Rscript scripts/7d_path_diet_correlations.R"
 
 [tasks.datacleaning]
 depends-on = ["datacleaning-clinical", "datacleaning-omics"]
