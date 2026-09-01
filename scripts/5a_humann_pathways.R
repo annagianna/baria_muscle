@@ -34,6 +34,7 @@ renoir_15 <- met.brewer("Renoir", n = 15)
 # Data
 baria_humann <- readRDS("data/raw_data/BARIA.humann4.profiles.2026.581.910.RDS")
 baria_mb <- readRDS("data/processed_data/BARIA_mb_clean.RDS")
+baria_muscle_long <- readRDS("data/processed_data/BARIA_muscle_long.RDS")
 linda_species_signif <- readRDS("data/processed_data/LinDA_significant_species.RDS")
 
 # HUMAnN cleaning
@@ -95,8 +96,8 @@ humann_linda <- humann_long |>
   filter(pathway_id %in% humann_keep_v0$pathway_id) |> 
   inner_join(linda_species_long, by = c("Sample", "id", "visit"), relationship = "many-to-many")
 
-### Correlations ###
-# Species-pathway Spearman correlations per visit
+#### Correlations ####
+#### Species-pathway Spearman correlations per visit ####
 humann_linda_cor <- humann_linda |>
   group_by(visit, species, species_label, pathway_id, pathway_name) |>
   summarise(
@@ -209,3 +210,78 @@ humann_linda_bubble <- humann_linda_plot_data |>
     legend.position = "right"
   )
 ggsave("results/figures/HUMAnN_LinDA_pathway_bubble.pdf", humann_linda_bubble, width = 8, height = 10)
+
+#### Correlations pathways-clinical features ####
+# Clinical vars of interest
+clinical_vars <- c(
+  "ffmi", "fmi", "bmi", "wc_cm", "hba1c_mmolmol", "glucose_mmoll_mmt_0", "homa_ir", "homa_b",
+  "systolic_bp_mmhg", "diastolic_bp_mmhg",
+  "total_cholesterol_mmoll", "ldl_cholesterol_mmoll", "hdl_cholesterol_mmoll", "triglycerides_mmoll",
+  "crp_mgl", "creatinine_umoll", "egfr_mlmin", "gammagt_ul", "asat_ul", "alat_ul"
+)
+
+# Join HUMAnN data with clinical vars of interest
+humann_clinical <- humann_long |>
+  filter(
+    visit == "v0",
+    pathway_id %in% pathways_top
+  ) |>
+  inner_join(
+    baria_muscle_long |>
+      filter(visit == "v0") |>
+      select(id, visit, all_of(clinical_vars)),
+    by = c("id", "visit")
+  ) |>
+  pivot_longer(
+    cols = all_of(clinical_vars),
+    names_to = "clinical_feature",
+    values_to = "clinical_value"
+  )
+
+# Spearman correlations between pathways and clinical features
+humann_clinical_cor <- humann_clinical |>
+  group_by(clinical_feature, pathway_id, pathway_name) |>
+  summarise(
+    n = sum(complete.cases(pathway_abundance, clinical_value)),
+    test = list(
+      cor.test(pathway_abundance, clinical_value, method = "spearman", exact = FALSE)),
+    .groups = "drop"
+  ) |>
+  mutate(
+    rho = map_dbl(test, ~ unname(.x$estimate)),
+    p = map_dbl(test, ~ .x$p.value)
+  ) |>
+  select(-test) |>
+  ungroup() |> 
+  mutate(padj = p.adjust(p, method = "BH"))
+
+
+### Plot ###
+# Plot data
+humann_clinical_plot_data <- humann_clinical_cor |>
+  mutate(
+    signif = padj < 0.05,
+    clinical_feature = recode(
+      clinical_feature,
+      ffmi = "FFMI",
+      fmi = "FMI",
+      bmi = "BMI",
+      wc_cm = "Waist circumference",
+      hba1c_mmolmol = "HbA1c",
+      glucose_mmoll_mmt_0 = "Fasting glucose",
+      homa_ir = "HOMA-IR",
+      homa_b = "HOMA-B",
+      systolic_bp_mmhg = "Systolic BP",
+      diastolic_bp_mmhg = "Diastolic BP",
+      total_cholesterol_mmoll = "Total cholesterol",
+      ldl_cholesterol_mmoll = "LDL cholesterol",
+      hdl_cholesterol_mmoll = "HDL cholesterol",
+      triglycerides_mmoll = "Triglycerides",
+      crp_mgl = "CRP",
+      creatinine_umoll = "Creatinine",
+      egfr_mlmin = "eGFR",
+      gammagt_ul = "Gamma-GT",
+      asat_ul = "ASAT",
+      alat_ul = "ALAT"
+    )
+  )
