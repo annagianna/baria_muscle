@@ -13,11 +13,17 @@ post-surgical microbiome shifts and metabolic outcomes.
 - **Clinical:** clinical, anthropometric and BIA-derived measures
 - **Language:** R
 
-The code currently covers data cleaning and cohort definition (`0a`), Table 1
-(`1a`), the baseline microbiome descriptive analyses — composition and diversity
-(`2a`–`2c`), a longitudinal mixed-model layer relating baseline species abundance
-to FFMI trajectory after surgery (`4b`), and a functional-pathway layer that
-cleans, filters and models the HUMAnN profiles against FFMI (`5a`).
+The code currently covers data cleaning and cohort definition, split into a
+clinical layer (`0a`) and an omics layer — microbiome, HUMAnN pathways,
+metabolomics (`0b`); Table 1 (`1a`); the baseline microbiome descriptive
+analyses — composition and diversity (`2a`–`2c`); a longitudinal mixed-model
+layer relating baseline species abundance to FFMI trajectory after surgery
+(`4b`); a functional-pathway layer that filters and models the HUMAnN profiles
+against FFMI (`5a`); a gradient-boosting (XGBeast/XGBoost) pipeline that ranks
+species and pathways by how well they predict FFMI and its post-surgical
+change, with LM/LMM forest plots confirming the top features (`6a`–`6d`); and
+correlation analyses relating the top predictive species to the serum
+metabolome and to baseline dietary macronutrient intake (`7a`–`7b`).
 
 ---
 
@@ -26,22 +32,34 @@ cleans, filters and models the HUMAnN profiles against FFMI (`5a`).
 ```
 baria_muscle/
 ├── scripts/
-│   ├── 0a_datacleaning.R              # Clinical + microbiome cleaning, derived variables, cohort definition
-│   ├── 1a_tableone_v0.R               # Table 1, stratified by baseline FFMI status
-│   ├── 2a_mb_alphadiversity_v0.R      # Alpha diversity (Shannon, Simpson, observed richness)
-│   ├── 2b_mb_betadiversity_v0.R       # Beta diversity (Bray–Curtis PCoA)
-│   ├── 2c_mb_composition_v0.R         # Compositional bar plots (top 20 species, by baseline FFMI group)
-│   ├── 4b_lmm_mb_ffmi_trajectories.R  # Mixed models: baseline species abundance × FFMI trajectory
-│   └── 5a_humann_pathways.R           # HUMAnN pathways: cleaning, filtering + FFMI models
-├── pixi.toml                          # Environment manifest
-├── pixi.lock                          # Locked environment
+│   ├── 0a_datacleaning_clinical.R          # Clinical cleaning, derived variables, cohort definition
+│   ├── 0b_datacleaning_omics.R             # Microbiome, HUMAnN pathway & metabolomics cleaning
+│   ├── 1a_tableone_v0.R                    # Table 1, stratified by baseline FFMI status
+│   ├── 2a_mb_alphadiversity_v0.R           # Alpha diversity (Shannon, Simpson, observed richness)
+│   ├── 2b_mb_betadiversity_v0.R            # Beta diversity (Bray–Curtis PCoA)
+│   ├── 2c_mb_composition_v0.R              # Compositional bar plots (top 20 species, by baseline FFMI group)
+│   ├── 4b_lmm_mb_ffmi_trajectories.R       # Mixed models: baseline species abundance × FFMI trajectory
+│   ├── 5a_humann_pathways.R                # HUMAnN pathways: filtering + FFMI models
+│   ├── 6a_ml_prep.R                        # Build XGBeast input tables per outcome/subgroup
+│   ├── 6b_ml_run.sh                        # SLURM job: fit XGBeast models for every outcome/subgroup
+│   ├── 6c_ml_process.R                     # Feature importance, LM/LMM confirmation, forest plots
+│   ├── 6d_ml_explained_variance_violin.R   # Violin plots of explained variance across CV iterations
+│   ├── 7a_mb_metabolome_correlations.R     # Top-15 predictive species × serum metabolome correlations
+│   ├── 7b_mb_diet_correlations.R           # Top-15 predictive species × dietary macronutrient correlations
+│   └── assets/
+│       ├── functions.R                     # Shared helper functions (plotting, XGBeast I/O, forest models)
+│       ├── XGBeast_new.py                  # Repeated-CV XGBoost + feature-importance framework
+│       ├── param_grid.json                 # XGBoost hyperparameter grid used by 6b
+│       └── grid_tuning.json                # Grid-search tuning config
+├── pixi.toml                               # Environment manifest
+├── pixi.lock                               # Locked environment
 ├── .gitignore
 └── README.md
 ```
 
 Scripts are numbered and run in that order. Gaps in the numbering (there is no
-`4a`) correspond to superseded scripts kept locally in a **git-ignored**
-`scripts/archive/` and are not tracked in this repository.
+`3*` and no `4a`) correspond to superseded scripts kept locally in a
+**git-ignored** `scripts/archive/` and are not tracked in this repository.
 
 The `data/` and `results/` directories, and the pixi environment
 (`.pixi/`), are also git-ignored: they are created and populated locally when the
@@ -49,16 +67,20 @@ scripts run (see **Data** below) and are not part of the repository.
 
 ### Order of execution
 
-`0a` runs first — it writes the processed datasets every other script reads.
-`1a` and the `2*` descriptive scripts are independent of one another and read the
-processed data written by `0a`. `4b` and `5a` fit their models on their own; `5a`
-additionally reads the raw HUMAnN profiles and is otherwise independent of the
-taxonomic scripts.
+`0a` runs first (clinical cleaning) and writes the processed clinical datasets;
+`0b` runs next and reads `0a`'s output alongside the raw microbiome, HUMAnN and
+metabolomics files to write the processed omics datasets. `1a` and the `2*`
+descriptive scripts are independent of one another and read the processed data
+written by `0a`/`0b`. `4b` and `5a` fit their models independently of each
+other and of the `2*` scripts.
 
-Note on input paths: `1a` and `2a`–`2c` read the processed files under their plain
-names (`BARIA_muscle_wide.RDS`, `BARIA_mb_clean.RDS`), whereas `4b` and `5a`
-currently read a date-stamped copy (`260818_BARIA_muscle_long.RDS`,
-`260818_BARIA_mb_clean.RDS`) of the same processed data.
+`6a` (build ML input) → `6b` (fit XGBeast models, typically on a SLURM cluster)
+→ `6c` (feature importance + confirmatory LM/LMM forest plots) → `6d`
+(explained-variance violin plots) must run in that order, since each step
+reads the previous step's output under `results/mlmodels/`. `7a` and `7b` are
+independent of one another but both depend on `6b`'s output for the
+`delta_ffmi_v4`/`all` model, from which they take the top 15 predictive
+species.
 
 ---
 
@@ -71,14 +93,27 @@ currently read a date-stamped copy (`260818_BARIA_muscle_long.RDS`,
 | `BARIA.clinical.2024-12-09.723.2043.RDS` | Clinical, anthropometric and BIA data |
 | `ps.BARIA.metaphlan.706.2548.RDS` | MetaPhlAn shotgun phyloseq object (per-sample relative abundances, 0–100%) |
 | `BARIA.humann4.profiles.2026.581.910.RDS` | HUMAnN 4.0 community functional-pathway profiles (per-sample pathway abundances, CPM) |
+| `BARIA.metabolon.1158.V12.BatchNorm.RDS` | Metabolon serum metabolomics, batch-normalised phyloseq object |
+| `BARIA.metabolon.1158.V12.Peak.Area.RDS` | Metabolon serum metabolomics, raw peak-area phyloseq object (used only to flag imputed/undetected values) |
+| `251002_BARIA_macronutrients.RDS` | Baseline dietary macronutrient intake, per diary tool (`V1`) |
 
-**Outputs** (written by `0a` to `data/processed_data/`):
+**Outputs written by `0a`** to `data/processed_data/` (clinical):
 
 | File | Description |
 |------|-------------|
 | `BARIA_muscle_long.{RDS,csv}` | Long clinical dataset (one row per participant × visit) |
 | `BARIA_muscle_wide.{RDS,csv}` | Wide clinical dataset (one row per participant) |
-| `BARIA_mb_clean.RDS` | MetaPhlAn phyloseq restricted to the analysis cohort, with FFMI metadata joined |
+
+**Outputs written by `0b`** to `data/processed_data/` (omics; `0b` reads `0a`'s
+`BARIA_muscle_wide.RDS` to restrict samples to the analysis cohort):
+
+| File | Description |
+|------|-------------|
+| `BARIA_mb_clean.RDS` | MetaPhlAn phyloseq restricted to the analysis cohort, with FFMI metadata joined; Eukaryota and unannotated `GGB` genera dropped |
+| `BARIA_mb_clean_unfiltered.RDS` | Same as above but before dropping Eukaryota/`GGB` genera — used for diversity |
+| `BARIA_mb_baseline.RDS` | `BARIA_mb_clean.RDS` restricted to `v0` samples |
+| `BARIA_humann_pathways_long.RDS` | HUMAnN pathway table reshaped to long form, restricted to faecal samples in the analysis cohort, `UNMAPPED`/`UNINTEGRATED` removed |
+| `BARIA_metabolon_clean.RDS` | Baseline serum metabolomics phyloseq object: unidentified/sparse (>10% imputed) compounds dropped, log10-transformed and z-scored |
 
 Visit coding: `v0` = baseline (raw `V-1` / MetaPhlAn `Time_Point == "V-1"`),
 `v2`–`v5` = yearly follow-ups, `v6` = 5 years, `v7` = 10 years.
@@ -159,7 +194,7 @@ document.
 
 ## Formulas
 
-All formulas applied in `0a_datacleaning.R`. Superscripts refer to the
+All formulas applied in `0a_datacleaning_clinical.R`. Superscripts refer to the
 **References** section.
 
 ### Body composition
@@ -313,14 +348,15 @@ over-adjustment.
 ### Functional pathways (`5a`)
 
 Community-level functional-pathway profiles from **HUMAnN 4.0** (MetaCyc pathways).
+Reshaping to long form, sample-name harmonisation to the MetaPhlAn convention,
+restriction to **faecal** samples in the cleaned cohort, removal of the
+`UNMAPPED`/`UNINTEGRATED` categories, splitting each pathway string into its
+identifier and name, and zero-filling undetected pathways all happen in `0b`
+(see **Data** above); `5a` itself starts from that cleaned long table.
 
-- Profiles are reshaped to long form; sample names are harmonised to the MetaPhlAn
-  convention and restricted to **faecal** samples present in the cleaned cohort.
-- The `UNMAPPED` and `UNINTEGRATED` categories are removed, and each pathway string
-  is split into its identifier and name.
-- Undetected pathways are set to zero. A pathway is retained if it exceeds
-  **5 CPM** in **≥ 50%** of baseline samples, and abundances are `log10`-transformed
-  with a `+1` pseudocount.
+- A pathway is retained if it exceeds **5 CPM** in **≥ 20%** of baseline samples,
+  and abundances are `log10`-transformed with a species-specific half-minimum
+  pseudocount, `log10(abundance + min_abundance/2)`.
 - **Baseline pathway ~ FFMI linear models**, fitted per pathway across three nested
   adjustment sets (M1: age + sex; M2: + FMI; M3: + T2D + diabetes medication +
   statins), with Benjamini–Hochberg FDR across pathways.
@@ -333,20 +369,92 @@ LMMs.
 
 ---
 
+## Machine-learning pipeline (`6a`–`6d`)
+
+A gradient-boosting layer that complements the linear/mixed models above by
+letting all baseline features compete jointly (rather than one species/pathway
+at a time) and ranking them by predictive contribution, using **XGBeast**
+(`scripts/assets/XGBeast_new.py`) — a repeated shuffle-split **XGBoost**
+regression framework with grid-search hyperparameter tuning that reports
+explained variance and permutation feature importance across CV iterations.
+
+- **`6a_ml_prep.R`** builds one input table per outcome × subgroup
+  (`all`/`male`/`female`) under `results/mlmodels/<outcome>/<subgroup>/`.
+  Predictors are baseline (`v0`) species (prevalence/abundance-filtered as in
+  `4b`) or, for the `*_path` outcomes, baseline HUMAnN pathways
+  (filtered analogously). Outcomes cover baseline FFMI/FMI, baseline FFMI
+  adjusted for FMI (residualised), the same two at `v4` (cross-sectional,
+  predicted from **`v4` species**, not baseline), baseline FFMI/FMI restricted
+  to the subjects with `v4` microbiome data (`*_matched`, to isolate subject-
+  subset effects from timepoint effects), and 1-year change in FFMI
+  (`delta_ffmi_v4`, `perc_change_ffmi_v4`) with and without FMI adjustment.
+- **`6b_ml_run.sh`** is a SLURM batch script that calls `XGBeast_new.py` once
+  per outcome × subgroup (17 outcomes × 3 subgroups) with 200 iterations, an
+  8-thread grid search (`param_grid.json`) and a fixed random seed.
+- **`6c_ml_process.R`** reads each model's XGBeast output and, per
+  outcome/subgroup: plots the explained-variance distribution across CV
+  iterations, extracts the top-15 features by importance, and **confirms them**
+  with a classical model on the same predictors — an LM for cross-sectional
+  outcomes or an LMM (mirroring `4b`'s baseline-abundance × visit structure)
+  for change outcomes — reporting a forest plot of per-feature effect estimates
+  with BH-FDR across the top-15 features.
+- **`6d_ml_explained_variance_violin.R`** plots the explained-variance
+  distribution across CV iterations for the six headline FFMI/delta-FFMI
+  models (± FMI adjustment), for the species- and pathway-abundance model sets
+  separately, to `results/graphs/ml_explained_variance/`.
+
+---
+
+## Correlation analyses (`7a`–`7b`)
+
+Both scripts take the **top-15 species by feature importance** from the
+`delta_ffmi_v4`/`all` XGBeast model (`6b`'s output) — i.e. the baseline species
+most predictive of 1-year FFMI change — and correlate their `log10`-transformed
+baseline relative abundance against an external baseline dataset, using
+Spearman correlations with Benjamini–Hochberg FDR across all bug × feature
+pairs.
+
+- **`7a_mb_metabolome_correlations.R`** — correlates the top-15 species against
+  every baseline serum metabolite in `BARIA_metabolon_clean.RDS`. Writes the
+  full correlation table, a scatter plot per species (one panel per
+  FDR-significant metabolite), and `ComplexHeatmap` bugs × metabolites heatmaps
+  (all FDR-significant metabolites, and a top-25-by-hit-count compact version),
+  annotated by Metabolon super-pathway, to `results/graphs/mb_metabolome_correlations/`.
+- **`7b_mb_diet_correlations.R`** — correlates the top-15 species against
+  baseline energy-normalised macronutrient intake (carbohydrate, protein, fat,
+  saturated fat, fibre, alcohol, plus total energy) from
+  `251002_BARIA_macronutrients.RDS`, run separately per dietary-diary tool.
+  Species are additionally required to be present in **≥ 30%** of participants
+  within each tool's subset before testing. Because little survives FDR
+  correction at this sample size, significance here is reported **nominal**
+  (uncorrected `p < 0.05`), not FDR-corrected. Outputs (correlation table,
+  scatter plots, heatmap) are written per tool to
+  `results/graphs/mb_diet_correlations/<tool>/`.
+
+---
+
 ## Dependencies
 
-The environment is managed with **pixi** (`pixi.toml`, `pixi.lock`). Packages
-loaded across the scripts include: `tidyverse`, `phyloseq`, `vegan`, `tableone`,
-`ggpubr`, `patchwork`, `ggthemes`, `ggsci`, `ggrepel`, `grid`, `MetBrewer`,
-`lmerTest`, and `broom` / `broom.mixed`. The pixi manifest currently pins the
-descriptive-analysis stack; the modelling scripts (`4b`, `5a`) additionally load
-`lmerTest`, `broom` / `broom.mixed`, `ggrepel` and `ggsci`.
+The environment is managed with **pixi** (`pixi.toml`, `pixi.lock`), and defines
+pixi tasks for every script plus grouped tasks (`datacleaning`, `mb`, `ml`,
+`mb-correlations`) that chain the steps within each stage — run e.g.
+`pixi run ml` or `pixi run datacleaning-clinical`; see `pixi.toml` for the full
+list. R packages loaded across the scripts include: `tidyverse`, `phyloseq`,
+`vegan`, `tableone`, `ggpubr`, `patchwork`, `ggthemes`, `ggsci`, `ggrepel`,
+`grid`, `MetBrewer`, `lmerTest`, `broom` / `broom.mixed`, and (`7a`/`7b`)
+`ComplexHeatmap` / `circlize`. The ML pipeline (`6b`) additionally uses Python:
+`xgboost`, `scikit-learn`, `numpy`, `pandas`, `matplotlib`, `seaborn`, `shap`,
+`tqdm`.
+
+> **Note:** `ComplexHeatmap` and `circlize` (used by `7a`/`7b`) are not
+> currently pinned in `pixi.toml` — install them separately (e.g. via
+> Bioconductor) until the manifest is updated.
 
 Expected working-directory layout (script paths are relative to the repo root):
 
 ```
 data/raw_data/          # inputs (see Data)
-data/processed_data/    # created by 0a
+data/processed_data/    # created by 0a (clinical) and 0b (omics)
 results/graphs/         # figures, in per-analysis subfolders
 results/tables/         # Table 1 output
 results/mlmodels/       # ML input data + XGBeast output, per outcome/subgroup
