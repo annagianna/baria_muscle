@@ -177,5 +177,5 @@ linda_forest_plot <- linda_plot_data |>
   model_color_manual +
   theme_minimal_custom() +
   theme(axis.text.y = element_text(face = "italic"))
-ggsave("results/figures/linda/LinDA_ffmi_forest_plot.pdf", linda_forest_plot, width = 12, height = 8)
+ggsave("graphs/LinDA/LinDA_ffmi_forest_plot.pdf", linda_forest_plot, width = 12, height = 8)
 
