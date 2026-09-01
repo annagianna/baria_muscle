@@ -99,15 +99,19 @@ theme_Publication <- function(base_size = 12, base_family = "sans") {
 }
 
 # Find the (non-PERMUTED) XGBeast output folder for a given subgroup path +
-# model name, e.g. find_output_folder("results/ml_crossectional/phenoage/all", "phenoage_all", "reg")
+# model name, e.g. find_output_folder("results/ml_crossectional/phenoage/all", "phenoage_all", "reg").
+# If the model has been rerun, multiple timestamped folders can exist for the
+# same name; since the timestamp suffix (YYYY_MM_DD__HH-MM-SS) sorts
+# lexicographically in chronological order, take the last one so a rerun
+# always wins over a stale one.
 find_output_folder <- function(base_path, name, mode = c("reg", "class")) {
   mode <- match.arg(mode)
   if (!dir.exists(base_path)) return(NA_character_)
   prefix <- paste0("output_XGB_", mode, "_", name)
   li <- list.files(base_path)
-  hit <- li[startsWith(li, prefix) & !grepl("PERMUTED", li)]
+  hit <- sort(li[startsWith(li, prefix) & !grepl("PERMUTED", li)])
   if (length(hit) == 0) return(NA_character_)
-  file.path(base_path, hit[1])
+  file.path(base_path, hit[length(hit)])
 }
 
 # Read aggregated regression metrics ("Median R2", "Median Explained
@@ -178,13 +182,35 @@ read_input_data <- function(model_path) {
 }
 
 # Short, human-readable species label from a "Genus_species_SGB####[_group]"
-# name. Keeps the SGB id (e.g. "Faecalibacterium prausnitzii (SGB15318)")
-# since several SGBs can share the same genus_species name; dropping it
-# would silently collapse distinct features onto the same plot row/facet.
+# name, e.g. "Faecalibacterium prausnitzii". The SGB id is meaningless to
+# most readers so it's dropped; make.unique() disambiguates the rare case
+# where several SGBs share the same genus_species name, instead of silently
+# collapsing distinct features onto the same plot row/facet.
 species_label <- function(x) {
-  sgb <- str_extract(x, "SGB\\d+(_group)?$")
   base <- str_remove(x, "_SGB\\d+(_group)?$") |> str_replace_all("_", " ")
-  paste0(base, " (", sgb, ")")
+  make.unique(base, sep = " ")
+}
+
+# Human-readable label for a HUMAnN pathway_id (e.g. "PWY-7238"), looked up
+# from BARIA_humann_pathways_long.RDS's pathway_id -> pathway_name mapping
+# (unlike species SGB ids, pathway ids carry no parseable structure, so this
+# can't be a string transform like species_label()). Cached across calls
+# since the lookup is rebuilt from a long (many-rows-per-pathway) table.
+.pathway_lookup_cache <- new.env(parent = emptyenv())
+# Spelled out rather than the Unicode Greek letters: those silently corrupt
+# under the pdf() device's default (single-byte) font encoding, the same
+# mbcsToSbcs issue non-ASCII characters hit elsewhere in these plots.
+.pathway_html_entities <- c(
+  "&alpha;" = "alpha", "&beta;" = "beta", "&gamma;" = "gamma", "&delta;" = "delta"
+)
+pathway_label <- function(x) {
+  if (is.null(.pathway_lookup_cache$map)) {
+    .pathway_lookup_cache$map <- readRDS("data/processed_data/BARIA_humann_pathways_long.RDS") |>
+      distinct(pathway_id, pathway_name) |>
+      mutate(pathway_name = str_replace_all(pathway_name, .pathway_html_entities)) |>
+      tibble::deframe()
+  }
+  unname(.pathway_lookup_cache$map[x])
 }
 
 # Cross-sectional confirmatory model: for each feature, lm(outcome ~
@@ -242,12 +268,14 @@ run_lmm_forest <- function(species_wide, long_data, feats, outcome, follow_up, c
 }
 
 # Forest plot of a run_lm_forest()/run_lmm_forest() result: one row per
-# feature, point estimate + 95% CI, ordered by effect size.
-plot_forest <- function(forest, title = "") {
+# feature, point estimate + 95% CI, ordered by effect size. `label_fn` maps
+# feature ids to display labels - species_label() for species (default) or
+# pathway_label() for HUMAnN pathways.
+plot_forest <- function(forest, title = "", label_fn = species_label) {
   forest |>
     mutate(
-      label = species_label(species),
-      label = forcats::fct_reorder(label, estimate)
+      label = label_fn(species),
+      label = forcats::fct_reorder(label, estimate, .desc = TRUE)
     ) |>
     ggplot(aes(x = estimate, y = label, color = p_fdr < 0.05)) +
     geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
@@ -258,11 +286,13 @@ plot_forest <- function(forest, title = "") {
     theme_Publication()
 }
 
-# Tidy top-n feature importance bar plot from top_features().
-plot_feature_importance <- function(fi_top, title = "") {
+# Tidy top-n feature importance bar plot from top_features(). `label_fn` maps
+# feature ids to display labels - species_label() for species (default) or
+# pathway_label() for HUMAnN pathways.
+plot_feature_importance <- function(fi_top, title = "", label_fn = species_label) {
   fi_top |>
     mutate(
-      label = species_label(FeatName),
+      label = label_fn(FeatName),
       label = forcats::fct_reorder(label, RelFeatImp)
     ) |>
     ggplot(aes(x = RelFeatImp, y = label)) +
@@ -274,24 +304,41 @@ plot_feature_importance <- function(fi_top, title = "") {
 # Sanity-check scatter grid: the outcome actually used by the model (from
 # read_input_data()$y) against each top feature's abundance (from
 # read_input_data()$X), one panel per feature, annotated with Spearman rho.
-plot_feature_correlations <- function(X, y, feats, title = "") {
+# `label_fn` maps feature ids to display labels - species_label() for species
+# (default) or pathway_label() for HUMAnN pathways.
+plot_feature_correlations <- function(X, y, feats, title = "", label_fn = species_label) {
+  # label_fn() is called against the distinct feature ids (length(feats));
+  # calling it after pivot_longer() below would see each id repeated once per
+  # subject, which breaks species_label()'s make.unique() disambiguation.
+  labels <- label_fn(feats)
+  names(labels) <- feats
+
   df <- as.data.frame(X[, feats, drop = FALSE])
   colnames(df) <- feats
   df$.y <- y
-  df |>
+  df <- df |>
     tidyr::pivot_longer(-.y, names_to = "species", values_to = "abundance") |>
     group_by(species) |>
     mutate(rho = cor(abundance, .y, method = "spearman", use = "complete.obs")) |>
     ungroup() |>
     mutate(
-      facet_label = sprintf("%s\n(rho = %.2f)", str_wrap(species_label(species), 22), rho),
+      facet_label = str_wrap(labels[species], 22),
       facet_label = forcats::fct_reorder(facet_label, -rho)
-    ) |>
-    ggplot(aes(x = abundance, y = .y)) +
+    )
+
+  # rho text drawn inside each panel (not the facet strip) - one label per facet
+  ann <- df |> distinct(facet_label, rho) |>
+    mutate(label = sprintf("rho = %.2f", rho))
+
+  ggplot(df, aes(x = abundance, y = .y)) +
     geom_point(alpha = 0.5, size = 1, color = "#2c7fb8") +
     geom_smooth(method = "lm", se = FALSE, color = "firebrick", linewidth = 0.6) +
+    geom_text(
+      data = ann, aes(label = label), x = -Inf, y = Inf, hjust = -0.05, vjust = 1.3,
+      inherit.aes = FALSE, size = 2.5
+    ) +
     facet_wrap(~facet_label, scales = "free_x", ncol = 5) +
-    labs(title = title, x = "Relative abundance (as used in model)", y = "Outcome (as used in model)") +
+    labs(title = title, x = "Relative abundance", y = "Outcome") +
     theme_Publication() +
     theme(strip.text = element_text(size = 8))
 }
