@@ -32,7 +32,6 @@ theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
 
 }
 renoir_15 <- met.brewer("Renoir", n = 15)
-fill_cor_manual <- scale_fill_gradient2(low = renoir_15[15], mid = "white", high = renoir_15[6], midpoint = 0, name = "Spearman\nrho")
 
 # Data
 baria_humann <- readRDS("data/raw_data/BARIA.humann4.profiles.2026.581.910.RDS")
@@ -93,10 +92,10 @@ humann_keep_v0 <- humann_long |>
   summarize(prevalence = mean(pathway_abundance > 5), .groups = "drop") |> 
   filter(prevalence >= 0.50)
 
-# Keep filtered baseline pathways accross all visits (v0, v4, v5) & join significant LinDA species
+# Keep filtered baseline pathways across all visits (v0, v4, v5) & join significant LinDA species
 humann_linda <- humann_long |>
   filter(pathway_id %in% humann_keep_v0$pathway_id) |> 
-  inner_join(linda_species_long, by = c("Sample", "id", "visit"))
+  inner_join(linda_species_long, by = c("Sample", "id", "visit"), relationship = "many-to-many")
 
 ### Correlations ###
 # Species-pathway Spearman correlations per visit
@@ -150,24 +149,53 @@ humann_linda_plot_data <- humann_linda_cor |>
     )
   )
 
-# Heatmap
-humann_linda_heatmap <- humann_linda_plot_data |> 
+rho_max <- max(abs(humann_linda_plot_data$rho), na.rm = TRUE)
+fill_cor_manual <- scale_fill_gradient2(low = renoir_15[14], mid = "white", high = renoir_15[6], midpoint = 0, limits = c(-rho_max, rho_max), name = "Spearman\nrho")
+
+## Heatmap
+# Species x axis
+humann_linda_heatmap_x <- humann_linda_plot_data |> 
   ggplot(aes(x = species_label, y = pathway_name, fill = rho)) +
   geom_tile(colour = "white", linewidth = 0.3) +
-  geom_text(aes(label = if_else(signif, "*", "")), hjust = 0.5, vjust = 0.5, size = 4) +
+  geom_point(
+    data = humann_linda_plot_data |> filter(signif),
+    shape = 8,
+    size = 2.3
+  ) +
   fill_cor_manual +
   labs(x = NULL, y = NULL) +
   coord_fixed() +
   theme_minimal_custom(base_size = 11) +
   theme(
-    axis.text.x = element_text(angle = 45, hjust = 1,face = "italic"),
+    axis.text.x = element_text(angle = 45, hjust = 1, face = "italic"),
     axis.text.y = element_text(size = 7),
     panel.grid = element_blank(),
     legend.position = "right"
   )
-ggsave("results/figures/HUMAnN_LinDA_pathway_heatmap.pdf", humann_linda_heatmap, width = 8, height = 10)
+ggsave("results/figures/HUMAnN_LinDA_pathway_heatmap_x.pdf", humann_linda_heatmap_x, width = 8, height = 10)
 
-# Bubble plot
+# Species y axis (for pptx)
+humann_linda_heatmap_y <- humann_linda_plot_data |> 
+  ggplot(aes(x = pathway_name, y = species_label, fill = rho)) +
+  geom_tile(colour = "white", linewidth = 0.3) +
+  geom_point(
+    data = humann_linda_plot_data |> filter(signif),
+    shape = 8,
+    size = 2.3
+  ) +
+  fill_cor_manual +
+  labs(x = NULL, y = NULL) +
+  coord_fixed() +
+  theme_minimal_custom(base_size = 11) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 7),
+    axis.text.y = element_text(face = "italic"),
+    panel.grid = element_blank(),
+    legend.position = "right"
+  )
+ggsave("results/figures/HUMAnN_LinDA_pathway_heatmap_y.pdf", humann_linda_heatmap_y, width = 12, height = 5)
+
+## Bubble plot
 humann_linda_bubble <- humann_linda_plot_data |> 
   ggplot(aes(x = species_label, y = pathway_name)) +
   geom_point(aes(size = abs(rho), fill = rho), shape = 21, colour = "grey30", stroke = 0.3) +
