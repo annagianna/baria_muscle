@@ -32,51 +32,31 @@ theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
 renoir_15 <- met.brewer("Renoir", n = 15)
 
 # Data
-baria_humann <- readRDS("data/raw_data/BARIA.humann4.profiles.2026.581.910.RDS")
+humann_long <- readRDS("data/processed_data/BARIA_humann_pathways_long.RDS")
 baria_mb <- readRDS("data/processed_data/BARIA_mb_clean.RDS")
 baria_muscle_long <- readRDS("data/processed_data/BARIA_muscle_long.RDS")
 linda_species_signif <- readRDS("data/processed_data/LinDA_significant_species.RDS")
 
-# HUMAnN cleaning
-humann_clean <- baria_humann |>
-  rownames_to_column(var = "pathway") |>
-  mutate(
-    pathway_id = str_extract(pathway, "^[^:]+"),
-    pathway_name = str_remove(pathway, "^[^:]+:\\s*"),
-    pathway_name = str_replace(pathway_name, "^.", toupper),
-    pathway_type = case_when(pathway %in% c("UNMAPPED", "UNINTEGRATED") ~ "non-pathway", TRUE ~ "pathway"), 
-    across(where(is.numeric), ~ replace_na(.x, 0))
-  )
+# Map cleaned microbiome taxa to species labels
+species_lookup <- tibble(
+  species = taxa_names(baria_mb),
+  species_label = as.character(tax_table(baria_mb)[, "Tax"])
+)
 
-# Long dataset
-humann_long <- humann_clean |>
-  filter(pathway_type == "pathway") |>
-  pivot_longer(
-    cols = -c(pathway, pathway_id, pathway_name, pathway_type),
-    names_to = "Sample_humann",
-    values_to = "pathway_abundance"
-  ) |>
-  mutate(
-    Sample = Sample_humann |>
-      str_remove("_Abundance$") |>
-      str_replace("\\.V\\.1\\.", ".V-1.") # HUMAnN data baseline V1, shotgun V-1
-  ) |>
-  inner_join(
-    as(sample_data(baria_mb), "data.frame") |>
-      rownames_to_column("Sample") |>
-      select(Sample, id, visit),
-    by = "Sample"
-  ) |>
-  filter(visit %in% c("v0", "v4", "v5")) |>
-  select(Sample, Sample_humann, id, visit, pathway, pathway_id, pathway_name, pathway_abundance)
-
-# Extract significant species from LinDA
+# Extract significant LinDA species
 linda_species_long <- as(otu_table(baria_mb), "matrix") |>
   as.data.frame() |>
   rownames_to_column(var = "species") |>
-  filter(species %in% linda_species_signif$species) |>
-  pivot_longer(cols = -species, names_to = "Sample", values_to = "species_abundance") |>
-  left_join(linda_species_signif, by = "species") |>
+  inner_join(
+    species_lookup |>
+      filter(species_label %in% linda_species_signif$species_label),
+    by = "species"
+  ) |>
+  pivot_longer(
+    cols = -c(species, species_label),
+    names_to = "Sample",
+    values_to = "species_abundance"
+  ) |>
   left_join(
     as(sample_data(baria_mb), "data.frame") |>
       rownames_to_column("Sample") |>
@@ -133,9 +113,13 @@ humann_linda_cor_top10 <- humann_linda_cor |>
   select(species_label, pathway_id, pathway_name, rho, padj) |> 
   print(n = 40)
 
-# Pull union of pathways
-pathways_top <- humann_linda_cor_top10 |>
-  distinct(pathway_id) |>
+# Save selected pathways for downstream analyses
+humann_pathways_top <- humann_linda_cor_top10 |>
+  distinct(pathway_id, pathway_name)
+saveRDS(humann_pathways_top, "data/processed_data/HUMAnN_selected_pathways.RDS")
+
+# Pull pathway IDs
+pathways_top <- humann_pathways_top |>
   pull(pathway_id)
 
 ### Plot ###
@@ -171,7 +155,7 @@ humann_linda_heatmap_x <- humann_linda_plot_data |>
     panel.grid = element_blank(),
     legend.position = "right"
   )
-ggsave("results/figures/HUMAnN_LinDA_pathway_heatmap_x.pdf", humann_linda_heatmap_x, width = 8, height = 10)
+ggsave("graphs/HUMAnN/HUMAnN_LinDA_pathway_heatmap_x.pdf", humann_linda_heatmap_x, width = 8, height = 10)
 
 # Species y axis (for pptx)
 humann_linda_heatmap_y <- humann_linda_plot_data |> 
@@ -192,7 +176,7 @@ humann_linda_heatmap_y <- humann_linda_plot_data |>
     panel.grid = element_blank(),
     legend.position = "right"
   )
-ggsave("results/figures/HUMAnN_LinDA_pathway_heatmap_y.pdf", humann_linda_heatmap_y, width = 12, height = 5)
+ggsave("graphs/HUMAnN/HUMAnN_LinDA_pathway_heatmap_y.pdf", humann_linda_heatmap_y, width = 12, height = 5)
 
 ## Bubble plot
 humann_linda_bubble <- humann_linda_plot_data |> 
@@ -209,7 +193,7 @@ humann_linda_bubble <- humann_linda_plot_data |>
     panel.grid = element_blank(),
     legend.position = "right"
   )
-ggsave("results/figures/HUMAnN_LinDA_pathway_bubble.pdf", humann_linda_bubble, width = 8, height = 10)
+ggsave("graphs/HUMAnN/HUMAnN_LinDA_pathway_bubble.pdf", humann_linda_bubble, width = 8, height = 10)
 
 #### Correlations pathways-clinical features ####
 # Clinical vars of interest
@@ -316,4 +300,4 @@ humann_clinical_heatmap <- humann_clinical_plot_data |>
     panel.grid = element_blank(),
     legend.position = "right"
   )
-ggsave("results/figures/HUMAnN_clinical_pathway_heatmap.pdf", humann_clinical_heatmap, width = 12, height = 10)
+ggsave("graphs/HUMAnN/HUMAnN_clinical_pathway_heatmap.pdf", humann_clinical_heatmap, width = 12, height = 10)
