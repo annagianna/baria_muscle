@@ -102,12 +102,13 @@ species_keep <- tibble(
 
 length(species_keep)
 
-# Create species labels
-species_labels <- tibble(species = species_keep) |>
-  mutate(
-    species_label = str_extract(species, "(?<=s__)[^|]+"),
-    species_label = str_replace_all(species_label, "_", " ")
+# Create species labels from cleaned taxonomy
+species_labels <- tibble(
+  species = species_keep,
+  species_label = as.character(
+    tax_table(baria_mb_species)[species_keep, "Tax"]
   )
+)
 
 # Filter abundance matrix
 mb_otu_keep <- mb_otu_long[species_keep, , drop = FALSE]
@@ -178,4 +179,3 @@ linda_forest_plot <- linda_plot_data |>
   theme_minimal_custom() +
   theme(axis.text.y = element_text(face = "italic"))
 ggsave("graphs/LinDA/LinDA_ffmi_forest_plot.pdf", linda_forest_plot, width = 12, height = 8)
-
