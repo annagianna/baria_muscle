@@ -2,6 +2,8 @@
 # Barbara Verhaar
 
 library(stringr)
+library(tidyr)
+library(tibble)
 source("scripts/assets/functions.R")
 
 meta <- readRDS("data/processed_data/BARIA_muscle_long.RDS")
@@ -23,6 +25,16 @@ tk <- apply(mb, 2, function(x) sum(x > 0.05) > (0.2 * length(x)))
 mb2 <- as.data.frame(mb[, tk])
 dim(mb2) # 147 species left, 365 subjects
 mb2[1:5,1:5]
+
+# v4 species table, for outcomes measured at v4 that should be predicted
+# from the microbiome at the same visit rather than the baseline microbiome
+mb_v4 <- readRDS("data/processed_data/BARIA_mb_clean.RDS")
+mb_v4 <- phyloseq::prune_samples(phyloseq::sample_data(mb_v4)$visit == "v4", mb_v4)
+mb_v4 <- t(as(mb_v4@otu_table, "matrix"))
+tk_v4 <- apply(mb_v4, 2, function(x) sum(x > 0.05) > (0.2 * length(x)))
+mb2_v4 <- as.data.frame(mb_v4[, tk_v4])
+dim(mb2_v4)
+mb2_v4[1:5,1:5]
 
 base <- file.path("results/mlmodels/ffmi")
 build_input_data(meta_var,        mb2, "ffmi", file.path(base, "all"),    mode = "reg")
@@ -57,32 +69,63 @@ build_input_data(meta_fmi_var,        mb2, "fmi", file.path(base_fmi_v0, "all"),
 build_input_data(meta_fmi_var_male,   mb2, "fmi", file.path(base_fmi_v0, "male"),   mode = "reg")
 build_input_data(meta_fmi_var_female, mb2, "fmi", file.path(base_fmi_v0, "female"), mode = "reg")
 
-#### Cross-sectional at v4 (post-surgery), predicted from baseline (v0) species ####
+#### Cross-sectional at v4 (post-surgery) ####
+# FFMI/FMI at v4 are predicted from v4 species (mb2_v4); delta/percent-change
+# outcomes below are predicted from baseline (v0) species (mb2), since those
+# are genuinely prospective (baseline microbiome -> future change).
 meta_delta <- readRDS("data/processed_data/BARIA_muscle_long.RDS") |> filter(visit == "v4")
 meta_delta$sampleid <- str_c("BARIA_", meta_delta$id, "_v0") # match against baseline mb sample ids
+meta_delta$sampleid_v4 <- str_c("BARIA_", meta_delta$id, "_v4") # match against v4 mb sample ids
 meta_delta <- meta_delta |> left_join(baseline_fmi, by = "id")
 
 # FFMI at v4
 cat("ffmi_v4: ", sum(!is.na(meta_delta[["ffmi"]])), "/", nrow(meta_delta), "non-missing\n")
-meta_v4_ffmi_var <- meta_delta |> filter(!is.na(ffmi))
+meta_v4_ffmi_var <- meta_delta |> filter(!is.na(ffmi)) |> mutate(sampleid = sampleid_v4)
 meta_v4_ffmi_var_male <- meta_v4_ffmi_var |> filter(sex == "male")
 meta_v4_ffmi_var_female <- meta_v4_ffmi_var |> filter(sex == "female")
 
 base_ffmi_v4 <- file.path("results/mlmodels/ffmi_v4")
-build_input_data(meta_v4_ffmi_var,        mb2, "ffmi", file.path(base_ffmi_v4, "all"),    mode = "reg")
-build_input_data(meta_v4_ffmi_var_male,   mb2, "ffmi", file.path(base_ffmi_v4, "male"),   mode = "reg")
-build_input_data(meta_v4_ffmi_var_female, mb2, "ffmi", file.path(base_ffmi_v4, "female"), mode = "reg")
+build_input_data(meta_v4_ffmi_var,        mb2_v4, "ffmi", file.path(base_ffmi_v4, "all"),    mode = "reg")
+build_input_data(meta_v4_ffmi_var_male,   mb2_v4, "ffmi", file.path(base_ffmi_v4, "male"),   mode = "reg")
+build_input_data(meta_v4_ffmi_var_female, mb2_v4, "ffmi", file.path(base_ffmi_v4, "female"), mode = "reg")
 
 # FMI at v4
 cat("fmi_v4: ", sum(!is.na(meta_delta[["fmi"]])), "/", nrow(meta_delta), "non-missing\n")
-meta_v4_fmi_var <- meta_delta |> filter(!is.na(fmi))
+meta_v4_fmi_var <- meta_delta |> filter(!is.na(fmi)) |> mutate(sampleid = sampleid_v4)
 meta_v4_fmi_var_male <- meta_v4_fmi_var |> filter(sex == "male")
 meta_v4_fmi_var_female <- meta_v4_fmi_var |> filter(sex == "female")
 
 base_fmi_v4 <- file.path("results/mlmodels/fmi_v4")
-build_input_data(meta_v4_fmi_var,        mb2, "fmi", file.path(base_fmi_v4, "all"),    mode = "reg")
-build_input_data(meta_v4_fmi_var_male,   mb2, "fmi", file.path(base_fmi_v4, "male"),   mode = "reg")
-build_input_data(meta_v4_fmi_var_female, mb2, "fmi", file.path(base_fmi_v4, "female"), mode = "reg")
+build_input_data(meta_v4_fmi_var,        mb2_v4, "fmi", file.path(base_fmi_v4, "all"),    mode = "reg")
+build_input_data(meta_v4_fmi_var_male,   mb2_v4, "fmi", file.path(base_fmi_v4, "male"),   mode = "reg")
+build_input_data(meta_v4_fmi_var_female, mb2_v4, "fmi", file.path(base_fmi_v4, "female"), mode = "reg")
+
+#### FFMI/FMI at v0, restricted to the v4-microbiome subset (matched) ####
+# Same outcome & v0 species (mb2) as the "ffmi"/"fmi_v0" models above, but
+# limited to the subjects who also have v4 microbiome data. Comparing these
+# against ffmi_v4/fmi_v4 isolates whether those results differ from the
+# full-cohort v0 models because of the subject subset or because of the
+# predictor/outcome timepoint.
+ffmi_v4_ids <- meta_v4_ffmi_var$id[meta_v4_ffmi_var$sampleid %in% rownames(mb2_v4)]
+fmi_v4_ids <- meta_v4_fmi_var$id[meta_v4_fmi_var$sampleid %in% rownames(mb2_v4)]
+
+meta_var_v0matched <- meta_var |> filter(id %in% ffmi_v4_ids)
+meta_var_v0matched_male <- meta_var_v0matched |> filter(sex == "male")
+meta_var_v0matched_female <- meta_var_v0matched |> filter(sex == "female")
+
+base_ffmi_v0matched <- file.path("results/mlmodels/ffmi_v0_matched")
+build_input_data(meta_var_v0matched,        mb2, "ffmi", file.path(base_ffmi_v0matched, "all"),    mode = "reg")
+build_input_data(meta_var_v0matched_male,   mb2, "ffmi", file.path(base_ffmi_v0matched, "male"),   mode = "reg")
+build_input_data(meta_var_v0matched_female, mb2, "ffmi", file.path(base_ffmi_v0matched, "female"), mode = "reg")
+
+meta_fmi_var_v0matched <- meta_fmi_var |> filter(id %in% fmi_v4_ids)
+meta_fmi_var_v0matched_male <- meta_fmi_var_v0matched |> filter(sex == "male")
+meta_fmi_var_v0matched_female <- meta_fmi_var_v0matched |> filter(sex == "female")
+
+base_fmi_v0matched <- file.path("results/mlmodels/fmi_v0_matched")
+build_input_data(meta_fmi_var_v0matched,        mb2, "fmi", file.path(base_fmi_v0matched, "all"),    mode = "reg")
+build_input_data(meta_fmi_var_v0matched_male,   mb2, "fmi", file.path(base_fmi_v0matched, "male"),   mode = "reg")
+build_input_data(meta_fmi_var_v0matched_female, mb2, "fmi", file.path(base_fmi_v0matched, "female"), mode = "reg")
 
 #### Delta FFMI v0 -> v4 ####
 # Outcome: change in FFMI from baseline to v4; predictors: baseline (v0) species (mb2)
@@ -137,3 +180,50 @@ base_pchange_adj <- file.path("results/mlmodels/perc_change_ffmi_v4_adj_fmi")
 build_input_data(meta_pchange_var_fmi,        mb2, "perc_change_ffmi_adj_fmi", file.path(base_pchange_adj, "all"),    mode = "reg")
 build_input_data(meta_pchange_var_fmi_male,   mb2, "perc_change_ffmi_adj_fmi", file.path(base_pchange_adj, "male"),   mode = "reg")
 build_input_data(meta_pchange_var_fmi_female, mb2, "perc_change_ffmi_adj_fmi", file.path(base_pchange_adj, "female"), mode = "reg")
+
+#### Pathway abundance models ####
+path_wide <- readRDS("data/processed_data/BARIA_humann_pathways_long.RDS") |>
+  filter(visit == "v0") |>
+  select(Sample, pathway_id, pathway_abundance) |>
+  pivot_wider(names_from = pathway_id, values_from = pathway_abundance) |>
+  column_to_rownames("Sample")
+tk_path <- apply(path_wide, 2, function(x) sum(x > 0.05) > (0.3 * length(x)))
+path2 <- as.data.frame(path_wide[, tk_path])
+dim(path2) # pathways left, 365 subjects
+path2[1:5,1:5]
+
+#### FFMI (v0), pathways ####
+base_path <- file.path("results/mlmodels/ffmi_path")
+build_input_data(meta_var,        path2, "ffmi", file.path(base_path, "all"),    mode = "reg")
+build_input_data(meta_var_male,   path2, "ffmi", file.path(base_path, "male"),   mode = "reg")
+build_input_data(meta_var_female, path2, "ffmi", file.path(base_path, "female"), mode = "reg")
+
+#### FFMI corrected for FMI (v0), pathways ####
+base_adj_path <- file.path("results/mlmodels/ffmi_adj_fmi_path")
+build_input_data(meta_var_fmi,        path2, "ffmi_adj_fmi", file.path(base_adj_path, "all"),    mode = "reg")
+build_input_data(meta_var_fmi_male,   path2, "ffmi_adj_fmi", file.path(base_adj_path, "male"),   mode = "reg")
+build_input_data(meta_var_fmi_female, path2, "ffmi_adj_fmi", file.path(base_adj_path, "female"), mode = "reg")
+
+#### Delta FFMI v0 -> v4, pathways ####
+base_delta_path <- file.path("results/mlmodels/delta_ffmi_v4_path")
+build_input_data(meta_delta_var,        path2, "delta_ffmi", file.path(base_delta_path, "all"),    mode = "reg")
+build_input_data(meta_delta_var_male,   path2, "delta_ffmi", file.path(base_delta_path, "male"),   mode = "reg")
+build_input_data(meta_delta_var_female, path2, "delta_ffmi", file.path(base_delta_path, "female"), mode = "reg")
+
+#### Delta FFMI corrected for FMI, pathways ####
+base_delta_adj_path <- file.path("results/mlmodels/delta_ffmi_v4_adj_fmi_path")
+build_input_data(meta_delta_var_fmi,        path2, "delta_ffmi_adj_fmi", file.path(base_delta_adj_path, "all"),    mode = "reg")
+build_input_data(meta_delta_var_fmi_male,   path2, "delta_ffmi_adj_fmi", file.path(base_delta_adj_path, "male"),   mode = "reg")
+build_input_data(meta_delta_var_fmi_female, path2, "delta_ffmi_adj_fmi", file.path(base_delta_adj_path, "female"), mode = "reg")
+
+#### Percentual change FFMI v0 -> v4, pathways ####
+base_pchange_path <- file.path("results/mlmodels/perc_change_ffmi_v4_path")
+build_input_data(meta_pchange_var,        path2, "perc_change_ffmi", file.path(base_pchange_path, "all"),    mode = "reg")
+build_input_data(meta_pchange_var_male,   path2, "perc_change_ffmi", file.path(base_pchange_path, "male"),   mode = "reg")
+build_input_data(meta_pchange_var_female, path2, "perc_change_ffmi", file.path(base_pchange_path, "female"), mode = "reg")
+
+#### Percentual change FFMI corrected for FMI, pathways ####
+base_pchange_adj_path <- file.path("results/mlmodels/perc_change_ffmi_v4_adj_fmi_path")
+build_input_data(meta_pchange_var_fmi,        path2, "perc_change_ffmi_adj_fmi", file.path(base_pchange_adj_path, "all"),    mode = "reg")
+build_input_data(meta_pchange_var_fmi_male,   path2, "perc_change_ffmi_adj_fmi", file.path(base_pchange_adj_path, "male"),   mode = "reg")
+build_input_data(meta_pchange_var_fmi_female, path2, "perc_change_ffmi_adj_fmi", file.path(base_pchange_adj_path, "female"), mode = "reg")
