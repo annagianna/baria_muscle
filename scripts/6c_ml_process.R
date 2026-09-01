@@ -1,7 +1,4 @@
-# Process XGBeast models: metrics, tidy top-15 feature importance,
-# feature-outcome correlation sanity checks, and a confirmatory LM (cross-
-# sectional outcomes: FFMI/FMI at v0 or v4) / LMM (change outcomes) forest
-# plot of the top-15 features, for every outcome x subgroup model.
+# Process XGBeast models and make plots for each model
 # Barbara Verhaar
 
 library(tidyverse)
@@ -18,12 +15,32 @@ model_defs <- tribble(
   "ffmi",                         "FFMI (v0)",                        FALSE,      "ffmi",         "v0",       FALSE,
   "ffmi_adj_fmi",                 "FFMI (v0, adj. FMI)",              FALSE,      "ffmi",         "v0",       TRUE,
   "fmi_v0",                       "FMI (v0)",                         FALSE,      "fmi",          "v0",       FALSE,
+  "ffmi_v0_matched",              "FFMI (v0, matched to v4 mb subset)", FALSE,    "ffmi",         "v0",       FALSE,
+  "fmi_v0_matched",               "FMI (v0, matched to v4 mb subset)",  FALSE,    "fmi",          "v0",       FALSE,
   "ffmi_v4",                      "FFMI (v4)",                        FALSE,      "ffmi",         "v4",       FALSE,
   "fmi_v4",                       "FMI (v4)",                         FALSE,      "fmi",          "v4",       FALSE,
-  "delta_ffmi_v4",                "Delta FFMI (v0-v4)",               TRUE,       "ffmi",         NA,         FALSE,
-  "delta_ffmi_v4_adj_fmi",        "Delta FFMI (v0-v4, adj. FMI)",     TRUE,       "ffmi",         NA,         TRUE,
-  "perc_change_ffmi_v4",          "%change FFMI (v0-v4)",             TRUE,       "ffmi",         NA,         FALSE,
-  "perc_change_ffmi_v4_adj_fmi",  "%change FFMI (v0-v4, adj. FMI)",   TRUE,       "ffmi",         NA,         TRUE,
+  "delta_ffmi_v4",                "Delta FFMI (1 year change)",               TRUE,       "ffmi",         NA,         FALSE,
+  "delta_ffmi_v4_adj_fmi",        "Delta FFMI (1 year change, adj. FMI)",     TRUE,       "ffmi",         NA,         TRUE,
+  "perc_change_ffmi_v4",          "%change FFMI (1 year change)",             TRUE,       "ffmi",         NA,         FALSE,
+  "perc_change_ffmi_v4_adj_fmi",  "%change FFMI (1 year change, adj. FMI)",   TRUE,       "ffmi",         NA,         TRUE,
+)
+
+# Same outcome set as the headline FFMI change models + their v0 cross-
+# sectional counterparts, but predicted from HUMAnN pathway abundance
+# (feat_ids are pathway_id, not species) instead of species abundance.
+model_defs_path <- tribble(
+  ~outcome,                            ~label,                                             ~is_change, ~response_var, ~timepoint, ~is_adj,
+  "ffmi_path",                         "FFMI (v0), pathways",                              FALSE,      "ffmi",        "v0",       FALSE,
+  "ffmi_adj_fmi_path",                 "FFMI (v0, adj. FMI), pathways",                    FALSE,      "ffmi",        "v0",       TRUE,
+  "delta_ffmi_v4_path",                "Delta FFMI (1 year change), pathways",             TRUE,       "ffmi",        NA,         FALSE,
+  "delta_ffmi_v4_adj_fmi_path",        "Delta FFMI (1 year change, adj. FMI), pathways",   TRUE,       "ffmi",        NA,         TRUE,
+  "perc_change_ffmi_v4_path",          "%change FFMI (1 year change), pathways",           TRUE,       "ffmi",        NA,         FALSE,
+  "perc_change_ffmi_v4_adj_fmi_path",  "%change FFMI (1 year change, adj. FMI), pathways", TRUE,       "ffmi",        NA,         TRUE,
+)
+
+model_defs <- bind_rows(
+  model_defs |> mutate(is_pathway = FALSE),
+  model_defs_path |> mutate(is_pathway = TRUE)
 )
 
 #### Data shared by the confirmatory LM/LMM models (not the ML input data
@@ -65,7 +82,7 @@ meta_long_by_group <- list(
   female = meta_long |> filter(sex == "female")
 )
 
-# Baseline species abundance (same filtering as 6a_ml_prep.R), wide with `id`
+# Baseline (v0) species abundance (same filtering as 6a_ml_prep.R), wide with `id`
 mb <- readRDS("data/processed_data/BARIA_mb_baseline.RDS")
 mb_mat <- t(as(mb@otu_table, "matrix"))
 tk <- apply(mb_mat, 2, function(x) sum(x > 0.05) > (0.2 * length(x)))
@@ -73,6 +90,30 @@ species_wide <- as.data.frame(mb_mat[, tk]) |>
   rownames_to_column("sampleid") |>
   mutate(id = sampleid |> str_remove("^BARIA_") |> str_remove("_v0$")) |>
   select(-sampleid)
+
+# v4 species abundance (same filtering as 6a_ml_prep.R's mb2_v4), wide with
+# `id` - needed because ffmi_v4/fmi_v4's top features come from the v4
+# species table, not the baseline one
+mb_v4 <- readRDS("data/processed_data/BARIA_mb_clean.RDS")
+mb_v4 <- phyloseq::prune_samples(phyloseq::sample_data(mb_v4)$visit == "v4", mb_v4)
+mb_v4_mat <- t(as(mb_v4@otu_table, "matrix"))
+tk_v4 <- apply(mb_v4_mat, 2, function(x) sum(x > 0.05) > (0.2 * length(x)))
+species_wide_v4 <- as.data.frame(mb_v4_mat[, tk_v4]) |>
+  rownames_to_column("sampleid") |>
+  mutate(id = sampleid |> str_remove("^BARIA_") |> str_remove("_v4$")) |>
+  select(-sampleid)
+
+species_wide_by_timepoint <- list(v0 = species_wide, v4 = species_wide_v4)
+
+# Baseline (v0) HUMAnN pathway abundance, wide with `id` - functional-level
+# analogue of species_wide, for the *_path outcomes' forest models. No
+# prevalence filter needed here (unlike 6a_ml_prep.R's path2): only the
+# top-15 `feats` columns get selected downstream, and those already passed
+# XGBeast's training-time filter.
+path_wide <- readRDS("data/processed_data/BARIA_humann_pathways_long.RDS") |>
+  filter(visit == "v0") |>
+  select(id, pathway_id, pathway_abundance) |>
+  pivot_wider(names_from = pathway_id, values_from = pathway_abundance)
 
 #### Process each outcome ####
 for (i in seq_len(nrow(model_defs))) {
@@ -82,6 +123,9 @@ for (i in seq_len(nrow(model_defs))) {
   response_var <- model_defs$response_var[i]
   timepoint    <- model_defs$timepoint[i]
   is_adj       <- model_defs$is_adj[i]
+  is_pathway   <- model_defs$is_pathway[i]
+  label_fn     <- if (is_pathway) pathway_label else species_label
+  abundance_wide <- if (is_pathway) path_wide else species_wide
   base <- file.path("results/mlmodels", outcome)
   dir.create(base, recursive = TRUE, showWarnings = FALSE)
   cat("\n====", label, "====\n")
@@ -115,29 +159,44 @@ for (i in seq_len(nrow(model_defs))) {
     fi_top <- top_features(fi, n = 15)
     feats <- fi_top$FeatName
     subtitle <- paste0(label, " (", g, ")")
+    input <- read_input_data(model_path)
 
     dir.create(model_path, recursive = TRUE, showWarnings = FALSE)
-    p_imp <- plot_feature_importance(fi_top, title = subtitle)
+    p_imp <- plot_feature_importance(fi_top, title = subtitle, label_fn = label_fn)
     ggsave(file.path(model_path, "feature_importance_top15.pdf"), p_imp, width = 7, height = 5)
 
-    input <- read_input_data(model_path)
-    p_cor <- plot_feature_correlations(input$X, input$y, feats, title = subtitle)
+    p_cor <- plot_feature_correlations(input$X, input$y, feats, title = subtitle, label_fn = label_fn)
     ggsave(file.path(model_path, "feature_correlations_top15.pdf"), p_cor, width = 12, height = 9)
 
     covariates <- if (g == "all") "sex" else character(0)
+    forest_title <- subtitle
     if (is_change) {
       covariates <- c("age_centered_v0", "perc_change_weight_kg", covariates)
       if (is_adj) covariates <- c(covariates, "fmi_v0")
-      forest <- run_lmm_forest(species_wide, meta_long_by_group[[g]], feats, "ffmi", "v4", covariates)
+      # delta_ffmi_v4(_path): the LMM this confirms whether baseline
+      # microbiome/pathways predict the FFMI trajectory, adjusted for
+      # concurrent FMI
+      if (outcome %in% c("delta_ffmi_v4", "delta_ffmi_v4_path")) {
+        covariates <- c(covariates, "fmi")
+        forest_title <- paste0("FFMI over 1 year (baseline→v4) ~ baseline ",
+                                if (is_pathway) "pathways" else "microbiome",
+                                ", LMM, adj. FMI (", g, ")")
+      }
+      forest <- run_lmm_forest(abundance_wide, meta_long_by_group[[g]], feats, "ffmi", "v4", covariates)
     } else {
       covariates <- c(age_var_by_timepoint[[timepoint]], covariates)
       if (is_adj) covariates <- c(covariates, "fmi")
+      # Restrict to the exact subjects XGBeast trained on for this model (for matched subj model)
+      ids_used <- input$subject_ids |> str_remove("^BARIA_") |> str_remove(paste0("_", timepoint, "$"))
+      abundance_wide_cs <- if (is_pathway) path_wide else species_wide_by_timepoint[[timepoint]]
       forest <- run_lm_forest(
-        species_wide |> inner_join(meta_cs_by_timepoint_group[[timepoint]][[g]], by = "id"),
+        abundance_wide_cs |>
+          filter(id %in% ids_used) |>
+          inner_join(meta_cs_by_timepoint_group[[timepoint]][[g]], by = "id"),
         feats, response_var, covariates
       )
     }
-    p_forest <- plot_forest(forest, title = subtitle)
+    p_forest <- plot_forest(forest, title = forest_title, label_fn = label_fn)
     ggsave(file.path(model_path, "forest_plot_top15.pdf"), p_forest, width = 7, height = 6)
 
     cat(sprintf("  %-12s %d/%d features FDR < 0.05 (%s)\n", g,

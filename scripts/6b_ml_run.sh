@@ -18,12 +18,20 @@ OUTCOMES=(
     ffmi
     ffmi_adj_fmi
     fmi_v0
+    ffmi_v0_matched
+    fmi_v0_matched
     ffmi_v4
     fmi_v4
     delta_ffmi_v4
     delta_ffmi_v4_adj_fmi
     perc_change_ffmi_v4
     perc_change_ffmi_v4_adj_fmi
+    ffmi_path
+    ffmi_adj_fmi_path
+    delta_ffmi_v4_path
+    delta_ffmi_v4_adj_fmi_path
+    perc_change_ffmi_v4_path
+    perc_change_ffmi_v4_adj_fmi_path
 )
 SUBGROUPS=(all male female)
 
