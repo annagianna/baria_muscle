@@ -6,7 +6,8 @@ platforms = ["osx-arm64", "linux-64"]
 version = "0.1.0"
 
 [tasks]
-datacleaning = "Rscript scripts/0a_datacleaning.R"
+datacleaning-clinical = "Rscript scripts/0a_datacleaning_clinical.R"
+datacleaning-omics = "Rscript scripts/0b_datacleaning_omics.R"
 table1 = "Rscript scripts/1a_tableone_v0.R"
 alphadiv = "Rscript scripts/2a_mb_alphadiversity_v0.R"
 betadiv = "Rscript scripts/2b_mb_betadiversity_v0.R"
@@ -16,6 +17,10 @@ humann = "Rscript scripts/5a_humann_pathways.R"
 ml-prep = "Rscript scripts/6a_ml_prep.R"
 ml-run = "bash scripts/6b_ml_run.sh"
 ml-process = "Rscript scripts/6c_ml_process.R"
+
+[tasks.datacleaning]
+depends-on = ["datacleaning-clinical", "datacleaning-omics"]
+description = "Clean clinical data, then omics data (microbiome, pathway, metabolomics)."
 
 [tasks.mb]
 depends-on = ["alphadiv", "betadiv", "composition"]
