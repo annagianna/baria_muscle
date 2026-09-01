@@ -4,8 +4,6 @@
 # Packages
 library(tidyverse)
 library(grid)
-library(lmerTest)
-library(broom.mixed)
 library(phyloseq)
 library(MetBrewer)
 
