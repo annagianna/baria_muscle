@@ -20,6 +20,8 @@ ml-process = "Rscript scripts/6c_ml_process.R"
 ml-violin = "Rscript scripts/6d_ml_explained_variance_violin.R"
 mb-metabolome = "Rscript scripts/7a_mb_metabolome_correlations.R"
 mb-diet = "Rscript scripts/7b_mb_diet_correlations.R"
+path-metabolome = "Rscript scripts/7c_path_metabolome_correlations.R"
+path-diet = "Rscript scripts/7d_path_diet_correlations.R"
 
 [tasks.datacleaning]
 depends-on = ["datacleaning-clinical", "datacleaning-omics"]
@@ -34,8 +36,8 @@ depends-on = ["ml-prep", "ml-run", "ml-process", "ml-violin"]
 description = "ML pipeline: prep XGBeast input data, submit model-fitting job, process results, plot explained-variance violins."
 
 [tasks.mb-correlations]
-depends-on = ["mb-metabolome", "mb-diet"]
-description = "Top-15 species correlations against metabolome and diet macronutrients."
+depends-on = ["mb-metabolome", "mb-diet", "path-metabolome", "path-diet"]
+description = "Top-15 species and pathway correlations against metabolome and diet macronutrients."
 
 [dependencies]
 r-tidyverse = ">=2.0.0,<3"
