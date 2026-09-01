@@ -624,6 +624,82 @@ humann_long <- humann |>
   ) |>
   mutate(pathway_abundance = replace_na(pathway_abundance, 0)) # Treat undetected pathways as zero abundance
 
+#### Metabolomics cleaning ####
+## These are phyloseq objects
+metab_batchnorm <- readRDS("data/raw_data/BARIA.metabolon.1158.V12.BatchNorm.RDS")
+metab_peakarea <- readRDS("data/raw_data/BARIA.metabolon.1158.V12.Peak.Area.RDS")
+
+## Sample IDs
+metab_meta <- as(sample_data(metab_batchnorm), "data.frame") |> rownames_to_column("Sample")
+
+## Visit nrs: filter for baseline
+metab_baseline <- metab_meta |>
+  filter(
+    Time_Point == "V-1",
+    Type == "Fasted",
+    is.na(Exclude) | Exclude != "T",
+    is.na(BOX_NUMBER) | !str_detect(BOX_NUMBER, "5 jaar")
+  )
+
+## ~36 subjects still have two baseline runs, filter out
+metab_baseline <- metab_baseline |>
+  group_by(Subject_ID) |>
+  filter(!(n() > 1 & Batch == "Batch3")) |>
+  ungroup() |>
+  mutate(id = as.character(Subject_ID))
+
+# Selection subgroup subjects FFMI and microbiome
+metab_ffmi_ids <- baria_muscle_wide |> filter(!is.na(ffmi_v0)) |> pull(id) |> as.character()
+metab_target_ids <- intersect(mb_v0_ids, metab_ffmi_ids)
+
+metab_baseline <- metab_baseline |> filter(id %in% metab_target_ids)
+
+metab_batchnorm_v0 <- prune_samples(sample_names(metab_batchnorm) %in% metab_baseline$Sample, metab_batchnorm)
+metab_peakarea_v0 <- prune_samples(sample_names(metab_peakarea) %in% metab_baseline$Sample, metab_peakarea)
+
+## Make matrix from phyloseq tables
+bn_mat <- as(otu_table(metab_batchnorm_v0), "matrix")
+pa_mat <- as(otu_table(metab_peakarea_v0), "matrix")
+
+## Peak is 0 when not detected: % zero == % imputed per metabolite
+pct_imputed <- colMeans(pa_mat == 0) * 100
+metab_var <- apply(bn_mat, 2, var)
+
+## Drop unidentified compounds
+metab_chem_name <- as(tax_table(metab_batchnorm_v0), "matrix")[, "CHEMICAL_NAME"]
+metab_named <- names(metab_chem_name)[!str_detect(metab_chem_name, "^X\\s*-\\s*\\d+$")]
+
+## Keep metabolites that are less than 10% imputed
+metab_keep <- names(pct_imputed)[pct_imputed <= 10 & metab_var > 0 & names(pct_imputed) %in% metab_named]
+bn_keep <- bn_mat[, metab_keep, drop = FALSE]
+
+## Impute + log10-transform + zero mean/unit variance scale
+metab_scaled <- apply(bn_keep, 2, function(x) {as.numeric(scale(log10(x + min(x[x > 0]))))})
+rownames(metab_scaled) <- rownames(bn_keep)
+
+# Fix rownames and colnames of metabolomics data
+metab_tax <- as(tax_table(metab_batchnorm_v0), "matrix")[metab_keep, , drop = FALSE]
+metab_tax <- cbind(metab_tax, pct_imputed = round(pct_imputed[metab_keep], 1))
+
+chem_name <- metab_tax[, "CHEMICAL_NAME"]
+colnames(metab_scaled) <- chem_name
+rownames(metab_tax) <- chem_name
+
+metab_sample_data <- metab_baseline |>
+  select(Sample, id, Batch, Subject_ID) |>
+  mutate(visit = "v0") |>
+  arrange(match(Sample, rownames(metab_scaled))) |>
+  column_to_rownames("Sample")
+rownames(metab_scaled) <- str_c("BARIA_", metab_sample_data$id, "_v0")
+rownames(metab_sample_data) <- rownames(metab_scaled)
+
+baria_metab_clean <- phyloseq(
+  otu_table(metab_scaled, taxa_are_rows = FALSE),
+  sample_data(metab_sample_data),
+  tax_table(metab_tax)
+)
+baria_metab_clean
+
 # Save clinical data as both RDS and csv files
 dir.create("data/processed_data", recursive = TRUE, showWarnings = FALSE)
 
@@ -642,3 +718,6 @@ saveRDS(baria_mb_baseline, "data/processed_data/BARIA_mb_baseline.RDS")
 
 # Save pathway data
 saveRDS(humann_long, "data/processed_data/BARIA_humann_pathways_long.RDS")
+
+# Save metabolomics data
+saveRDS(baria_metab_clean, "data/processed_data/BARIA_metabolon_clean.RDS")
