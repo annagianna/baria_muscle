@@ -1,42 +1,37 @@
-# Correlations between the top-15 species behind the delta-FFMI (v0->v4,
-# adj. FMI) forest plot (results/mlmodels/delta_ffmi_v4_adj_fmi/all/
-# forest_plot_top15.pdf) and the baseline metabolome: per bug x metabolite
-# Spearman correlation + BH-FDR, a scatter plot of every FDR-significant
-# metabolite per bug, and a ComplexHeatmap summary.
+# Correlations: top-15 species (deltaFFMI) and metabolites
 # Barbara Verhaar
 
 library(tidyverse)
 library(phyloseq)
 library(ComplexHeatmap)
 library(circlize)
+
 source("scripts/assets/functions.R")
 
 out_dir <- "results/graphs/mb_metabolome_correlations"
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
-#### Bugs: top-15 features behind delta_ffmi_v4_adj_fmi's forest plot (all) ####
-fi <- get_feature_importance("results/mlmodels/delta_ffmi_v4_adj_fmi/all", "delta_ffmi_v4_adj_fmi_all", "reg")
+#### Microbes ####
+fi <- get_feature_importance("results/mlmodels/delta_ffmi_v4/all", "delta_ffmi_v4_all", "reg")
 feats <- top_features(fi, n = 15)$FeatName
 
-# Baseline (v0) species abundance, same filtering as 6a_ml_prep.R/6c_ml_process.R
+# Baseline (v0) abundance for the top 15
 mb <- readRDS("data/processed_data/BARIA_mb_baseline.RDS")
 mb_mat <- t(as(mb@otu_table, "matrix"))
-tk <- apply(mb_mat, 2, function(x) sum(x > 0.05) > (0.2 * length(x)))
-species_wide <- as.data.frame(mb_mat[, tk]) |>
+stopifnot(all(feats %in% colnames(mb_mat)))
+species_wide <- as.data.frame(mb_mat[, feats, drop = FALSE]) |>
   rownames_to_column("sampleid") |>
   mutate(id = sampleid |> str_remove("^BARIA_") |> str_remove("_v0$")) |>
   select(-sampleid)
-stopifnot(all(feats %in% colnames(species_wide)))
 
-# log10-transform (pseudocount = min(nonzero)/2 per species, same convention
-# used throughout the pipeline, e.g. 4b_lmm_mb_ffmi_trajectories.R)
+# log10-transform (pseudocount)
 bugs <- species_wide |> select(id, all_of(feats))
 bugs[feats] <- map(bugs[feats], ~ {
   pseudo <- min(.x[.x > 0]) / 2
   log10(.x + pseudo)
 })
 
-#### Metabolites: cleaned baseline metabolome (already log10 + z-scored, see 0a_datacleaning.R) ####
+#### Metabolomics ###
 metab <- readRDS("data/processed_data/BARIA_metabolon_clean.RDS")
 metab_mat <- as(otu_table(metab), "matrix")
 metab_meta <- as(sample_data(metab), "data.frame")
@@ -65,16 +60,12 @@ cor_results <- expand_grid(bug = feats, metabolite = colnames(metab_mat)) |>
 write.csv(cor_results, file.path(out_dir, "microbe_metabolite_correlations.csv"), row.names = FALSE)
 
 sig <- cor_results |> filter(p_fdr < 0.05)
-cat(nrow(sig), "/", nrow(cor_results), "bug-metabolite pairs FDR < 0.05\n")
+cat(nrow(sig), "/", nrow(cor_results), "microbe-metabolite pairs FDR < 0.05\n")
 
 # FDR values below 0.001 round to "0.000" at 3 decimals - report a floor instead
 format_fdr <- function(p) if_else(p < 0.001, "<0.001", sprintf("%.3f", p))
 
-# Sphingolipid names (sphingomyelin, ceramide, ...) list every chain-assignment
-# alternative Metabolon couldn't fully resolve, e.g. "sphingomyelin (d18:1/25:0,
-# d19:0/24:1, d20:1/23:0, d19:1/24:0)*" - display-only shortening to the first
-# alternative (the underlying `metabolite` column keeps the full name for
-# joins/lookups against cor_results and tax).
+# Sphingolipid names shortening
 metabolite_label <- function(x) {
   str_replace(
     x,
@@ -84,9 +75,6 @@ metabolite_label <- function(x) {
 }
 
 #### Scatter plots: every FDR-significant metabolite, one panel per bug ####
-# species_label() only disambiguates repeated genus_species names (here,
-# three Faecalibacterium_prausnitzii SGBs) when called on the full feats
-# vector at once - a named lookup avoids collisions in titles/filenames.
 bug_labels <- species_label(feats)
 names(bug_labels) <- feats
 
@@ -167,12 +155,7 @@ lgd_sig <- Legend(
   background = "white"
 )
 
-# Build & save one bugs x `metabs` correlation heatmap (or, if transpose =
-# TRUE, metabolites x bugs - a "vertical" layout that suits a short bug list
-# and a longer metabolite list better). Bug rows/columns with no
-# FDR-significant correlation *within this specific metabolite selection*
-# are dropped - a bug can be significant overall but have none of its hits
-# land in a smaller top-N metabolite subset, so this is done per heatmap.
+# Build & save one bugs x `metabs` correlation heatmap
 plot_corr_heatmap <- function(metabs, file, column_title, col_width, pdf_width_min,
                                column_fontsize = 8, cell_fontsize = 10,
                                transpose = FALSE, row_height = 0.35) {
@@ -202,8 +185,7 @@ plot_corr_heatmap <- function(metabs, file, column_title, col_width, pdf_width_m
   rownames(fdr_mat) <- rownames(rho_mat)
   colnames(fdr_mat) <- colnames(rho_mat)
 
-  # Super pathway strip: a column (top) annotation against the metabolite
-  # axis normally, or a row (left) annotation once metabolites are rows.
+  # Super pathway strip
   pathway_anno <- tax[metabs, "SUPER_PATHWAY"]
 
   if (transpose) {
@@ -266,10 +248,7 @@ plot_corr_heatmap <- function(metabs, file, column_title, col_width, pdf_width_m
 sig_metabs_all <- unique(sig$metabolite)
 cat(length(sig_metabs_all), "distinct metabolites significant for >=1 bug\n")
 
-if (length(sig_metabs_all) > 0) {
-  # Vertical (metabolites as rows, bugs as columns) - the only orientation
-  # kept, since it reads better than the wide horizontal layout for both a
-  # short bug list and a much longer metabolite list.
+if (length(sig_metabs_all) > 0) { # if anything is sig
 
   # Full heatmap: every metabolite significant for >=1 bug
   plot_corr_heatmap(
@@ -280,12 +259,11 @@ if (length(sig_metabs_all) > 0) {
   )
 
   # Compact version: the 20 metabolites correlated with the most bugs
-  # (breadth), tie-broken by the strongest single association (|rho|)
   metab_rank <- sig |>
     group_by(metabolite) |>
     summarise(n_sig = n(), max_abs_rho = max(abs(rho)), .groups = "drop") |>
     arrange(desc(n_sig), desc(max_abs_rho))
-  sig_metabs_small <- metab_rank |> slice_head(n = 20) |> pull(metabolite)
+  sig_metabs_small <- metab_rank |> slice_head(n = 25) |> pull(metabolite)
 
   plot_corr_heatmap(
     sig_metabs_small, file.path(out_dir, "microbe_metabolite_heatmap_top20_vertical.pdf"),
