@@ -261,7 +261,7 @@ humann_clinical_cor <- humann_clinical |>
 humann_clinical_plot_data <- humann_clinical_cor |>
   mutate(
     signif = padj < 0.05,
-    clinical_feature = recode(
+    clinical_feature = dplyr::recode(
       clinical_feature,
       ffmi = "FFMI",
       fmi = "FMI",
@@ -285,3 +285,35 @@ humann_clinical_plot_data <- humann_clinical_cor |>
       alat_ul = "ALAT"
     )
   )
+
+# Symmetric colour scale
+rho_max_clinical <- max(abs(humann_clinical_plot_data$rho), na.rm = TRUE)
+
+fill_cor_clinical <- scale_fill_gradient2(
+  low = renoir_15[2],
+  mid = "white",
+  high = renoir_15[6],
+  midpoint = 0,
+  limits = c(-rho_max_clinical, rho_max_clinical),
+  name = "Spearman\nrho"
+)
+
+# Clinical features x axis
+humann_clinical_heatmap <- humann_clinical_plot_data |>
+  ggplot(aes(x = clinical_feature, y = pathway_name,fill = rho)) +
+  geom_tile(colour = "white", linewidth = 0.3) +
+  geom_point(
+    data = humann_clinical_plot_data |> filter(signif),
+    shape = 8,
+    size = 2.3
+  ) +
+  fill_cor_clinical +
+  labs(x = NULL, y = NULL) +
+  theme_minimal_custom(base_size = 11) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.text.y = element_text(size = 7),
+    panel.grid = element_blank(),
+    legend.position = "right"
+  )
+ggsave("results/figures/HUMAnN_clinical_pathway_heatmap.pdf", humann_clinical_heatmap, width = 12, height = 10)
