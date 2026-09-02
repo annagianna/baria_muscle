@@ -8,6 +8,166 @@ library(broom.mixed)
 library(broom)
 source("scripts/assets/functions.R")
 
+# Read aggregated regression metrics ("Median R2", "Median Explained
+# Variance", "Median RMSE", "Median MAE") for one subgroup; NULL if the model
+# hasn't been run yet.
+get_metrics_reg <- function(base_path, name) {
+  folder <- find_output_folder(base_path, name, "reg")
+  if (is.na(folder)) return(NULL)
+  f <- file.path(folder, "aggregated_metrics_regression.txt")
+  if (!file.exists(f)) return(NULL)
+  read.delim(f)
+}
+
+# Read per-iteration regression metrics ("R2", "Explained Variance", "RMSE",
+# "MAE"), one row per CV iteration, for one subgroup; NULL if the model
+# hasn't been run yet.
+get_iterations_reg <- function(base_path, name) {
+  folder <- find_output_folder(base_path, name, "reg")
+  if (is.na(folder)) return(NULL)
+  f <- file.path(folder, "model_results_per_iteration.txt")
+  if (!file.exists(f)) return(NULL)
+  read.delim(f)
+}
+
+# Read the exact X/y XGBeast trained on for one subgroup (input_data/
+# X_data.txt, feat_ids.txt, subject_ids.txt, y_reg.txt or y_binary.txt).
+read_input_data <- function(model_path) {
+  d <- file.path(model_path, "input_data")
+  X <- as.matrix(read.delim(file.path(d, "X_data.txt"), header = FALSE, sep = "\t"))
+  feat_ids <- readLines(file.path(d, "feat_ids.txt"))
+  subject_ids <- readLines(file.path(d, "subject_ids.txt"))
+  colnames(X) <- feat_ids
+  rownames(X) <- subject_ids
+  y_file <- if (file.exists(file.path(d, "y_reg.txt"))) "y_reg.txt" else "y_binary.txt"
+  y <- scan(file.path(d, y_file), quiet = TRUE)
+  list(X = X, y = y, subject_ids = subject_ids)
+}
+
+# Cross-sectional confirmatory model: for each feature, lm(outcome ~
+# log10(abundance) + covariates), returning the log10_abundance term as one
+# forest-plot row per feature (species, estimate, conf.low/high, p.value,
+# p_fdr). `data` must have one row per subject with columns `outcome`,
+# `covariates`, and every name in `feats`.
+run_lm_forest <- function(data, feats, outcome, covariates = character(0)) {
+  f <- reformulate(c("log10_abundance", covariates), response = outcome)
+  purrr::map_dfr(feats, function(feat) {
+    x <- data[[feat]]
+    pseudo <- min(x[x > 0], na.rm = TRUE) / 2
+    data$log10_abundance <- log10(x + pseudo)
+    fit <- lm(f, data = data)
+    broom::tidy(fit, conf.int = TRUE) |>
+      filter(term == "log10_abundance") |>
+      mutate(species = feat)
+  }) |>
+    mutate(p_fdr = p.adjust(p.value, method = "BH"))
+}
+
+# Change-over-time confirmatory model: for each feature, lmer(outcome ~
+# log10(baseline_abundance) * visit + covariates + (1 | id)), returning the
+# log10_abundance:visit interaction term as one forest-plot row per feature.
+# `species_wide` has one row per subject (column `id`) with baseline
+# abundance columns named in `feats`; `long_data` is long-format (v0 +
+# follow_up) with columns `id`, `visit`, `outcome`, `covariates`.
+run_lmm_forest <- function(species_wide, long_data, feats, outcome, follow_up, covariates = character(0)) {
+  f <- reformulate(c("log10_abundance * visit", covariates, "(1 | id)"), response = outcome)
+  model_data <- species_wide |>
+    select(id, all_of(feats)) |>
+    tidyr::pivot_longer(all_of(feats), names_to = "species", values_to = "baseline_abundance") |>
+    inner_join(long_data, by = "id", relationship = "many-to-many") |>
+    filter(visit %in% c("v0", follow_up)) |>
+    droplevels() |>
+    group_by(species) |>
+    mutate(
+      pseudo = min(baseline_abundance[baseline_abundance > 0], na.rm = TRUE) / 2,
+      log10_abundance = log10(baseline_abundance + pseudo)
+    ) |>
+    ungroup()
+
+  model_data |>
+    group_by(species) |>
+    tidyr::nest() |>
+    mutate(
+      model = purrr::map(data, ~ lmerTest::lmer(f, data = .x, REML = FALSE)),
+      results = purrr::map(model, ~ broom.mixed::tidy(.x, effects = "fixed", conf.int = TRUE))
+    ) |>
+    select(species, results) |>
+    tidyr::unnest(results) |>
+    filter(str_detect(term, "log10_abundance:visit")) |>
+    ungroup() |>
+    mutate(p_fdr = p.adjust(p.value, method = "BH"))
+}
+
+# Forest plot of a run_lm_forest()/run_lmm_forest() result: one row per
+# feature, point estimate + 95% CI, ordered by effect size.
+plot_forest <- function(forest, title = "") {
+  forest |>
+    mutate(
+      label = species_label(species),
+      label = forcats::fct_reorder(label, estimate, .desc = TRUE)
+    ) |>
+    ggplot(aes(x = estimate, y = label, color = p_fdr < 0.05)) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+    geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.2) +
+    geom_point(size = 2) +
+    scale_color_manual(values = c(`TRUE` = "firebrick", `FALSE` = "grey40"), guide = "none") +
+    labs(title = title, x = "Effect estimate (95% CI)", y = NULL) +
+    theme_Publication()
+}
+
+# Tidy top-n feature importance bar plot from top_features().
+plot_feature_importance <- function(fi_top, title = "") {
+  fi_top |>
+    mutate(
+      label = species_label(FeatName),
+      label = forcats::fct_reorder(label, RelFeatImp)
+    ) |>
+    ggplot(aes(x = RelFeatImp, y = label)) +
+    geom_col(fill = "#2c7fb8", width = 0.7) +
+    labs(title = title, x = "Relative importance", y = NULL) +
+    theme_Publication()
+}
+
+# Sanity-check scatter grid: the outcome actually used by the model (from
+# read_input_data()$y) against each top feature's abundance (from
+# read_input_data()$X), one panel per feature, annotated with Spearman rho.
+plot_feature_correlations <- function(X, y, feats, title = "") {
+  # species_label() is called against the distinct feature ids (length(feats));
+  # calling it after pivot_longer() below would see each id repeated once per
+  # subject, which breaks its make.unique() disambiguation.
+  labels <- species_label(feats)
+  names(labels) <- feats
+
+  df <- as.data.frame(X[, feats, drop = FALSE])
+  colnames(df) <- feats
+  df$.y <- y
+  df <- df |>
+    tidyr::pivot_longer(-.y, names_to = "species", values_to = "abundance") |>
+    group_by(species) |>
+    mutate(rho = cor(abundance, .y, method = "spearman", use = "complete.obs")) |>
+    ungroup() |>
+    mutate(
+      facet_label = str_wrap(labels[species], 22),
+      facet_label = forcats::fct_reorder(facet_label, -rho)
+    )
+
+  # rho text drawn inside each panel (not the facet strip) - one label per facet
+  ann <- df |> distinct(facet_label, rho) |>
+    mutate(label = sprintf("rho = %.2f", rho))
+
+  ggplot(df, aes(x = abundance, y = .y)) +
+    geom_point(alpha = 0.5, size = 1, color = "#2c7fb8") +
+    geom_smooth(method = "lm", se = FALSE, color = "firebrick", linewidth = 0.6) +
+    geom_text(
+      data = ann, aes(label = label), x = -Inf, y = Inf, hjust = -0.05, vjust = 1.3,
+      inherit.aes = FALSE, size = 2.5
+    ) +
+    facet_wrap(~facet_label, scales = "free_x", ncol = 5) +
+    labs(title = title, x = "Relative abundance", y = "Outcome") +
+    theme_Publication() +
+    theme(strip.text = element_text(size = 8))
+}
+
 groups <- c("all", "male", "female")
 
 model_defs <- tribble(
@@ -169,4 +329,81 @@ for (i in seq_len(nrow(model_defs))) {
                 sum(forest$p_fdr < 0.05), nrow(forest),
                 if (is_change) "LMM" else "LM"))
   }
+}
+
+#### Explained variance violin: distribution across CV iterations for the ####
+#### FFMI models (all subjects), cross-sectional vs. 1y change vs. %change ####
+violin_out_dir <- "results/graphs/ml_explained_variance"
+dir.create(violin_out_dir, recursive = TRUE, showWarnings = FALSE)
+
+# Compact multi-line labels + a group per outcome (for the fill color below);
+# only a subset of model_defs is shown here (drops fmi_v0/*_matched/*_v4,
+# which aren't FFMI-vs-adjusted-FFMI comparisons).
+violin_defs <- tribble(
+  ~outcome,                       ~violin_label,                   ~violin_group,
+  "ffmi",                         "FFMI (v0)",                     "FFMI",
+  "ffmi_adj_fmi",                 "FFMI (v0)\nadj. FMI",           "FFMI",
+  "delta_ffmi_v4",                "Delta FFMI (1y)",               "Delta FFMI",
+  "delta_ffmi_v4_adj_fmi",        "Delta FFMI (1y)\nadj. FMI",     "Delta FFMI",
+  "perc_change_ffmi_v4",          "%change FFMI (1y)",             "%Delta FFMI",
+  "perc_change_ffmi_v4_adj_fmi",  "%change FFMI (1y)\nadj. FMI",   "%Delta FFMI",
+) |>
+  left_join(model_defs |> select(outcome, is_adj), by = "outcome")
+
+# Pair each outcome with its FMI-adjusted counterpart via a light/dark shade
+# of the same hue, so the six violins read as three related pairs rather than
+# six arbitrary colors.
+violin_fill_colors <- c(
+  "FFMI.FALSE"        = "#8ec6f2",
+  "FFMI.TRUE"          = "#2a78d6",
+  "Delta FFMI.FALSE"   = "#a8dfc4",
+  "Delta FFMI.TRUE"    = "#1baf7a",
+  "%Delta FFMI.FALSE"  = "#f5c396",
+  "%Delta FFMI.TRUE"   = "#eb6834"
+)
+
+ev_df <- pmap_dfr(violin_defs, function(outcome, violin_label, violin_group, is_adj) {
+  it <- get_iterations_reg(file.path("results/mlmodels", outcome, "all"), paste0(outcome, "_all"))
+  if (is.null(it)) {
+    cat("  no XGBeast output found for", outcome, "(all), skipping violin\n")
+    return(NULL)
+  }
+  tibble(label = violin_label, group = violin_group, adj = is_adj, explained_variance = it$Explained.Variance * 100)
+})
+
+if (nrow(ev_df) == 0) {
+  cat("  no models found, skipping explained variance violin plot\n")
+} else {
+  ev_df <- ev_df |>
+    mutate(
+      # reversed so, after coord_flip(), FFMI (v0) reads at the top
+      label = factor(label, levels = rev(violin_defs$violin_label)),
+      fill_key = paste(group, adj, sep = ".")
+    )
+
+  ev_medians <- ev_df |>
+    summarise(med = median(explained_variance), max_val = max(explained_variance), .by = label) |>
+    mutate(label_text = sprintf("%.1f%%", med))
+
+  p_violin <- ggplot(ev_df, aes(x = label, y = explained_variance, fill = fill_key)) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.4) +
+    geom_violin(trim = FALSE, alpha = 0.9, color = "grey30", linewidth = 0.3) +
+    geom_boxplot(width = 0.08, outlier.shape = NA, color = "grey20", fill = "white") +
+    geom_text(
+      data = ev_medians, aes(x = label, y = max_val + 2, label = label_text),
+      inherit.aes = FALSE, position = position_nudge(x = 0.32),
+      hjust = 0, size = 3.2, fontface = "bold"
+    ) +
+    scale_fill_manual(values = violin_fill_colors, guide = "none") +
+    scale_y_continuous(expand = expansion(mult = c(0.05, 0.15))) +
+    coord_flip() +
+    labs(
+      title = "Explained variance across CV iterations - FFMI models, species (all subjects)",
+      x = "", y = "Explained variance (%)"
+    ) +
+    theme_Publication() +
+    theme(axis.text.y = element_text(size = 9))
+
+  ggsave(file.path(violin_out_dir, "ffmi_models_explained_variance_violin.pdf"), p_violin, width = 9, height = 6)
+  cat("Saved", file.path(violin_out_dir, "ffmi_models_explained_variance_violin.pdf"), "\n")
 }

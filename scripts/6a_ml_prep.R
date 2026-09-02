@@ -4,7 +4,64 @@
 library(stringr)
 library(tidyr)
 library(tibble)
-source("scripts/assets/functions.R")
+library(dplyr)
+
+write_y <- function(x, name_y, data_path) {
+  if (!name_y %in% c("y_binary.txt", "y_reg.txt")) {
+    stop('name_y must be "y_binary.txt" or "y_reg.txt"')
+  }
+  if (any(is.na(x))) stop("There are missing values in the outcome data!")
+  data_path <- file.path(data_path, "input_data")
+  dir.create(data_path, recursive = TRUE, showWarnings = FALSE)
+  write.table(x, file = file.path(data_path, name_y),
+              row.names = FALSE, col.names = FALSE, sep = "\t", quote = FALSE)
+}
+
+write_data <- function(x, data_path) {
+  x <- as.matrix(x)
+  if (any(is.na(x))) stop("There are missing values in the input data!")
+  data_path <- file.path(data_path, "input_data")
+  dir.create(data_path, recursive = TRUE, showWarnings = FALSE)
+  write.table(x, file.path(data_path, "X_data.txt"),
+              row.names = FALSE, col.names = FALSE, sep = "\t", quote = FALSE)
+  write.table(colnames(x), file.path(data_path, "feat_ids.txt"),
+              row.names = FALSE, col.names = FALSE, sep = "\t", quote = FALSE)
+  write.table(rownames(x), file.path(data_path, "subject_ids.txt"),
+              row.names = FALSE, col.names = FALSE, sep = "\t", quote = FALSE)
+}
+
+# Build one XGBeast input_data folder: intersect a metadata subgroup with the
+# species table on sampleID_mb, write X_data/feat_ids/subject_ids + y_reg.txt
+# (mode = "reg") or y_binary.txt coded 1 = pos_class, 0 = other (mode = "class").
+build_input_data <- function(meta_sub, mb2, var, out_path,
+                              mode = c("reg", "class"), pos_class = NULL) {
+  mode <- match.arg(mode)
+  X <- mb2[rownames(mb2) %in% meta_sub$sampleid, , drop = FALSE]
+  meta_sub <- meta_sub[match(rownames(X), meta_sub$sampleid), ]
+  stopifnot(all(meta_sub$sampleid == rownames(X)))
+
+  if (mode == "reg") {
+    y <- as.data.frame(as.numeric(meta_sub[[var]]))
+    y_name <- "y_reg.txt"
+  } else {
+    y <- as.data.frame(as.integer(meta_sub[[var]] == pos_class))
+    y_name <- "y_binary.txt"
+  }
+
+  write_data(X, out_path)
+  write_y(y, name_y = y_name, out_path)
+  cat(sprintf("  %-55s %4d samples, %4d taxa\n", out_path, nrow(X), ncol(X)))
+  invisible(nrow(X))
+}
+
+# Regress `outcome` on `covariate` and add the residuals as column `new_var`,
+# e.g. to build an outcome "corrected for" FMI (muscle mass independent of
+# adiposity) before handing it to build_input_data().
+add_residual_var <- function(data, outcome, covariate, new_var) {
+  fit <- lm(reformulate(covariate, outcome), data = data)
+  data[[new_var]] <- as.numeric(resid(fit))
+  data
+}
 
 meta <- readRDS("data/processed_data/BARIA_muscle_long.RDS")
 meta$sampleid <- str_c("BARIA_", meta$id, "_", meta$visit)
