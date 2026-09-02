@@ -4,8 +4,6 @@
 # Packages
 library(tidyverse)
 library(grid)
-library(lmerTest)
-library(broom.mixed)
 library(phyloseq)
 library(MetBrewer)
 
@@ -35,165 +33,271 @@ renoir_15 <- met.brewer("Renoir", n = 15)
 
 # Data
 humann_long <- readRDS("data/processed_data/BARIA_humann_pathways_long.RDS")
+baria_mb <- readRDS("data/processed_data/BARIA_mb_clean.RDS")
 baria_muscle_long <- readRDS("data/processed_data/BARIA_muscle_long.RDS")
+linda_species_signif <- readRDS("data/processed_data/LinDA_significant_species.RDS")
 
-# Feature selection & transform for this analysis
-humann_long <- humann_long |>
-  group_by(pathway_id) |>
-  filter(mean(pathway_abundance[visit == "v0"] > 5) >= 0.2) |>
-  mutate(pseudocount = min(pathway_abundance[pathway_abundance > 0]) / 2) |>
-  ungroup() |>
-  mutate(log10_pathway_abundance = log10(pathway_abundance + pseudocount))
-
-#### Baseline pathway - FFMI associations ####
-# Prepare baseline data
-humann_v0 <- humann_long |>
-  filter(visit == "v0") |>
-  left_join(
-    baria_muscle_long |>
-      filter(visit == "v0") |>
-      select(id, age_v0, sex, t2d_v0, dm_meds, statins, ffmi, fmi) |>
-      rename(dm_meds_v0 = dm_meds, statins_v0 = statins, ffmi_v0 = ffmi, fmi_v0 = fmi),
-    by = "id"
-  )
-
-# Nest participant-level data separately for each pathway
-model_data_ffmi_v0_nested <- humann_v0 |>
-  group_by(pathway_id, pathway_name) |>
-  nest()
-
-# Function to run pathway LMs
-run_pathway_lm <- function(model_data, model_formula) {
-  
-  model_data |>
-    mutate(
-      model = map(data, \(x) lm(model_formula, data = x)),
-      results = map(model, broom::tidy, conf.int = TRUE)
-    ) |>
-    select(pathway_id, pathway_name, results) |>
-    unnest(results) |>
-    filter(term == "log10_pathway_abundance") |>
-    ungroup() |> # Remove pathway grouping before FDR correction across all pathways
-    mutate(
-      p_fdr = p.adjust(p.value, method = "BH"),
-      signif = if_else(p_fdr < 0.05, "significant", "not significant")
-    )
-}
-
-# Model formulas
-model1 <- ffmi_v0 ~ log10_pathway_abundance + age_v0 + sex
-model2 <- ffmi_v0 ~ log10_pathway_abundance + age_v0 + sex + fmi_v0
-model3 <- ffmi_v0 ~ log10_pathway_abundance + age_v0 + sex + fmi_v0 + t2d_v0 + dm_meds_v0 + statins_v0
-
-# Run pathway LM for each model formula
-model_pathway_ffmi_v0_1_results <- run_pathway_lm(model_data_ffmi_v0_nested, model1)
-model_pathway_ffmi_v0_2_results <- run_pathway_lm(model_data_ffmi_v0_nested, model2)
-model_pathway_ffmi_v0_3_results <- run_pathway_lm(model_data_ffmi_v0_nested, model3)
-
-# Pathways significantly associated with baseline FFMI after FDR correction
-model_pathway_ffmi_v0_1_signif <- model_pathway_ffmi_v0_1_results |>
-  filter(p_fdr < 0.05) |>
-  arrange(p_fdr)
-
-model_pathway_ffmi_v0_2_signif <- model_pathway_ffmi_v0_2_results |>
-  filter(p_fdr < 0.05) |>
-  arrange(p_fdr)
-
-model_pathway_ffmi_v0_3_signif <- model_pathway_ffmi_v0_3_results |>
-  filter(p_fdr < 0.05) |>
-  arrange(p_fdr)
-
-# No pathways were significantly associated with baseline FFMI after FDR correction
-
-#### Baseline pathway abundance & FFMI trajectories LMMs ####
-# Merge baseline pathway abundance with longitudinal FFMI data
-# Prepare LMM data
-model_data_pathway_lmm <- humann_v0 |>
-  select(id, pathway_id, pathway_name, baseline_pathway_abundance = pathway_abundance, log10_baseline_pathway_abundance = log10_pathway_abundance) |>
-  inner_join(
-    baria_muscle_long |>
-      filter(visit %in% c("v0", "v4", "v5"), !is.na(ffmi)) |>
-      mutate(
-        visit = factor(visit, levels = c("v0", "v4", "v5")),
-        age_centered_v0 = age_v0 - mean(age_v0, na.rm = TRUE)
-      ) |>
-      select(id, visit, ffmi, age_centered_v0, sex, perc_change_weight_kg),
-    by = "id",
-    relationship = "many-to-many" # expected: each id fans out across pathway x visit
-  )
-
-# Function for pathway LMMs
-run_pathway_lmm <- function(lmm_data, follow_up) {
-
-  lmm_data |>
-    filter(visit %in% c("v0", follow_up)) |>
-    droplevels() |>
-    group_by(pathway_id, pathway_name) |>
-    nest() |>
-    mutate(
-      model = map(
-        data,
-        ~ lmerTest::lmer(ffmi ~ log10_baseline_pathway_abundance * visit + age_centered_v0 + sex + perc_change_weight_kg + (1 | id),
-        data = .x, REML = FALSE
-        )
-      ),
-      results = map(model, ~ broom.mixed::tidy(.x, effects = "fixed", conf.int = TRUE))
-    ) |>
-    select(pathway_id, pathway_name, results) |>
-    unnest(results) |>
-    filter(str_detect(term, "log10_baseline_pathway_abundance:visit")) |>
-    ungroup() |> # Remove pathway grouping before FDR correction across all pathways
-    mutate(
-      p_fdr = p.adjust(p.value, method = "BH"),
-      signif = if_else(p_fdr < 0.05, "significant", "not significant"),
-      visit = follow_up
-    )
-}
-
-# Run pathway LMM for each follow-up visit
-lmm_pathway_v4_results <- run_pathway_lmm(model_data_pathway_lmm, "v4")
-lmm_pathway_v5_results <- run_pathway_lmm(model_data_pathway_lmm, "v5")
-
-# Significant pathways
-lmm_pathway_v4_signif <- lmm_pathway_v4_results |>
-  filter(p_fdr < 0.05) |>
-  arrange(p_fdr)
-
-lmm_pathway_v5_signif <- lmm_pathway_v5_results |>
-  filter(p_fdr < 0.05) |>
-  arrange(p_fdr)
-
-c(
-  n_pathways_tested = n_distinct(model_data_pathway_lmm$pathway_id),
-  v4_results = nrow(lmm_pathway_v4_results),
-  v5_results = nrow(lmm_pathway_v5_results),
-  v4_signif = nrow(lmm_pathway_v4_signif),
-  v5_signif = nrow(lmm_pathway_v5_signif)
+# Map cleaned microbiome taxa to species labels
+species_lookup <- tibble(
+  species = taxa_names(baria_mb),
+  species_label = as.character(tax_table(baria_mb)[, "Tax"])
 )
 
-pathway_lmm_nominal_overlap <- lmm_pathway_v4_results |>
-  filter(p.value < 0.05) |>
-  select(
-    pathway_id,
-    pathway_name,
-    estimate_v4 = estimate,
-    p_v4 = p.value,
-    p_fdr_v4 = p_fdr
-  ) |>
+# Extract significant LinDA species
+linda_species_long <- as(otu_table(baria_mb), "matrix") |>
+  as.data.frame() |>
+  rownames_to_column(var = "species") |>
   inner_join(
-    lmm_pathway_v5_results |>
-      filter(p.value < 0.05) |>
-      select(
-        pathway_id,
-        estimate_v5 = estimate,
-        p_v5 = p.value,
-        p_fdr_v5 = p_fdr
-      ),
-    by = "pathway_id"
+    species_lookup |>
+      filter(species_label %in% linda_species_signif$species_label),
+    by = "species"
   ) |>
-  mutate(
-    same_direction = sign(estimate_v4) == sign(estimate_v5)
+  pivot_longer(
+    cols = -c(species, species_label),
+    names_to = "Sample",
+    values_to = "species_abundance"
+  ) |>
+  left_join(
+    as(sample_data(baria_mb), "data.frame") |>
+      rownames_to_column("Sample") |>
+      select(Sample, id, visit),
+    by = "Sample"
   )
 
-nrow(pathway_lmm_nominal_overlap)
-pathway_lmm_nominal_overlap
+# Filter HUMAnN pathways based on baseline prevalence (>5 CPM in at least 50% of samples)
+humann_keep_v0 <- humann_long |> 
+  filter(visit == "v0") |> 
+  group_by(pathway_id, pathway_name) |> 
+  summarize(prevalence = mean(pathway_abundance > 5), .groups = "drop") |> 
+  filter(prevalence >= 0.50)
+
+# Keep filtered baseline pathways across all visits (v0, v4, v5) & join significant LinDA species
+humann_linda <- humann_long |>
+  filter(pathway_id %in% humann_keep_v0$pathway_id) |> 
+  inner_join(linda_species_long, by = c("Sample", "id", "visit"), relationship = "many-to-many")
+
+#### Correlations ####
+#### Species-pathway Spearman correlations per visit ####
+humann_linda_cor <- humann_linda |>
+  group_by(visit, species, species_label, pathway_id, pathway_name) |>
+  summarise(
+    n = sum(complete.cases(species_abundance, pathway_abundance)),
+    test = list(cor.test(species_abundance, pathway_abundance, method = "spearman", exact = FALSE)),
+    .groups = "drop"
+  ) |>
+  mutate(
+    rho = map_dbl(test, ~ unname(.x$estimate)),
+    p = map_dbl(test, ~ .x$p.value)
+  ) |>
+  select(-test) |>
+  group_by(visit, species) |>
+  mutate(padj = p.adjust(p, method = "BH")) |>
+  ungroup()
+
+# Strongest significant baseline pathway associations per species
+humann_linda_cor_top10 <- humann_linda_cor |>
+  filter(visit == "v0",padj < 0.05) |>
+  mutate(direction = if_else(rho > 0, "positive", "negative")) |>
+  group_by(species_label, direction) |> 
+  arrange(desc(abs(rho)), .by_group = TRUE) |> 
+  slice_head(n = 10) |> 
+  mutate(rank_direction = row_number()) |> 
+  ungroup() |> 
+  group_by(species_label) |> 
+  mutate(# Select up to 10 strongest signif baseline pathway associations per species (up to 5 from each direction where available)
+    priority = if_else(rank_direction <= 5, 1L, 2L)
+  ) |>
+  arrange(priority, desc(abs(rho)), .by_group = TRUE) |> 
+  slice_head(n = 10) |> 
+  ungroup() |> 
+  select(species_label, pathway_id, pathway_name, rho, padj) |> 
+  print(n = 40)
+
+# Save selected pathways for downstream analyses
+humann_pathways_top <- humann_linda_cor_top10 |>
+  distinct(pathway_id, pathway_name)
+saveRDS(humann_pathways_top, "data/processed_data/HUMAnN_selected_pathways.RDS")
+
+# Pull pathway IDs
+pathways_top <- humann_pathways_top |>
+  pull(pathway_id)
+
+### Plot ###
+# Plot data
+humann_linda_plot_data <- humann_linda_cor |>
+  filter(visit == "v0", pathway_id %in% pathways_top) |>
+  mutate(
+    signif = padj < 0.05,
+    species_label = factor(species_label, levels = linda_species_signif$species_label
+    )
+  )
+
+rho_max <- max(abs(humann_linda_plot_data$rho), na.rm = TRUE)
+fill_cor_manual <- scale_fill_gradient2(low = renoir_15[14], mid = "white", high = renoir_15[6], midpoint = 0, limits = c(-rho_max, rho_max), name = "Spearman\nrho")
+
+## Heatmap
+# Species x axis
+humann_linda_heatmap_x <- humann_linda_plot_data |> 
+  ggplot(aes(x = species_label, y = pathway_name, fill = rho)) +
+  geom_tile(colour = "white", linewidth = 0.3) +
+  geom_point(
+    data = humann_linda_plot_data |> filter(signif),
+    shape = 8,
+    size = 2.3
+  ) +
+  fill_cor_manual +
+  labs(x = NULL, y = NULL) +
+  coord_fixed() +
+  theme_minimal_custom(base_size = 11) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, face = "italic"),
+    axis.text.y = element_text(size = 7),
+    panel.grid = element_blank(),
+    legend.position = "right"
+  )
+ggsave("graphs/HUMAnN/HUMAnN_LinDA_pathway_heatmap_x.pdf", humann_linda_heatmap_x, width = 8, height = 10)
+
+# Species y axis (for pptx)
+humann_linda_heatmap_y <- humann_linda_plot_data |> 
+  ggplot(aes(x = pathway_name, y = species_label, fill = rho)) +
+  geom_tile(colour = "white", linewidth = 0.3) +
+  geom_point(
+    data = humann_linda_plot_data |> filter(signif),
+    shape = 8,
+    size = 2.3
+  ) +
+  fill_cor_manual +
+  labs(x = NULL, y = NULL) +
+  coord_fixed() +
+  theme_minimal_custom(base_size = 11) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 7),
+    axis.text.y = element_text(face = "italic"),
+    panel.grid = element_blank(),
+    legend.position = "right"
+  )
+ggsave("graphs/HUMAnN/HUMAnN_LinDA_pathway_heatmap_y.pdf", humann_linda_heatmap_y, width = 12, height = 5)
+
+## Bubble plot
+humann_linda_bubble <- humann_linda_plot_data |> 
+  ggplot(aes(x = species_label, y = pathway_name)) +
+  geom_point(aes(size = abs(rho), fill = rho), shape = 21, colour = "grey30", stroke = 0.3) +
+  geom_text(aes(label = if_else(signif, "*", "")), size = 3) +
+  scale_size_continuous(range = c(1, 7), guide = "none") +
+  fill_cor_manual +
+  labs(x = NULL, y = NULL) +
+  theme_minimal_custom(base_size = 11) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, face = "italic"),
+    axis.text.y = element_text(size = 7),
+    panel.grid = element_blank(),
+    legend.position = "right"
+  )
+ggsave("graphs/HUMAnN/HUMAnN_LinDA_pathway_bubble.pdf", humann_linda_bubble, width = 8, height = 10)
+
+#### Correlations pathways-clinical features ####
+# Clinical vars of interest
+clinical_vars <- c(
+  "ffmi", "fmi", "bmi", "wc_cm", "hba1c_mmolmol", "glucose_mmoll_mmt_0", "homa_ir", "homa_b",
+  "systolic_bp_mmhg", "diastolic_bp_mmhg",
+  "total_cholesterol_mmoll", "ldl_cholesterol_mmoll", "hdl_cholesterol_mmoll", "triglycerides_mmoll",
+  "crp_mgl", "creatinine_umoll", "egfr_mlmin", "gammagt_ul", "asat_ul", "alat_ul"
+)
+
+# Join HUMAnN data with clinical vars of interest
+humann_clinical <- humann_long |>
+  filter(
+    visit == "v0",
+    pathway_id %in% pathways_top
+  ) |>
+  inner_join(
+    baria_muscle_long |>
+      filter(visit == "v0") |>
+      select(id, visit, all_of(clinical_vars)),
+    by = c("id", "visit")
+  ) |>
+  pivot_longer(
+    cols = all_of(clinical_vars),
+    names_to = "clinical_feature",
+    values_to = "clinical_value"
+  )
+
+# Spearman correlations between pathways and clinical features
+humann_clinical_cor <- humann_clinical |>
+  group_by(clinical_feature, pathway_id, pathway_name) |>
+  summarise(
+    n = sum(complete.cases(pathway_abundance, clinical_value)),
+    test = list(
+      cor.test(pathway_abundance, clinical_value, method = "spearman", exact = FALSE)),
+    .groups = "drop"
+  ) |>
+  mutate(
+    rho = map_dbl(test, ~ unname(.x$estimate)),
+    p = map_dbl(test, ~ .x$p.value)
+  ) |>
+  select(-test) |>
+  ungroup() |> 
+  mutate(padj = p.adjust(p, method = "BH"))
+
+
+### Plot ###
+# Plot data
+humann_clinical_plot_data <- humann_clinical_cor |>
+  mutate(
+    signif = padj < 0.05,
+    clinical_feature = dplyr::recode(
+      clinical_feature,
+      ffmi = "FFMI",
+      fmi = "FMI",
+      bmi = "BMI",
+      wc_cm = "Waist circumference",
+      hba1c_mmolmol = "HbA1c",
+      glucose_mmoll_mmt_0 = "Fasting glucose",
+      homa_ir = "HOMA-IR",
+      homa_b = "HOMA-B",
+      systolic_bp_mmhg = "Systolic BP",
+      diastolic_bp_mmhg = "Diastolic BP",
+      total_cholesterol_mmoll = "Total cholesterol",
+      ldl_cholesterol_mmoll = "LDL cholesterol",
+      hdl_cholesterol_mmoll = "HDL cholesterol",
+      triglycerides_mmoll = "Triglycerides",
+      crp_mgl = "CRP",
+      creatinine_umoll = "Creatinine",
+      egfr_mlmin = "eGFR",
+      gammagt_ul = "Gamma-GT",
+      asat_ul = "ASAT",
+      alat_ul = "ALAT"
+    )
+  )
+
+# Symmetric colour scale
+rho_max_clinical <- max(abs(humann_clinical_plot_data$rho), na.rm = TRUE)
+
+fill_cor_clinical <- scale_fill_gradient2(
+  low = renoir_15[2],
+  mid = "white",
+  high = renoir_15[6],
+  midpoint = 0,
+  limits = c(-rho_max_clinical, rho_max_clinical),
+  name = "Spearman\nrho"
+)
+
+# Clinical features x axis
+humann_clinical_heatmap <- humann_clinical_plot_data |>
+  ggplot(aes(x = clinical_feature, y = pathway_name,fill = rho)) +
+  geom_tile(colour = "white", linewidth = 0.3) +
+  geom_point(
+    data = humann_clinical_plot_data |> filter(signif),
+    shape = 8,
+    size = 2.3
+  ) +
+  fill_cor_clinical +
+  labs(x = NULL, y = NULL) +
+  theme_minimal_custom(base_size = 11) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.text.y = element_text(size = 7),
+    panel.grid = element_blank(),
+    legend.position = "right"
+  )
+ggsave("graphs/HUMAnN/HUMAnN_clinical_pathway_heatmap.pdf", humann_clinical_heatmap, width = 12, height = 10)

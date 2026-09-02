@@ -23,8 +23,9 @@ long_vars <- c(
   # Cardiometabolic/lab parameters
   str_c("glucose_mmoll_mmt_", mmt_timepoints), str_c("insulin_pmoll_mmt_", mmt_timepoints), str_c("cpeptide_nmoll_mmt_", mmt_timepoints),
   "glucagon_ngl_mmt_0", "hba1c", "hba1c_mmolmol", "crp_mgl",
-  "systolic_bp_mmhg", "diastolic_bp_mmhg",
-  "gammagt_ul", "asat_ul", "alat_ul", "triglycerides_mmoll", "tsh_miul", "ft4_pmoll",
+  "systolic_bp_mmhg", "diastolic_bp_mmhg", "total_cholesterol_mmoll", "ldl_cholesterol_mmoll", "hdl_cholesterol_mmoll", "triglycerides_mmoll",
+  "creatinine_umoll", "egfr_mlmin",
+  "gammagt_ul", "asat_ul", "alat_ul", "tsh_miul", "ft4_pmoll",
 
   # Medication
   "medication_list", "medication_binary",
@@ -47,11 +48,13 @@ baria_muscle_vars <- baria_clinical_data_raw |>
     glucose_mmoll_v0 = glucose, glucose_mmoll_mmt_0_v0 = min0gluc, insulin_pmoll_mmt_0_v0 = min0insulin,
     glucagon_ngl_mmt_0_v0 = min0glucagon, cpeptide_nmoll_mmt_0_v0 = min0cpept, hba1c_v0 = hba1c, hba1c_mmolmol_v0 = hba1c__IFCC_mmolmol,
     matches("^min(10|20|30|60|90|120)(gluc|insulin|cpept)$"), # MMT vars
-    gammagt_ul_v0 = ggt, alat_ul_v0 = alat, asat_ul_v0 = asat, triglycerides_mmoll_v0 = triglycerides,
+    gammagt_ul_v0 = ggt, alat_ul_v0 = alat, asat_ul_v0 = asat,
+    total_cholesterol_mmoll_v0 = totchol, ldl_cholesterol_mmoll_v0 = ldlchol, hdl_cholesterol_mmoll_v0 = hdlchol, triglycerides_mmoll_v0 = triglycerides,
+    creatinine_umoll_v0 = creatinine, egfr_mlmin_v0 = egfrmdrd, 
     crp_mgl_v0 = crp, tsh_miul_v0 = tsh, ft4_pmoll_v0 = ft4,
 
     # v2-v5 (Repeated vars)
-    matches("^V[2-5]_(date|bmi|weight|taille|tbf|tbf_percent|ffm|ffm_percent|rawdata_50Khz_Resistance|upperleg|min0gluc|min0insulin|min0glucagon|min0cpept|hba1c|hba1c__IFCC_mmolmol|crp|ggt|asat|alat|triglycerides|tsh|ft4)$"),
+    matches("^V[2-5]_(date|bmi|weight|taille|tbf|tbf_percent|ffm|ffm_percent|rawdata_50Khz_Resistance|upperleg|min0gluc|min0insulin|min0glucagon|min0cpept|hba1c|hba1c__IFCC_mmolmol|crp|ggt|asat|alat|totchol|ldlchol|hdlchol|triglycerides|creatinine|egfrmdrd|tsh|ft4)$"),
     matches("^V[2-5]_min(10|20|30|60|90|120)(gluc|insulin|cpept)$"),
     matches("^(systolic|diastolic)_pressure_v[45]$"),
 
@@ -93,11 +96,16 @@ baria_muscle_vars <- baria_clinical_data_raw |>
       str_replace("^ggt_", "gammagt_ul_") |>
       str_replace("^asat_", "asat_ul_") |>
       str_replace("^alat_", "alat_ul_") |>
-      str_replace("^triglycerides_", "triglycerides_mmoll_") |>
-      str_replace("^tsh_", "tsh_miul_") |>
-      str_replace("^ft4_", "ft4_pmoll_") |>
       str_replace("^systolic_pressure_", "systolic_bp_mmhg_") |>
-      str_replace("^diastolic_pressure_", "diastolic_bp_mmhg_"),
+      str_replace("^diastolic_pressure_", "diastolic_bp_mmhg_") |> 
+      str_replace("^totchol_", "total_cholesterol_mmoll_") |>
+      str_replace("^ldlchol_", "ldl_cholesterol_mmoll_") |>
+      str_replace("^hdlchol_", "hdl_cholesterol_mmoll_") |>
+      str_replace("^triglycerides_", "triglycerides_mmoll_") |>
+      str_replace("^creatinine_", "creatinine_umoll_") |>
+      str_replace("^egfrmdrd_", "egfr_mlmin_") |> 
+      str_replace("^tsh_", "tsh_miul_") |>
+      str_replace("^ft4_", "ft4_pmoll_"),
     matches("_v[2-5]$")
 ) |>
   rename_with(
