@@ -7,34 +7,6 @@
 
 library(dplyr)
 
-theme_Publication <- function(base_size = 12, base_family = "sans") {
-  library(grid); library(ggthemes)
-  theme_foundation(base_size = base_size, base_family = base_family) +
-    theme(
-      plot.title = element_text(face = "bold", size = rel(1.0), hjust = 0.5),
-      panel.background = element_rect(colour = NA, fill = NA),
-      plot.background = element_rect(colour = NA, fill = NA),
-      panel.border = element_rect(colour = NA),
-      axis.title = element_text(face = "bold", size = rel(0.8)),
-      axis.title.y = element_text(angle = 90, vjust = 2),
-      axis.line.y = element_line(colour = "black"),
-      axis.title.x = element_text(vjust = -0.2),
-      axis.line.x = element_line(colour = "black"),
-      axis.ticks.x = element_line(),
-      axis.ticks.y = element_line(),
-      panel.grid.major = element_line(colour = "#f0f0f0"),
-      panel.grid.minor = element_blank(),
-      legend.key = element_rect(colour = NA),
-      legend.position = "right",
-      legend.key.size = unit(0.2, "cm"),
-      legend.spacing = unit(0, "cm"),
-      plot.margin = unit(c(5, 5, 5, 5), "mm"),
-      strip.background = element_rect(colour = "#f0f0f0", fill = "#f0f0f0"),
-      strip.text = element_text(face = "bold"),
-      plot.caption = element_text(face = "italic", size = rel(0.6))
-    )
-}
-
 # Find the (non-PERMUTED) XGBeast output folder for a given subgroup path +
 # model name, e.g. find_output_folder("results/ml_crossectional/phenoage/all", "phenoage_all", "reg").
 # If the model has been rerun, multiple timestamped folders can exist for the
