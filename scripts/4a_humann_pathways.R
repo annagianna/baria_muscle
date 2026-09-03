@@ -1,4 +1,4 @@
-# Functional pathways (HUMAnN)
+# Functional pathways (HUMAnN) and top 15 species
 # Anna Giannakogeorgou, a.gianna@amsterdamumc.nl
 
 # Packages
@@ -9,7 +9,7 @@ library(MetBrewer)
 library(ComplexHeatmap)
 library(circlize)
 
-dir.create("graphs/HUMAnN", recursive = TRUE, showWarnings = FALSE)
+dir.create("results/graphs/HUMAnN", recursive = TRUE, showWarnings = FALSE)
 
 # Theme
 theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
@@ -231,7 +231,7 @@ humann_species_bubble <- humann_species_plot_data |>
     panel.grid = element_blank(),
     legend.position = "right"
   )
-ggsave("graphs/HUMAnN/HUMAnN_species_pathway_bubble.pdf", humann_species_bubble, width = 8, height = 10)
+ggsave("results/graphs/HUMAnN/HUMAnN_species_pathway_bubble.pdf", humann_species_bubble, width = 8, height = 10)
 
 #### Correlations pathways-clinical features ####
 # Clinical vars of interest
@@ -345,7 +345,7 @@ ht_clinical <- Heatmap(
   show_column_dend = FALSE
 )
 
-pdf("graphs/HUMAnN/HUMAnN_clinical_pathway_heatmap.pdf", width = 12, height = 10)
+pdf("results/graphs/HUMAnN/HUMAnN_clinical_pathway_heatmap.pdf", width = 12, height = 10)
 draw(ht_clinical, heatmap_legend_side = "right", annotation_legend_side = "right",
      annotation_legend_list = list(lgd_sig_pathway))
 dev.off()
