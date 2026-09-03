@@ -132,16 +132,23 @@ for (feat in unique(sig$bug)) {
 # species x pathway heatmap colours in 4a_humann_pathways.R (MetBrewer
 # Renoir[14]/[6]); olive = negative, mauve = positive correlation
 col_fun <- colorRamp2(c(-0.5, 0, 0.5), c("#939336", "#f0efec", "#AE7B9E"))
+# Super pathway strip: a muted, earthy 9-colour set (moderate chroma ~35,
+# lightness alternating so adjacent picks aren't just hue-apart) chosen to
+# stay clear of both diverging-scale endpoints (Lab distance >=23 from each)
+# while maximizing separation between categories themselves (min pairwise Lab
+# distance ~23) - straight Renoir subsampling put 6 of 9 categories within a
+# 60-degree hue wedge (pink/red/orange/gold/mustard) and was hard to tell
+# apart; this keeps the same muted/painterly character without that crowding
 pathway_colors <- c(
-  "Amino Acid"                         = "#2a78d6",
-  "Carbohydrate"                       = "#eb6834",
-  "Cofactors and Vitamins"             = "#1baf7a",
-  "Energy"                             = "#eda100",
-  "Lipid"                              = "#e87ba4",
-  "Nucleotide"                         = "#008300",
-  "Peptide"                            = "#4a3aa7",
-  "Xenobiotics"                        = "#e34948",
-  "Partially Characterized Molecules"  = "#898781"
+  "Amino Acid"                         = "#3C9189",
+  "Carbohydrate"                       = "#765135",
+  "Cofactors and Vitamins"             = "#385C7E",
+  "Energy"                             = "#3E6330",
+  "Lipid"                              = "#CCA38D",
+  "Nucleotide"                         = "#8EAFCF",
+  "Peptide"                            = "#96B485",
+  "Xenobiotics"                        = "#814956",
+  "Partially Characterized Molecules"  = "#6A4F7E"
 )
 tax <- as(tax_table(metab), "matrix")
 
