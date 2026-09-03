@@ -11,28 +11,6 @@ library(circlize)
 
 dir.create("results/graphs/HUMAnN", recursive = TRUE, showWarnings = FALSE)
 
-# Theme
-theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
-
-  theme_minimal(base_size = base_size, base_family = base_family) +
-    theme(
-      plot.title = element_text(face = "bold", size = rel(0.8), hjust = 0.5),
-      axis.title = element_text(face = "bold", size = rel(0.8)),
-      axis.title.y = element_text(angle = 90, vjust = 2),
-      axis.title.x = element_text(vjust = -0.2),
-      axis.text = element_text(colour = "black"),
-      axis.line.x.bottom = element_line(colour = "black", linewidth = 0.5),
-      axis.line.y.left = element_line(colour = "black", linewidth = 0.5),
-      axis.ticks = element_line(colour = "black", linewidth = 0.4),
-      panel.grid.major = element_line(colour = "#dddddd", linewidth = 0.4, linetype = "22"),
-      panel.grid.minor = element_blank(),
-      panel.background = element_rect(fill = "white", colour = NA),
-      plot.background = element_rect(fill = "white", colour = NA),
-      legend.position = "bottom",
-      plot.margin = unit(c(10, 5, 5, 5), "mm")
-    )
-
-}
 renoir_15 <- met.brewer("Renoir", n = 15)
 
 source("scripts/assets/functions.R")
@@ -42,11 +20,16 @@ humann_long <- readRDS("data/processed_data/BARIA_humann_pathways_long.RDS")
 baria_mb <- readRDS("data/processed_data/BARIA_mb_clean.RDS")
 baria_muscle_long <- readRDS("data/processed_data/BARIA_muscle_long.RDS")
 
-# Top-15 species by ML feature importance for deltaFFMI - same species set as
-# 4b_mb_metabolome_correlations.R / 4c_mb_diet_correlations.R
-fi <- get_feature_importance("results/mlmodels/delta_ffmi_v4/all", "delta_ffmi_v4_all", "reg")
+# MetaCyc/HUMAnN pathway names embed literal HTML entities (e.g. "&beta;")
+# instead of the Greek letters themselves - decode once so every downstream
+# plot gets clean text
+html_entities <- c("&alpha;" = "α", "&beta;" = "β", "&gamma;" = "γ", "&delta;" = "δ")
+humann_long <- humann_long |>
+  mutate(pathway_name = str_replace_all(pathway_name, html_entities))
+
+# Top-15 species by ML feature importance for deltaFFMI
+fi <- get_feature_importance("results/mlmodels/perc_change_ffmi_v4/all", "perc_change_ffmi_v4_all", "reg")
 feats <- top_features(fi, n = 15)$FeatName
-stopifnot(all(feats %in% taxa_names(baria_mb)))
 
 species_lookup <- tibble(
   species = feats,
@@ -71,12 +54,12 @@ top_species_long <- as(otu_table(baria_mb), "matrix") |>
     by = "Sample"
   )
 
-# Filter HUMAnN pathways based on baseline prevalence (>5 CPM in at least 50% of samples)
+# Filter HUMAnN pathways based on baseline prevalence (>5 CPM in at least 30% of samples)
 humann_keep_v0 <- humann_long |> 
   filter(visit == "v0") |> 
   group_by(pathway_id, pathway_name) |> 
   summarize(prevalence = mean(pathway_abundance > 5), .groups = "drop") |> 
-  filter(prevalence >= 0.50)
+  filter(prevalence >= 0.30)
 
 # Keep filtered baseline pathways across all visits (v0, v4, v5) & join top-15 ML species
 humann_top_species <- humann_long |>
@@ -139,7 +122,6 @@ humann_species_plot_data <- humann_species_cor |>
   )
 
 rho_max <- max(abs(humann_species_plot_data$rho), na.rm = TRUE)
-fill_cor_manual <- scale_fill_gradient2(low = renoir_15[14], mid = "white", high = renoir_15[6], midpoint = 0, limits = c(-rho_max, rho_max), name = "Spearman\nrho")
 
 ## ComplexHeatmap: species x pathway
 col_fun_species <- colorRamp2(c(-rho_max, 0, rho_max), c(renoir_15[14], "white", renoir_15[6]))
@@ -193,45 +175,55 @@ plot_species_pathway_heatmap <- function(rho_mat, padj_mat, file, transpose, wid
     row_names_gp = if (transpose) pathway_gp else species_gp,
     column_names_gp = if (transpose) species_gp else pathway_gp,
     column_names_rot = 45,
+    row_names_side = "left",
+    row_names_max_width = unit(10, "cm"),
+    row_dend_side = "right",
     cluster_rows = TRUE,
     cluster_columns = TRUE,
     show_column_dend = FALSE
   )
 
-  pdf(file, width = width, height = height)
+  # Bottom padding clears the 45-degree column labels' left-hanging overhang;
+  # left padding clears the row names, now on the left (wider when those rows
+  # are the long HUMAnN pathway names, i.e. the transposed orientation).
+  left_padding <- if (transpose) 14 else 6
+
+  cairo_pdf(file, width = width, height = height)
   draw(ht, heatmap_legend_side = "right", annotation_legend_side = "right",
-       annotation_legend_list = list(lgd_sig_pathway))
+       annotation_legend_list = list(lgd_sig_pathway),
+       padding = unit(c(20, left_padding, 4, 4), "mm"))
   dev.off()
 }
 
-# Species on x axis (pathway rows)
+# Species on x axis (pathway rows) - wide, for the long pathway names now on the left
 plot_species_pathway_heatmap(
   rho_mat, padj_mat, "results/graphs/HUMAnN/HUMAnN_species_pathway_heatmap_x.pdf",
-  transpose = TRUE, width = 8, height = 10
+  transpose = TRUE, width = 14, height = 17
 )
 
 # Species on y axis (for pptx)
 plot_species_pathway_heatmap(
   rho_mat, padj_mat, "results/graphs/HUMAnN/HUMAnN_species_pathway_heatmap_y.pdf",
-  transpose = FALSE, width = 12, height = 5
+  transpose = FALSE, width = 20, height = 8
 )
 
-## Bubble plot
-humann_species_bubble <- humann_species_plot_data |> 
-  ggplot(aes(x = species_label, y = pathway_name)) +
-  geom_point(aes(size = abs(rho), fill = rho), shape = 21, colour = "grey30", stroke = 0.3) +
-  geom_text(aes(label = if_else(signif, "*", "")), size = 3) +
-  scale_size_continuous(range = c(1, 7), guide = "none") +
-  fill_cor_manual +
-  labs(x = NULL, y = NULL) +
-  theme_minimal_custom(base_size = 11) +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1, face = "italic"),
-    axis.text.y = element_text(size = 7),
-    panel.grid = element_blank(),
-    legend.position = "right"
-  )
-ggsave("results/graphs/HUMAnN/HUMAnN_species_pathway_bubble.pdf", humann_species_bubble, width = 8, height = 10)
+# Rank a pathway by how many sig corr
+rank_pathways <- function(df) {
+  df |>
+    group_by(pathway_id, pathway_name) |>
+    summarise(n_sig = sum(signif), max_abs_rho = max(abs(rho)), .groups = "drop") |>
+    arrange(desc(n_sig), desc(max_abs_rho))
+}
+
+# Compact heatmap: the 15 pathways implicated for the most species
+pathway_rank <- rank_pathways(humann_species_plot_data)
+pathways_compact <- pathway_rank |> slice_head(n = 15) |> pull(pathway_name)
+
+plot_species_pathway_heatmap(
+  rho_mat[, pathways_compact, drop = FALSE], padj_mat[, pathways_compact, drop = FALSE],
+  "results/graphs/HUMAnN/HUMAnN_species_pathway_heatmap_top15.pdf",
+  transpose = TRUE, width = 12, height = 6
+)
 
 #### Correlations pathways-clinical features ####
 # Clinical vars of interest
@@ -327,25 +319,48 @@ padj_mat_clinical <- humann_clinical_plot_data |>
   as.matrix()
 padj_mat_clinical <- padj_mat_clinical[rownames(rho_mat_clinical), colnames(rho_mat_clinical)]
 
-ht_clinical <- Heatmap(
-  rho_mat_clinical,
-  name = "Spearman\nrho",
-  col = col_fun_clinical,
-  rect_gp = gpar(col = "white", lwd = 0.3),
-  cell_fun = function(j, i, x, y, width, height, fill) {
-    p <- padj_mat_clinical[i, j]
-    stars <- if (is.na(p)) "" else if (p < 0.001) "***" else if (p < 0.01) "**" else if (p < 0.05) "*" else ""
-    if (stars != "") grid::grid.text(stars, x, y, gp = grid::gpar(fontsize = 9, col = "black"))
-  },
-  row_names_gp = gpar(fontsize = 7),
-  column_names_gp = gpar(fontsize = 9),
-  column_names_rot = 45,
-  cluster_rows = TRUE,
-  cluster_columns = TRUE,
-  show_column_dend = FALSE
+plot_clinical_pathway_heatmap <- function(rho_mat, padj_mat, file, width, height) {
+  ht <- Heatmap(
+    rho_mat,
+    name = "Spearman\nrho",
+    col = col_fun_clinical,
+    rect_gp = gpar(col = "white", lwd = 0.3),
+    cell_fun = function(j, i, x, y, width, height, fill) {
+      p <- padj_mat[i, j]
+      stars <- if (is.na(p)) "" else if (p < 0.001) "***" else if (p < 0.01) "**" else if (p < 0.05) "*" else ""
+      if (stars != "") grid::grid.text(stars, x, y, gp = grid::gpar(fontsize = 9, col = "black"))
+    },
+    row_names_gp = gpar(fontsize = 7),
+    column_names_gp = gpar(fontsize = 9),
+    column_names_rot = 45,
+    row_names_side = "left",
+    row_names_max_width = unit(10, "cm"),
+    row_dend_side = "right",
+    cluster_rows = TRUE,
+    cluster_columns = TRUE,
+    show_column_dend = FALSE
+  )
+
+  cairo_pdf(file, width = width, height = height)
+  draw(ht, heatmap_legend_side = "right", annotation_legend_side = "right",
+       annotation_legend_list = list(lgd_sig_pathway),
+       padding = unit(c(20, 10, 4, 4), "mm"))
+  dev.off()
+}
+
+plot_clinical_pathway_heatmap(
+  rho_mat_clinical, padj_mat_clinical,
+  "results/graphs/HUMAnN/HUMAnN_clinical_pathway_heatmap.pdf",
+  width = 15, height = 10
 )
 
-pdf("results/graphs/HUMAnN/HUMAnN_clinical_pathway_heatmap.pdf", width = 12, height = 10)
-draw(ht_clinical, heatmap_legend_side = "right", annotation_legend_side = "right",
-     annotation_legend_list = list(lgd_sig_pathway))
-dev.off()
+# Compact heatmap: the 15 pathways implicated for the most clinical features
+pathway_rank_clinical <- rank_pathways(humann_clinical_plot_data)
+pathways_compact_clinical <- pathway_rank_clinical |> slice_head(n = 15) |> pull(pathway_name)
+
+plot_clinical_pathway_heatmap(
+  rho_mat_clinical[pathways_compact_clinical, , drop = FALSE],
+  padj_mat_clinical[pathways_compact_clinical, , drop = FALSE],
+  "results/graphs/HUMAnN/HUMAnN_clinical_pathway_heatmap_top15.pdf",
+  width = 10, height = 6
+)

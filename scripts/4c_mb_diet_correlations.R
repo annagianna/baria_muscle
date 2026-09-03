@@ -10,7 +10,7 @@ source("scripts/assets/functions.R")
 base_out_dir <- "results/graphs/mb_diet_correlations"
 
 #### Microbes top 15 ####
-fi <- get_feature_importance("results/mlmodels/delta_ffmi_v4/all", "delta_ffmi_v4_all", "reg")
+fi <- get_feature_importance("results/mlmodels/perc_change_ffmi_v4/all", "perc_change_ffmi_v4_all", "reg")
 feats <- top_features(fi, n = 15)$FeatName
 mb <- readRDS("data/processed_data/BARIA_mb_baseline.RDS")
 mb_mat <- t(as(mb@otu_table, "matrix"))
@@ -56,29 +56,35 @@ lgd_sig <- Legend(
   background = "white"
 )
 
-for (tool in levels(diet_all$diary_tool)) {
-  cat("\n====", tool, "====\n")
-  out_dir <- file.path(base_out_dir, tool)
+# One pooled analysis across both diary tools (macronutrient variables are
+# defined identically regardless of tool, and no participant used both), plus
+# one analysis per tool
+diet_groups <- c(levels(diet_all$diary_tool), "overall")
+
+for (group in diet_groups) {
+  label <- if (group == "overall") "all tools" else group
+  cat("\n====", label, "====\n")
+  out_dir <- file.path(base_out_dir, group)
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
   diet_mat <- diet_all |>
-    filter(diary_tool == tool) |>
+    {\(d) if (group == "overall") d else filter(d, diary_tool == group)}() |>
     select(-diary_tool) |>
     column_to_rownames("id") |>
     as.matrix()
 
   #### Join on id, correlate every bug x nutrient pair ####
   shared_ids <- intersect(bugs$id, rownames(diet_mat))
-  cat(length(shared_ids), "participants with both baseline microbiome and", tool, "dietary data\n")
+  cat(length(shared_ids), "participants with both baseline microbiome and", label, "dietary data\n")
 
-  ## Filter per dietary tool because correlations are meaningless if not prev enough
+  ## Filter because correlations are meaningless if not prevalent enough
   raw_bugs_tool <- species_wide |>
     filter(id %in% shared_ids) |>
     column_to_rownames("id")
   raw_bugs_tool <- as.matrix(raw_bugs_tool[shared_ids, , drop = FALSE])
   prevalent_feats <- colnames(raw_bugs_tool)[colMeans(raw_bugs_tool > 0.05) >= 0.3]
-  cat(length(prevalent_feats), "/", length(feats), "bugs present in >=30% of", tool, "participants\n")
-  
+  cat(length(prevalent_feats), "/", length(feats), "bugs present in >=30% of", label, "participants\n")
+
 
   bugs_mat <- bugs |>
     filter(id %in% shared_ids) |>
@@ -194,13 +200,13 @@ for (tool in levels(diet_all$diary_tool)) {
       row_names_gp = grid::gpar(fontsize = 10),
       row_names_side = "left",
       row_dend_side = "right",
-      column_title = sprintf("Baseline dietary macronutrients (%s)", tool),
+      column_title = sprintf("Baseline dietary macronutrients (%s)", label),
       cluster_rows = TRUE,
       cluster_columns = TRUE,
       show_column_dend = FALSE
     )
 
-    pdf(file.path(out_dir, "microbe_diet_heatmap_vertical.pdf"),
+    cairo_pdf(file.path(out_dir, "microbe_diet_heatmap_vertical.pdf"),
         width = max(5, 3 + ncol(rho_mat) * 0.55), height = max(4, 3 + nrow(rho_mat) * 0.4))
     draw(ht, heatmap_legend_side = "right", annotation_legend_side = "right",
          annotation_legend_list = list(lgd_sig), merge_legends = TRUE,

@@ -12,7 +12,7 @@ out_dir <- "results/graphs/mb_metabolome_correlations"
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
 #### Microbes ####
-fi <- get_feature_importance("results/mlmodels/delta_ffmi_v4/all", "delta_ffmi_v4_all", "reg")
+fi <- get_feature_importance("results/mlmodels/perc_change_ffmi_v4/all", "perc_change_ffmi_v4_all", "reg")
 feats <- top_features(fi, n = 15)$FeatName
 
 # Baseline (v0) abundance for the top 15
@@ -239,7 +239,7 @@ plot_corr_heatmap <- function(metabs, file, column_title, col_width, pdf_width_m
   height <- if (transpose) max(6, 3 + nrow(rho_mat) * row_height) else 9
   left_padding <- if (transpose) 10 else 8
 
-  pdf(file, width = width, height = height)
+  cairo_pdf(file, width = width, height = height)
   draw(ht, heatmap_legend_side = "right", annotation_legend_side = "right",
        annotation_legend_list = list(lgd_sig),
        padding = unit(c(20, left_padding, 4, 4), "mm"))
