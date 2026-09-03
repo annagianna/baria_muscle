@@ -43,6 +43,10 @@ description = "ML pipeline: prep XGBeast input data, submit model-fitting job, p
 depends-on = ["humann", "mb-metabolome", "mb-diet"]
 description = "Top-15 species correlations against HUMAnN pathways, metabolome, and diet macronutrients."
 
+[tasks.all]
+depends-on = ["datacleaning", "table1", "table1-ffmi1y", "mb", "mb-ffmi1y", "ml-prep", "ml-process", "mb-correlations"]
+description = "Full pipeline except ml-run (submit the XGBeast job separately, then run ml-process)."
+
 [dependencies]
 r-tidyverse = ">=2.0.0,<3"
 r-ggpubr = ">=1.0.0,<2"
