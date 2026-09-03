@@ -128,9 +128,10 @@ for (feat in unique(sig$bug)) {
 }
 
 #### ComplexHeatmap: bugs x metabolites ####
-# Diverging blue<->red pair, gray neutral midpoint - blue = negative, red =
-# positive correlation
-col_fun <- colorRamp2(c(-0.5, 0, 0.5), c("dodgerblue3", "#f0efec", "firebrick"))
+# Diverging olive<->mauve pair, gray neutral midpoint - matches the
+# species x pathway heatmap colours in 4a_humann_pathways.R (MetBrewer
+# Renoir[14]/[6]); olive = negative, mauve = positive correlation
+col_fun <- colorRamp2(c(-0.5, 0, 0.5), c("#939336", "#f0efec", "#AE7B9E"))
 pathway_colors <- c(
   "Amino Acid"                         = "#2a78d6",
   "Carbohydrate"                       = "#eb6834",

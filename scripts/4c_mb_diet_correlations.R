@@ -44,8 +44,9 @@ format_pval <- function(p) if_else(p < 0.001, "<0.001", sprintf("%.3f", p))
 bug_labels <- species_label(feats) # as a make unique
 names(bug_labels) <- feats
 
-# Color pal
-col_fun <- colorRamp2(c(-0.5, 0, 0.5), c("dodgerblue3", "#f0efec", "firebrick"))
+# Color pal - matches the species x pathway heatmap in 4a_humann_pathways.R
+# (MetBrewer Renoir[14]/[6]); olive = negative, mauve = positive correlation
+col_fun <- colorRamp2(c(-0.5, 0, 0.5), c("#939336", "#f0efec", "#AE7B9E"))
 lgd_sig <- Legend(
   labels = c("p < 0.05", "p < 0.01", "p < 0.001"),
   title = "Significance (nominal)",
