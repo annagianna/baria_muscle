@@ -9,17 +9,19 @@ version = "0.1.0"
 datacleaning-clinical = "Rscript scripts/0a_datacleaning_clinical.R"
 datacleaning-omics = "Rscript scripts/0b_datacleaning_omics.R"
 table1 = "Rscript scripts/1a_tableone_v0.R"
+table1-ffmi1y = "Rscript scripts/1b_tableone_ffmi_1y.R"
 alphadiv = "Rscript scripts/2a_mb_alphadiversity_v0.R"
 betadiv = "Rscript scripts/2b_mb_betadiversity_v0.R"
 composition = "Rscript scripts/2c_mb_composition_v0.R"
-lmm = "Rscript scripts/4b_lmm_mb_ffmi_trajectories.R"
-humann = "Rscript scripts/5a_humann_pathways.R"
-ml-prep = "Rscript scripts/6a_ml_prep.R"
-ml-run = "bash scripts/6b_ml_run.sh"
-ml-process = "Rscript scripts/6c_ml_process.R"
-ml-violin = "Rscript scripts/6d_ml_explained_variance_violin.R"
-mb-metabolome = "Rscript scripts/7a_mb_metabolome_correlations.R"
-mb-diet = "Rscript scripts/7b_mb_diet_correlations.R"
+alphadiv-ffmi1y = "Rscript scripts/2d_mb_alphadiversity_ffmi_1y.R"
+betadiv-ffmi1y = "Rscript scripts/2e_mb_betadiversity_ffmi_1y.R"
+composition-ffmi1y = "Rscript scripts/2f_mb_composition_ffmi_1y.R"
+ml-prep = "Rscript scripts/3a_ml_prep.R"
+ml-run = "bash scripts/3b_ml_run.sh"
+ml-process = "Rscript scripts/3c_ml_process.R"
+humann = "Rscript scripts/4a_humann_pathways.R"
+mb-metabolome = "Rscript scripts/4b_mb_metabolome_correlations.R"
+mb-diet = "Rscript scripts/4c_mb_diet_correlations.R"
 
 [tasks.datacleaning]
 depends-on = ["datacleaning-clinical", "datacleaning-omics"]
@@ -29,13 +31,17 @@ description = "Clean clinical data, then omics data (microbiome, pathway, metabo
 depends-on = ["alphadiv", "betadiv", "composition"]
 description = "Baseline microbiome descriptive analyses: alpha diversity, beta diversity, composition."
 
+[tasks.mb-ffmi1y]
+depends-on = ["alphadiv-ffmi1y", "betadiv-ffmi1y", "composition-ffmi1y"]
+description = "Baseline microbiome descriptive analyses stratified by 1-year %FFMI change group."
+
 [tasks.ml]
-depends-on = ["ml-prep", "ml-run", "ml-process", "ml-violin"]
-description = "ML pipeline: prep XGBeast input data, submit model-fitting job, process results, plot explained-variance violins."
+depends-on = ["ml-prep", "ml-run", "ml-process"]
+description = "ML pipeline: prep XGBeast input data, submit model-fitting job, process results (includes explained-variance violin plots)."
 
 [tasks.mb-correlations]
-depends-on = ["mb-metabolome", "mb-diet", "path-metabolome", "path-diet"]
-description = "Top-15 species and pathway correlations against metabolome and diet macronutrients."
+depends-on = ["humann", "mb-metabolome", "mb-diet"]
+description = "Top-15 species correlations against HUMAnN pathways, metabolome, and diet macronutrients."
 
 [dependencies]
 r-tidyverse = ">=2.0.0,<3"
@@ -48,6 +54,8 @@ r-patchwork = ">=1.3.2,<2"
 r-ggthemes = ">=5.2.0,<6"
 grid = ">=1.3,<2"
 r-metbrewer = ">=0.2.0,<0.3"
+bioconductor-complexheatmap = ">=2.24.0,<3"
+r-circlize = ">=0.4.16,<0.5"
 python = ">=3.14.7,<3.15"
 xgboost = ">=3.4.1,<4"
 numpy = ">=2.5.2,<3"
