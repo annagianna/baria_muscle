@@ -70,4 +70,5 @@ t1_v0_mb_matrix <- print(
   )
 
 # Write table
+dir.create("results/tables", recursive = TRUE, showWarnings = FALSE)
 write.csv(t1_v0_mb_matrix, file = "results/tables/t1_v0_mb_matrix.csv", row.names = TRUE)

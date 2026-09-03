@@ -9,11 +9,12 @@ scripts/archive
 data/
 
 # results
-graphs/
-tables/
+results
 
 #vscode
 .vscode/*
 
 # R
 .Rhistory
+
+.DS_Store
