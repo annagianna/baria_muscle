@@ -8,9 +8,7 @@ library(broom.mixed)
 library(broom)
 source("scripts/assets/functions.R")
 
-# Read aggregated regression metrics ("Median R2", "Median Explained
-# Variance", "Median RMSE", "Median MAE") for one subgroup; NULL if the model
-# hasn't been run yet.
+# Read aggregated regression metrics
 get_metrics_reg <- function(base_path, name) {
   folder <- find_output_folder(base_path, name, "reg")
   if (is.na(folder)) return(NULL)
@@ -19,9 +17,7 @@ get_metrics_reg <- function(base_path, name) {
   read.delim(f)
 }
 
-# Read per-iteration regression metrics ("R2", "Explained Variance", "RMSE",
-# "MAE"), one row per CV iteration, for one subgroup; NULL if the model
-# hasn't been run yet.
+# Read per-iteration regression metrics
 get_iterations_reg <- function(base_path, name) {
   folder <- find_output_folder(base_path, name, "reg")
   if (is.na(folder)) return(NULL)
@@ -30,8 +26,7 @@ get_iterations_reg <- function(base_path, name) {
   read.delim(f)
 }
 
-# Read the exact X/y XGBeast trained on for one subgroup (input_data/
-# X_data.txt, feat_ids.txt, subject_ids.txt, y_reg.txt or y_binary.txt).
+# Read the input data for the ML models
 read_input_data <- function(model_path) {
   d <- file.path(model_path, "input_data")
   X <- as.matrix(read.delim(file.path(d, "X_data.txt"), header = FALSE, sep = "\t"))
@@ -44,11 +39,7 @@ read_input_data <- function(model_path) {
   list(X = X, y = y, subject_ids = subject_ids)
 }
 
-# Cross-sectional confirmatory model: for each feature, lm(outcome ~
-# log10(abundance) + covariates), returning the log10_abundance term as one
-# forest-plot row per feature (species, estimate, conf.low/high, p.value,
-# p_fdr). `data` must have one row per subject with columns `outcome`,
-# `covariates`, and every name in `feats`.
+# Cross-sectional linear model (for cross sectional ML models)
 run_lm_forest <- function(data, feats, outcome, covariates = character(0)) {
   f <- reformulate(c("log10_abundance", covariates), response = outcome)
   purrr::map_dfr(feats, function(feat) {
@@ -63,12 +54,7 @@ run_lm_forest <- function(data, feats, outcome, covariates = character(0)) {
     mutate(p_fdr = p.adjust(p.value, method = "BH"))
 }
 
-# Change-over-time confirmatory model: for each feature, lmer(outcome ~
-# log10(baseline_abundance) * visit + covariates + (1 | id)), returning the
-# log10_abundance:visit interaction term as one forest-plot row per feature.
-# `species_wide` has one row per subject (column `id`) with baseline
-# abundance columns named in `feats`; `long_data` is long-format (v0 +
-# follow_up) with columns `id`, `visit`, `outcome`, `covariates`.
+# LMM model (for delta ML models)
 run_lmm_forest <- function(species_wide, long_data, feats, outcome, follow_up, covariates = character(0)) {
   f <- reformulate(c("log10_abundance * visit", covariates, "(1 | id)"), response = outcome)
   model_data <- species_wide |>
@@ -128,13 +114,8 @@ plot_feature_importance <- function(fi_top, title = "") {
     theme_Publication()
 }
 
-# Sanity-check scatter grid: the outcome actually used by the model (from
-# read_input_data()$y) against each top feature's abundance (from
-# read_input_data()$X), one panel per feature, annotated with Spearman rho.
+# Correlation plots to check dis
 plot_feature_correlations <- function(X, y, feats, title = "") {
-  # species_label() is called against the distinct feature ids (length(feats));
-  # calling it after pivot_longer() below would see each id repeated once per
-  # subject, which breaks its make.unique() disambiguation.
   labels <- species_label(feats)
   names(labels) <- feats
 
@@ -185,8 +166,7 @@ model_defs <- tribble(
   "perc_change_ffmi_v4_adj_fmi",  "%change FFMI (1 year change, adj. FMI)",   TRUE,       "ffmi",         NA,         TRUE,
 )
 
-#### Data shared by the confirmatory LM/LMM models (not the ML input data
-#### itself, which is read per-model via read_input_data()) ####
+### Data shared by theLM/LMM models ###
 
 meta_full <- readRDS("data/processed_data/BARIA_muscle_long.RDS")
 baseline_fmi <- meta_full |> filter(visit == "v0") |> select(id, fmi_v0 = fmi)
@@ -331,14 +311,10 @@ for (i in seq_len(nrow(model_defs))) {
   }
 }
 
-#### Explained variance violin: distribution across CV iterations for the ####
-#### FFMI models (all subjects), cross-sectional vs. 1y change vs. %change ####
+### Explained variance violin ###
 violin_out_dir <- "results/graphs/ml_explained_variance"
 dir.create(violin_out_dir, recursive = TRUE, showWarnings = FALSE)
 
-# Compact multi-line labels + a group per outcome (for the fill color below);
-# only a subset of model_defs is shown here (drops fmi_v0/*_matched/*_v4,
-# which aren't FFMI-vs-adjusted-FFMI comparisons).
 violin_defs <- tribble(
   ~outcome,                       ~violin_label,                   ~violin_group,
   "ffmi",                         "FFMI (v0)",                     "FFMI",
@@ -350,9 +326,7 @@ violin_defs <- tribble(
 ) |>
   left_join(model_defs |> select(outcome, is_adj), by = "outcome")
 
-# Pair each outcome with its FMI-adjusted counterpart via a light/dark shade
-# of the same hue, so the six violins read as three related pairs rather than
-# six arbitrary colors.
+# color palette
 violin_fill_colors <- c(
   "FFMI.FALSE"        = "#8ec6f2",
   "FFMI.TRUE"          = "#2a78d6",
