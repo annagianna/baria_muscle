@@ -59,6 +59,9 @@ baria_mb <- readRDS(
   "data/processed_data/BARIA_mb_clean.RDS"
 )
 
+# Output folder
+dir.create("results/graphs/alphadiversity", recursive = TRUE, showWarnings = FALSE)
+
 # Diversity metrics
 # Convert OTU table to matrix with samples as rows and taxa as columns
 matrix_mb <- as(otu_table(baria_mb), "matrix")
@@ -140,7 +143,7 @@ shannon_ffmi_loss_v0 <- alpha_v0 |>
   theme_minimal_custom()
 
 ggsave(
-  filename = "graphs/alphadiversity/shannon_by_ffmi_loss_v4.pdf",
+  filename = "results/graphs/alphadiversity/shannon_by_ffmi_loss_v4.pdf",
   plot = shannon_ffmi_loss_v0,
   width = 7,
   height = 5
@@ -183,7 +186,7 @@ shannon_violin_ffmi_loss_v0 <- alpha_v0 |>
   )
 
 ggsave(
-  filename = "graphs/alphadiversity/shannon_violin_by_ffmi_loss_v4.pdf",
+  filename = "results/graphs/alphadiversity/shannon_violin_by_ffmi_loss_v4.pdf",
   plot = shannon_violin_ffmi_loss_v0,
   width = 6,
   height = 5
@@ -218,7 +221,7 @@ simpson_ffmi_loss_v0 <- alpha_v0 |>
   theme_minimal_custom()
 
 ggsave(
-  filename = "graphs/alphadiversity/simpson_by_ffmi_loss_v4.pdf",
+  filename = "results/graphs/alphadiversity/simpson_by_ffmi_loss_v4.pdf",
   plot = simpson_ffmi_loss_v0,
   width = 7,
   height = 5
@@ -261,7 +264,7 @@ simpson_violin_ffmi_loss_v0 <- alpha_v0 |>
   )
 
 ggsave(
-  filename = "graphs/alphadiversity/simpson_violin_by_ffmi_loss_v4.pdf",
+  filename = "results/graphs/alphadiversity/simpson_violin_by_ffmi_loss_v4.pdf",
   plot = simpson_violin_ffmi_loss_v0,
   width = 6,
   height = 5
@@ -296,7 +299,7 @@ richness_ffmi_loss_v0 <- alpha_v0 |>
   theme_minimal_custom()
 
 ggsave(
-  filename = "graphs/alphadiversity/richness_by_ffmi_loss_v4.pdf",
+  filename = "results/graphs/alphadiversity/richness_by_ffmi_loss_v4.pdf",
   plot = richness_ffmi_loss_v0,
   width = 7,
   height = 5
@@ -339,7 +342,7 @@ richness_violin_ffmi_loss_v0 <- alpha_v0 |>
   )
 
 ggsave(
-  filename = "graphs/alphadiversity/richness_violin_by_ffmi_loss_v4.pdf",
+  filename = "results/graphs/alphadiversity/richness_violin_by_ffmi_loss_v4.pdf",
   plot = richness_violin_ffmi_loss_v0,
   width = 6,
   height = 5
@@ -359,7 +362,7 @@ alpha_panel_ffmi_loss_v0 <-
   theme(aspect.ratio = 0.8)
 
 ggsave(
-  filename = "graphs/alphadiversity/alpha_panel_by_ffmi_loss_v4.pdf",
+  filename = "results/graphs/alphadiversity/alpha_panel_by_ffmi_loss_v4.pdf",
   plot = alpha_panel_ffmi_loss_v0,
   width = 12,
   height = 8
@@ -377,7 +380,7 @@ alpha_panel_ffmi_loss_v0_vertical <-
   )
 
 ggsave(
-  filename = "graphs/alphadiversity/alpha_panel_by_ffmi_loss_v4_vertical.pdf",
+  filename = "results/graphs/alphadiversity/alpha_panel_by_ffmi_loss_v4_vertical.pdf",
   plot = alpha_panel_ffmi_loss_v0_vertical,
   width = 3.8,
   height = 8

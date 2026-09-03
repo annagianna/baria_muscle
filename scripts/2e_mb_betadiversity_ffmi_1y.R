@@ -54,6 +54,9 @@ color_cols_2 <- scale_color_manual(
 # Data
 baria_mb <- readRDS("data/processed_data/BARIA_mb_clean.RDS")
 
+# Output folder
+dir.create("results/graphs/betadiversity", recursive = TRUE, showWarnings = FALSE)
+
 # Convert OTU table to matrix
 matrix_mb <- as(otu_table(baria_mb), "matrix") |> 
   t() # vegan requires samples as rows and taxa as columns
@@ -128,4 +131,4 @@ bray_ffmi_loss_1y <- bray_2_v0 |>
   color_cols_2 +
   theme_minimal_custom() +
   theme(legend.position = "left")
-ggsave(filename = "graphs/betadiversity/bray_ffmi_loss_1y.pdf", plot = bray_ffmi_loss_1y, width = 10, height = 7)
+ggsave(filename = "results/graphs/betadiversity/bray_ffmi_loss_1y.pdf", plot = bray_ffmi_loss_1y, width = 10, height = 7)

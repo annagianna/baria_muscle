@@ -40,6 +40,9 @@ renoir_20 <- met.brewer("Renoir", n = 20)
 # Data
 baria_mb <- readRDS("data/processed_data/BARIA_mb_clean.RDS")
 
+# Output folder
+dir.create("results/graphs/composition", recursive = TRUE, showWarnings = FALSE)
+
 # Melt phyloseq object into dataframe
 melted_mb <- psmelt(baria_mb)
 
@@ -101,4 +104,4 @@ species_comp_ffmi_change_v0 <- species_ffmi_change_v0 |>
     axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
     legend.text = element_text(size = rel(0.9))
   )
-ggsave(filename = "graphs/composition/species_comp_by_ffmi_change_v4.pdf", plot = species_comp_ffmi_change_v0, width = 14, height = 8)
+ggsave(filename = "results/graphs/composition/species_comp_by_ffmi_change_v4.pdf", plot = species_comp_ffmi_change_v0, width = 14, height = 8)

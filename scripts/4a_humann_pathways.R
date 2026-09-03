@@ -206,13 +206,13 @@ plot_species_pathway_heatmap <- function(rho_mat, padj_mat, file, transpose, wid
 
 # Species on x axis (pathway rows)
 plot_species_pathway_heatmap(
-  rho_mat, padj_mat, "graphs/HUMAnN/HUMAnN_species_pathway_heatmap_x.pdf",
+  rho_mat, padj_mat, "results/graphs/HUMAnN/HUMAnN_species_pathway_heatmap_x.pdf",
   transpose = TRUE, width = 8, height = 10
 )
 
 # Species on y axis (for pptx)
 plot_species_pathway_heatmap(
-  rho_mat, padj_mat, "graphs/HUMAnN/HUMAnN_species_pathway_heatmap_y.pdf",
+  rho_mat, padj_mat, "results/graphs/HUMAnN/HUMAnN_species_pathway_heatmap_y.pdf",
   transpose = FALSE, width = 12, height = 5
 )
 
