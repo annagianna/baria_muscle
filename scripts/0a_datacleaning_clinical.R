@@ -58,7 +58,6 @@ baria_muscle_vars <- baria_clinical_data_raw |>
     matches("^V[2-5]_min(10|20|30|60|90|120)(gluc|insulin|cpept)$"),
     matches("^(systolic|diastolic)_pressure_v[45]$"),
 
-
     # v4-v5 medication free text
     medication_list_v4 = Medication_v4_freetext,
     medication_list_v5 = medication_v5_freetext,
@@ -76,8 +75,15 @@ baria_muscle_vars <- baria_clinical_data_raw |>
     matches("^nexfin_(hr|dpdt|sv|svi|co|ci|svr|svri)_", ignore.case = TRUE),
     -nexfin_HR_v0
   ) |>
-  rename_with(~ str_replace(.x, "^V([2-5])_(.+)$", "\\2_v\\1"), matches("^V[2-5]_")) |>
-  rename_with(~ str_c(.x, "_v0"), matches("^min(10|20|30|60|90|120)(gluc|insulin|cpept)$")) |>
+  rename_with(~ str_replace(.x, "^V([0-5])_(.+)$", "\\2_v\\1"), matches("^V[0-5]_")) |>
+  rename_with(~ str_c(.x, "_v0"), matches("^min(10|20|30|60|90|120)(gluc|insulin|cpept)$")) |>  # first add "_v0" to baseline MMT vars
+  rename_with(# then standardize their names
+    ~ .x |>
+      str_replace("^min(10|20|30|60|90|120)gluc_", "glucose_mmoll_mmt_\\1_") |>
+      str_replace("^min(10|20|30|60|90|120)insulin_", "insulin_pmoll_mmt_\\1_") |>
+      str_replace("^min(10|20|30|60|90|120)cpept_","cpeptide_nmoll_mmt_\\1_"),
+    matches("^min(10|20|30|60|90|120)(gluc|insulin|cpept)_v0$")
+  ) |>
   rename_with(
     ~ .x |>
       str_replace("^weight_", "weight_kg_") |>
@@ -123,7 +129,7 @@ baria_muscle_vars <- baria_clinical_data_raw |>
     medication_binary_v0 = case_when(medication_binary_v0 == "1" ~ "yes", medication_binary_v0 == "2" ~ "no"),
     sport_v0 = case_when(sport_v0 == "1" ~ "yes", sport_v0 == "2" ~ "no"),
     sg_type = case_when(sg_type == "1" ~ "rygb", sg_type == "2" ~ "omegaloop", sg_type == "3" ~ "sg")
-  ) |>
+  ) |> 
   pivot_longer(
     cols = matches(long_vars_pattern),
     names_to = c(".value", "visit"),
