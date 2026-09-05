@@ -14,6 +14,9 @@ results
 #vscode
 .vscode/*
 
+# claude local settings
+.claude/settings.local.json
+
 # R
 .Rhistory
 
