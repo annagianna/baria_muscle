@@ -1,56 +1,57 @@
 # Correlations: top-15 species (deltaFFMI) and metabolites
 # Barbara Verhaar
 
+# Packages
 library(tidyverse)
 library(phyloseq)
 library(ComplexHeatmap)
 library(circlize)
+library(MetBrewer)
 
 source("scripts/assets/functions.R")
-
 out_dir <- "results/graphs/mb_metabolome_correlations"
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
-#### Microbes ####
+# Top-15 species by ML feature importance for deltaFFMI
 fi <- get_feature_importance("results/mlmodels/perc_change_ffmi_v4/all", "perc_change_ffmi_v4_all", "reg")
-feats <- top_features(fi, n = 15)$FeatName
+top15_species <- top_features(fi, n = 15)$FeatName
 
 # Baseline (v0) abundance for the top 15
-mb <- readRDS("data/processed_data/BARIA_mb_baseline.RDS")
-mb_mat <- t(as(mb@otu_table, "matrix"))
-stopifnot(all(feats %in% colnames(mb_mat)))
-species_wide <- as.data.frame(mb_mat[, feats, drop = FALSE]) |>
+baria_mb_baseline <- readRDS("data/processed_data/BARIA_mb_baseline.RDS")
+species_mat <- t(as(baria_mb_baseline@otu_table, "matrix"))
+stopifnot(all(top15_species %in% colnames(species_mat)))
+species_wide <- as.data.frame(species_mat[, top15_species, drop = FALSE]) |>
   rownames_to_column("sampleid") |>
   mutate(id = sampleid |> str_remove("^BARIA_") |> str_remove("_v0$")) |>
   select(-sampleid)
 
 # log10-transform (pseudocount)
-bugs <- species_wide |> select(id, all_of(feats))
-bugs[feats] <- map(bugs[feats], ~ {
+species_log10 <- species_wide |> select(id, all_of(top15_species))
+species_log10[top15_species] <- map(species_log10[top15_species], ~ {
   pseudo <- min(.x[.x > 0]) / 2
   log10(.x + pseudo)
 })
 
-#### Metabolomics ###
+#### Metabolomics ####
 metab <- readRDS("data/processed_data/BARIA_metabolon_clean.RDS")
 metab_mat <- as(otu_table(metab), "matrix")
 metab_meta <- as(sample_data(metab), "data.frame")
 rownames(metab_mat) <- metab_meta$id
 
-#### Join on id, correlate every bug x metabolite pair ####
-shared_ids <- intersect(bugs$id, rownames(metab_mat))
+#### Join on id, correlate every species x metabolite pair ####
+shared_ids <- intersect(species_log10$id, rownames(metab_mat))
 cat(length(shared_ids), "participants with both baseline microbiome and metabolome data\n")
 
-bugs_mat <- bugs |>
+species_log10_mat <- species_log10 |>
   filter(id %in% shared_ids) |>
   column_to_rownames("id")
-bugs_mat <- as.matrix(bugs_mat[shared_ids, , drop = FALSE])
+species_log10_mat <- as.matrix(species_log10_mat[shared_ids, , drop = FALSE])
 metab_mat <- metab_mat[shared_ids, , drop = FALSE]
-stopifnot(identical(rownames(bugs_mat), rownames(metab_mat)), !anyNA(bugs_mat), !anyNA(metab_mat))
+stopifnot(identical(rownames(species_log10_mat), rownames(metab_mat)), !anyNA(species_log10_mat), !anyNA(metab_mat))
 
-cor_results <- expand_grid(bug = feats, metabolite = colnames(metab_mat)) |>
+cor_results <- expand_grid(species = top15_species, metabolite = colnames(metab_mat)) |>
   mutate(
-    test = map2(bug, metabolite, ~ cor.test(bugs_mat[, .x], metab_mat[, .y], method = "spearman", exact = FALSE)),
+    test = map2(species, metabolite, ~ cor.test(species_log10_mat[, .x], metab_mat[, .y], method = "spearman", exact = FALSE)),
     rho = map_dbl(test, "estimate"),
     p.value = map_dbl(test, "p.value")
   ) |>
@@ -74,12 +75,15 @@ metabolite_label <- function(x) {
   )
 }
 
-#### Scatter plots: every FDR-significant metabolite, one panel per bug ####
-bug_labels <- species_label(feats)
-names(bug_labels) <- feats
+#### Scatter plots: every FDR-significant metabolite, one panel per species ####
+species_labels <- species_label(top15_species)
+names(species_labels) <- top15_species
 
-for (feat in unique(sig$bug)) {
-  sig_metabs <- sig |> filter(bug == feat) |> arrange(p_fdr) |> pull(metabolite)
+for (species_id in unique(sig$species)) {
+  # Cap panels per page at the 30 strongest hits - a species with hundreds of
+  # FDR-significant metabolites would otherwise blow the PDF past its 200in
+  # page-size limit (nrow_used unbounded x panel_size) and fail at dev.off()
+  sig_metabs <- sig |> filter(species == species_id) |> arrange(p_fdr) |> slice_head(n = 30) |> pull(metabolite)
   if (length(sig_metabs) == 0) next
 
   # Layout scales with how many panels there actually are, so e.g. a single
@@ -88,7 +92,7 @@ for (feat in unique(sig$bug)) {
   ncol_used <- min(5, length(sig_metabs))
   nrow_used <- ceiling(length(sig_metabs) / ncol_used)
 
-  df <- tibble(id = rownames(bugs_mat), abundance = bugs_mat[, feat]) |>
+  df <- tibble(id = rownames(species_log10_mat), abundance = species_log10_mat[, species_id]) |>
     left_join(
       metab_mat[, sig_metabs, drop = FALSE] |>
         as.data.frame() |>
@@ -96,7 +100,7 @@ for (feat in unique(sig$bug)) {
         pivot_longer(-id, names_to = "metabolite", values_to = "level"),
       by = "id"
     ) |>
-    left_join(sig |> filter(bug == feat) |> select(metabolite, rho, p_fdr), by = "metabolite") |>
+    left_join(sig |> filter(species == species_id) |> select(metabolite, rho, p_fdr), by = "metabolite") |>
     mutate(facet_label = fct_reorder(str_wrap(metabolite_label(metabolite), 22), -rho))
 
   # rho/FDR text drawn inside each panel (not the facet strip) - one label
@@ -114,24 +118,26 @@ for (feat in unique(sig$bug)) {
     ) +
     facet_wrap(~facet_label, scales = "free", ncol = ncol_used) +
     labs(
-      title = bug_labels[[feat]],
+      title = species_labels[[species_id]],
       x = "log10 relative abundance (baseline)", y = "Metabolite level (z-scored log10)"
     ) +
     theme_Publication() +
     theme(strip.text = element_text(size = 8), plot.title = element_text(size = 10))
 
-  fname <- str_replace_all(bug_labels[[feat]], " ", "_")
+  fname <- str_replace_all(species_labels[[species_id]], " ", "_")
   ggsave(
     file.path(out_dir, sprintf("correlation_scatter_%s.pdf", fname)),
     p, width = panel_size * ncol_used + 0.5, height = panel_size * nrow_used + 0.6, limitsize = FALSE
   )
 }
 
-#### ComplexHeatmap: bugs x metabolites ####
-# Diverging olive<->mauve pair, gray neutral midpoint - matches the
-# species x pathway heatmap colours in 4a_humann_pathways.R (MetBrewer
-# Renoir[14]/[6]); olive = negative, mauve = positive correlation
-col_fun <- colorRamp2(c(-0.5, 0, 0.5), c("#939336", "#f0efec", "#AE7B9E"))
+#### ComplexHeatmap: species x metabolites ####
+# Diverging colour scale matching the species x pathway heatmap in
+# 4a_humann_pathways.R (MetBrewer Renoir[14]/[6]); negative = Renoir[14],
+# positive = Renoir[6], scale bounded by the actual max |rho|
+renoir_15 <- met.brewer("Renoir", n = 15)
+rho_max <- max(abs(cor_results$rho), na.rm = TRUE)
+col_fun <- colorRamp2(c(-rho_max, 0, rho_max), c(renoir_15[14], "white", renoir_15[6]))
 # Super pathway strip: a muted, earthy 9-colour set (moderate chroma ~35,
 # lightness alternating so adjacent picks aren't just hue-apart) chosen to
 # stay clear of both diverging-scale endpoints (Lab distance >=23 from each)
@@ -163,32 +169,32 @@ lgd_sig <- Legend(
   background = "white"
 )
 
-# Build & save one bugs x `metabs` correlation heatmap
+# Build & save one species x `metabs` correlation heatmap
 plot_corr_heatmap <- function(metabs, file, column_title, col_width, pdf_width_min,
                                column_fontsize = 8, cell_fontsize = 10,
                                transpose = FALSE, row_height = 0.35) {
   rho_mat <- cor_results |>
     filter(metabolite %in% metabs) |>
-    select(bug, metabolite, rho) |>
+    select(species, metabolite, rho) |>
     pivot_wider(names_from = metabolite, values_from = rho) |>
-    column_to_rownames("bug") |>
+    column_to_rownames("species") |>
     as.matrix()
-  rho_mat <- rho_mat[feats, metabs, drop = FALSE]
+  rho_mat <- rho_mat[top15_species, metabs, drop = FALSE]
 
   fdr_mat <- cor_results |>
     filter(metabolite %in% metabs) |>
-    select(bug, metabolite, p_fdr) |>
+    select(species, metabolite, p_fdr) |>
     pivot_wider(names_from = metabolite, values_from = p_fdr) |>
-    column_to_rownames("bug") |>
+    column_to_rownames("species") |>
     as.matrix()
-  fdr_mat <- fdr_mat[feats, metabs, drop = FALSE]
+  fdr_mat <- fdr_mat[top15_species, metabs, drop = FALSE]
 
-  bugs_active <- rownames(fdr_mat)[apply(fdr_mat < 0.05, 1, any)]
-  cat(file, ":", length(bugs_active), "/", length(feats), "bugs have >=1 FDR-significant correlation\n")
-  rho_mat <- rho_mat[bugs_active, , drop = FALSE]
-  fdr_mat <- fdr_mat[bugs_active, , drop = FALSE]
+  species_active <- rownames(fdr_mat)[apply(fdr_mat < 0.05, 1, any)]
+  cat(file, ":", length(species_active), "/", length(top15_species), "species have >=1 FDR-significant correlation\n")
+  rho_mat <- rho_mat[species_active, , drop = FALSE]
+  fdr_mat <- fdr_mat[species_active, , drop = FALSE]
 
-  rownames(rho_mat) <- bug_labels[rownames(rho_mat)]
+  rownames(rho_mat) <- species_labels[rownames(rho_mat)]
   colnames(rho_mat) <- metabolite_label(colnames(rho_mat))
   rownames(fdr_mat) <- rownames(rho_mat)
   colnames(fdr_mat) <- colnames(rho_mat)
@@ -246,7 +252,17 @@ plot_corr_heatmap <- function(metabs, file, column_title, col_width, pdf_width_m
   height <- if (transpose) max(6, 3 + nrow(rho_mat) * row_height) else 9
   left_padding <- if (transpose) 10 else 8
 
-  cairo_pdf(file, width = width, height = height)
+  # PDF page dimensions are capped at 200in (14400pt) by the format itself -
+  # a heatmap with many rows/columns can otherwise silently blow past that
+  # and fail at dev.off() with a generic "write failed"
+  cat(file, ": requested pdf size", round(width, 1), "x", round(height, 1), "in (", nrow(rho_mat), "rows x", ncol(rho_mat), "cols )\n")
+  if (width > 200 || height > 200) {
+    warning(file, ": requested size exceeds the 200in PDF page limit (", round(width, 1), "x", round(height, 1), "in) - clamping")
+  }
+  width <- min(width, 200)
+  height <- min(height, 200)
+
+  quartz(type = "pdf", file = file, width = width, height = height)
   draw(ht, heatmap_legend_side = "right", annotation_legend_side = "right",
        annotation_legend_list = list(lgd_sig),
        padding = unit(c(20, left_padding, 4, 4), "mm"))
@@ -254,11 +270,11 @@ plot_corr_heatmap <- function(metabs, file, column_title, col_width, pdf_width_m
 }
 
 sig_metabs_all <- unique(sig$metabolite)
-cat(length(sig_metabs_all), "distinct metabolites significant for >=1 bug\n")
+cat(length(sig_metabs_all), "distinct metabolites significant for >=1 species\n")
 
 if (length(sig_metabs_all) > 0) { # if anything is sig
 
-  # Full heatmap: every metabolite significant for >=1 bug
+  # Full heatmap: every metabolite significant for >=1 species
   plot_corr_heatmap(
     sig_metabs_all, file.path(out_dir, "microbe_metabolite_heatmap_vertical.pdf"),
     column_title = "All significant metabolites",
@@ -266,12 +282,12 @@ if (length(sig_metabs_all) > 0) { # if anything is sig
     transpose = TRUE, row_height = 0.18
   )
 
-  # Compact version: the 20 metabolites correlated with the most bugs
+  # Compact version: the 20 metabolites correlated with the most species
   metab_rank <- sig |>
     group_by(metabolite) |>
     summarise(n_sig = n(), max_abs_rho = max(abs(rho)), .groups = "drop") |>
     arrange(desc(n_sig), desc(max_abs_rho))
-  sig_metabs_small <- metab_rank |> slice_head(n = 25) |> pull(metabolite)
+  sig_metabs_small <- metab_rank |> slice_head(n = 20) |> pull(metabolite)
 
   plot_corr_heatmap(
     sig_metabs_small, file.path(out_dir, "microbe_metabolite_heatmap_top20_vertical.pdf"),
