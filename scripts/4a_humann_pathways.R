@@ -248,4 +248,11 @@ plot_species_pathway_heatmap(
   transpose = TRUE, width = 12, height = 6
 )
 
+# Compact heatmap, species on y axis (for pptx)
+plot_species_pathway_heatmap(
+  rho_matrix[, pathways_compact, drop = FALSE], padj_matrix[, pathways_compact, drop = FALSE],
+  "results/graphs/HUMAnN/HUMAnN_species_pathway_heatmap_top15_y.pdf",
+  transpose = FALSE, width = 14, height = 6
+)
+
 
