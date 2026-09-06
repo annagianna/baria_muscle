@@ -18,7 +18,6 @@ source("scripts/assets/functions.R")
 # Data
 humann_long <- readRDS("data/processed_data/BARIA_humann_pathways_long.RDS")
 baria_mb <- readRDS("data/processed_data/BARIA_mb_clean.RDS")
-baria_muscle_long <- readRDS("data/processed_data/BARIA_muscle_long.RDS")
 forest_perc_change_ffmi_v4 <- read.csv("results/mlmodels/perc_change_ffmi_v4/all/forest_results_top15.csv")
 
 # MetaCyc/HUMAnN pathway names embed literal HTML entities (e.g. "&beta;")
@@ -162,8 +161,8 @@ padj_matrix <- humann_species_v0_plot_data |>
 
 padj_matrix <- padj_matrix[rownames(rho_matrix), colnames(rho_matrix)]
 
-# Species labels are always italic, pathway labels are not
-# built as rows = species, cos = pathway (optionally transposed for wide/pptx)
+# Plot species-pathway correlation heatmap with optional transposition,
+# significance stars, clustering, and species-label colors by FFMI trajectory direction
 plot_species_pathway_heatmap <- function(rho_matrix, padj_matrix, file, transpose, width, height) {
 
   if (transpose) {
@@ -177,7 +176,7 @@ plot_species_pathway_heatmap <- function(rho_matrix, padj_matrix, file, transpos
     rownames(rho_matrix)
   }
 
-  species_gp <- gpar(fontsize = 8, fontface = "italic", col = species_label_colors[species_names])
+  species_gp <- gpar(fontsize = 8, fontface = "italic", col = species_label_colors[species_names]) # Species labels are always italic
   pathway_gp <- gpar(fontsize = 7)
 
   ht <- Heatmap(
@@ -218,7 +217,8 @@ plot_species_pathway_heatmap <- function(rho_matrix, padj_matrix, file, transpos
 
 # Species on x axis (pathway rows) - wide, for the long pathway names now on the left
 plot_species_pathway_heatmap(
-  rho_matrix, padj_matrix, "results/graphs/HUMAnN/HUMAnN_species_pathway_heatmap_x.pdf",
+  rho_matrix, padj_matrix, 
+  "results/graphs/HUMAnN/HUMAnN_species_pathway_heatmap_x.pdf", 
   transpose = TRUE, width = 14, height = 17
 )
 
@@ -228,6 +228,7 @@ plot_species_pathway_heatmap(
   transpose = FALSE, width = 20, height = 8
 )
 
+## Compact heatmap: the 15 pathways implicated for the most species
 # Rank a pathway by how many signif correlations
 rank_pathways <- function(df) {
   df |>
@@ -236,7 +237,6 @@ rank_pathways <- function(df) {
     arrange(desc(n_sig), desc(max_abs_rho))
 }
 
-# Compact heatmap: the 15 pathways implicated for the most species
 pathway_rank <- rank_pathways(humann_species_v0_plot_data)
 pathways_compact <- pathway_rank |> 
   slice_head(n = 15) |> 
@@ -247,3 +247,5 @@ plot_species_pathway_heatmap(
   "results/graphs/HUMAnN/HUMAnN_species_pathway_heatmap_top15.pdf",
   transpose = TRUE, width = 12, height = 6
 )
+
+
