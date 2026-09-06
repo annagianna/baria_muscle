@@ -1,11 +1,17 @@
 # Process XGBeast models and make plots for each model
 # Barbara Verhaar
 
+# Packages
 library(tidyverse)
 library(phyloseq)
 library(lmerTest)
 library(broom.mixed)
 library(broom)
+library(MetBrewer)
+
+# Theme/colors
+renoir_15 <- met.brewer("Renoir", n = 15)
+
 source("scripts/assets/functions.R")
 
 # Read aggregated regression metrics
@@ -96,7 +102,7 @@ plot_forest <- function(forest, title = "") {
     geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
     geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.2) +
     geom_point(size = 2) +
-    scale_color_manual(values = c(`TRUE` = "firebrick", `FALSE` = "grey40"), guide = "none") +
+    scale_color_manual(values = c(`TRUE` = renoir_15[6], `FALSE` = "grey40"), guide = "none") +
     labs(title = title, x = "Effect estimate (95% CI)", y = NULL) +
     theme_Publication()
 }
@@ -109,7 +115,7 @@ plot_feature_importance <- function(fi_top, title = "") {
       label = forcats::fct_reorder(label, RelFeatImp)
     ) |>
     ggplot(aes(x = RelFeatImp, y = label)) +
-    geom_col(fill = "#2c7fb8", width = 0.7) +
+    geom_col(fill = renoir_15[6], width = 0.7) +
     labs(title = title, x = "Relative importance", y = NULL) +
     theme_Publication()
 }
@@ -137,8 +143,8 @@ plot_feature_correlations <- function(X, y, feats, title = "") {
     mutate(label = sprintf("rho = %.2f", rho))
 
   ggplot(df, aes(x = abundance, y = .y)) +
-    geom_point(alpha = 0.5, size = 1, color = "#2c7fb8") +
-    geom_smooth(method = "lm", se = FALSE, color = "firebrick", linewidth = 0.6) +
+    geom_point(alpha = 0.5, size = 1, color = renoir_15[6]) +
+    geom_smooth(method = "lm", se = FALSE, color = renoir_15[14], linewidth = 0.6) +
     geom_text(
       data = ann, aes(label = label), x = -Inf, y = Inf, hjust = -0.05, vjust = 1.3,
       inherit.aes = FALSE, size = 2.5
@@ -302,6 +308,9 @@ for (i in seq_len(nrow(model_defs))) {
         feats, response_var, covariates
       )
     }
+    # Save forest model results
+    write.csv(forest, file.path(model_path, "forest_results_top15.csv"), row.names = FALSE)
+
     p_forest <- plot_forest(forest, title = forest_title)
     ggsave(file.path(model_path, "forest_plot_top15.pdf"), p_forest, width = 7, height = 6)
 
@@ -316,7 +325,7 @@ violin_out_dir <- "results/graphs/ml_explained_variance"
 dir.create(violin_out_dir, recursive = TRUE, showWarnings = FALSE)
 
 violin_defs <- tribble(
-  ~outcome,                       ~violin_label,                   ~violin_group,
+  ~ outcome,                      ~ violin_label,                  ~ violin_group,
   "ffmi",                         "FFMI (v0)",                     "FFMI",
   "ffmi_adj_fmi",                 "FFMI (v0)\nadj. FMI",           "FFMI",
   "delta_ffmi_v4",                "Delta FFMI (1y)",               "Delta FFMI",
@@ -328,12 +337,12 @@ violin_defs <- tribble(
 
 # color palette
 violin_fill_colors <- c(
-  "FFMI.FALSE"        = "#8ec6f2",
-  "FFMI.TRUE"          = "#2a78d6",
-  "Delta FFMI.FALSE"   = "#a8dfc4",
-  "Delta FFMI.TRUE"    = "#1baf7a",
-  "%Delta FFMI.FALSE"  = "#f5c396",
-  "%Delta FFMI.TRUE"   = "#eb6834"
+  "FFMI.FALSE"         = renoir_15[5],
+  "FFMI.TRUE"          = renoir_15[2],
+  "Delta FFMI.FALSE"   = renoir_15[14],
+  "Delta FFMI.TRUE"    = renoir_15[15],
+  "%Delta FFMI.FALSE"  = renoir_15[8],
+  "%Delta FFMI.TRUE"   = renoir_15[9]
 )
 
 ev_df <- pmap_dfr(violin_defs, function(outcome, violin_label, violin_group, is_adj) {
