@@ -13,32 +13,7 @@ library(ggpubr)
 library(ggsci)
 
 # Theme
-theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
-
-  theme_minimal(base_size = base_size, base_family = base_family) +
-    theme(
-      plot.title = element_text(face = "bold", size = rel(0.8), hjust = 0.5),
-      axis.title = element_text(face = "bold", size = rel(0.8)),
-      axis.title.y = element_text(angle = 90, vjust = 2),
-      axis.title.x = element_text(vjust = -0.2),
-      axis.text = element_text(colour = "black"),
-      axis.line.x.bottom = element_line(colour = "black", linewidth = 0.5),
-      axis.line.y.left = element_line(colour = "black", linewidth = 0.5),
-      axis.ticks = element_line(colour = "black", linewidth = 0.4),
-      panel.grid.major = element_line(
-        colour = "#dddddd",
-        linewidth = 0.4,
-        linetype = "22"
-      ),
-      panel.grid.minor = element_blank(),
-      panel.background = element_rect(fill = "white", colour = NA),
-      plot.background = element_rect(fill = "white", colour = NA),
-      legend.position = "bottom",
-      plot.margin = unit(c(10, 5, 5, 5), "mm")
-    )
-}
-
-# Colours
+source("scripts/assets/functions.R")
 renoir_cols_20 <- met.brewer("Renoir", n = 20)
 fill_cols_2 <- scale_fill_manual(
   name = "FFMI loss at 1 year",
