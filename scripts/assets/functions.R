@@ -1,12 +1,14 @@
-# Shared helpers genuinely reused across pipelines: XGBeast output-folder
-# discovery, the shared ggplot theme, and species-name/plotting helpers used
-# by both 6c_ml_process.R and 7a/7b_mb_*_correlations.R. Anything used by
-# only one script lives in that script instead.
-#
-# Barbara Verhaar
+# Shared helpers genuinely reused across pipelines: XGBeast output-folder discovery, the shared ggplot theme, 
+# and species-name/plotting helpers used
+# by both 6c_ml_process.R and 7a/7b_mb_*_correlations.R.
+# Anything used by only one script lives in that script instead.
 
+# Barbara Verhaar, Anna Giannakogeorgou
+
+#### Packages ####
 library(dplyr)
 
+#### Themes #### 
 theme_Publication <- function(base_size = 12, base_family = "sans") {
   library(grid); library(ggthemes)
   theme_foundation(base_size = base_size, base_family = base_family) +
@@ -35,6 +37,59 @@ theme_Publication <- function(base_size = 12, base_family = "sans") {
     )
 }
 
+theme_minimal_custom <- function(base_size = 14, base_family = "sans") {
+
+  theme_minimal(base_size = base_size, base_family = base_family) +
+    theme(
+      plot.title = element_text(face = "bold", size = rel(0.8), hjust = 0.5),
+      axis.title = element_text(face = "bold", size = rel(0.8)),
+      axis.title.y = element_text(angle = 90, vjust = 2),
+      axis.title.x = element_text(vjust = -0.2),
+      axis.text = element_text(colour = "black"),
+      axis.line.x.bottom = element_line(colour = "black", linewidth = 0.5),
+      axis.line.y.left = element_line(colour = "black", linewidth = 0.5),
+      axis.ticks = element_line(colour = "black", linewidth = 0.4),
+      panel.grid.major = element_line(
+        colour = "#dddddd",
+        linewidth = 0.4,
+        linetype = "22"
+      ),
+      panel.grid.minor = element_blank(),
+      panel.background = element_rect(fill = "white", colour = NA),
+      plot.background = element_rect(fill = "white", colour = NA),
+      legend.position = "bottom",
+      plot.margin = unit(c(10, 5, 5, 5), "mm")
+    )
+}
+
+theme_minimal_composition <- function(base_size = 14, base_family = "sans") {
+
+  theme_minimal(base_size = base_size, base_family = base_family) +
+
+    theme(
+      plot.title = element_text(face = "bold", size = rel(1), hjust = 0.5),
+      axis.title = element_text(face = "bold", size = rel(1)),
+      axis.title.y = element_text(angle = 90, vjust = 2),
+      axis.text = element_text(colour = "black"),
+      axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+      axis.line.x.bottom = element_line(colour = "black", linewidth = 0.5),
+      axis.line.y.left = element_line(colour = "black", linewidth = 0.5),
+      axis.ticks = element_line(colour = "black", linewidth = 0.4),
+      panel.grid.major.y = element_line(colour = "#dddddd", linewidth = 0.4, linetype = "22"),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.background = element_rect(fill = "white", colour = NA),
+      plot.background = element_rect(fill = "white", colour = NA),
+      legend.position = "right",
+      legend.key.height = unit(0.4, "cm"),
+      legend.key.width = unit(0.4, "cm"),
+      legend.spacing.y = unit(0, "cm"),
+      legend.text = element_text(size = rel(0.7)),
+      plot.margin = unit(c(10, 5, 5, 5), "mm")
+    )
+}
+
+#### XGBeast ####
 # Find the (non-PERMUTED) XGBeast output folder for a given subgroup path +
 # model name, e.g. find_output_folder("results/ml_crossectional/phenoage/all", "phenoage_all", "reg").
 # If the model has been rerun, multiple timestamped folders can exist for the
@@ -63,7 +118,7 @@ get_feature_importance <- function(base_path, name, mode = c("reg", "class")) {
   read.delim(f)
 }
 
-# Top n real (non-random-variable) features by relative importance.
+# Top n real (non-random-variable) features by relative importance
 top_features <- function(feature_importance, n = 15) {
   feature_importance |>
     filter(!FeatName %in% c("random_variable1", "random_variable2")) |>
@@ -71,11 +126,8 @@ top_features <- function(feature_importance, n = 15) {
     head(n)
 }
 
-# Short, human-readable species label from a "Genus_species_SGB####[_group]"
-# name, e.g. "Faecalibacterium prausnitzii". The SGB id is meaningless to
-# most readers so it's dropped; make.unique() disambiguates the rare case
-# where several SGBs share the same genus_species name, instead of silently
-# collapsing distinct features onto the same plot row/facet.
+# Short, human-readable species label from a "Genus_species_SGB####[_group]" name, e.g. "Faecalibacterium prausnitzii". The SGB id is meaningless to
+# most readers so it's dropped; make.unique() disambiguates the rare case where several SGBs share the same genus_species name, instead of silently collapsing distinct features onto the same plot row/facet.
 species_label <- function(x) {
   base <- str_remove(x, "_SGB\\d+(_group)?$") |> str_replace_all("_", " ")
   make.unique(base, sep = " ")
