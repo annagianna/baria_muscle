@@ -70,7 +70,7 @@ nonnormal_vars <- c(
   "Total cholesterol (mmol/L)", "LDL cholesterol (mmol/L)", "HDL cholesterol (mmol/L)", "Triglycerides (mmol/L)"
 )
 categorical_vars <- c("Sex", "Prediabetes", "T2D", "Lipid-lowering medication", "Antidiabetic medication")
-paired_continuous_vars <- setdiff(t1_vars, c(nonnormal_vars, categorical_vars, "Age at baseline (years)"))
+normal_vars <- setdiff(t1_vars, c(nonnormal_vars, categorical_vars))
 
 ## Baseline ##
 # Baseline table stratified by %FFMI change group at 1y
@@ -211,3 +211,31 @@ run_test_paired <- function(var, ffmi_group, var_type) {
   }
   test$p.value
 }
+
+# Function to run comparisons across var types
+run_all_tests <- function(vars, var_type) {
+
+  tibble(
+    var = vars,
+    p_v0_between = map_dbl(vars, \(var) run_test_between(var, "Baseline", var_type)),
+    p_v4_between = map_dbl(vars, \(var) run_test_between(var, "1 year", var_type)),
+    p_high_paired = map_dbl(
+      vars, \(var) {
+        if (var %in% c("Age at baseline (years)", "Sex")) {NA_real_} else {run_test_paired(var, "High FFMI loss", var_type)}
+      }
+    ),
+    p_modest_paired = map_dbl(
+      vars,
+      \(var) {
+        if (var %in% c("Age at baseline (years)", "Sex")) {NA_real_} else {run_test_paired(var, "Modest/low FFMI loss", var_type)}
+      }
+    )
+  )
+}
+
+## Run tests ##
+test_results <- bind_rows(
+  run_all_tests(normal_vars, "normal"),
+  run_all_tests(nonnormal_vars, "nonnormal"),
+  run_all_tests(categorical_vars, "categorical")
+)
