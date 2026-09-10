@@ -8,7 +8,7 @@ library(tableone)
 # Data
 baria_muscle_wide <- readRDS("data/processed_data/BARIA_muscle_wide.RDS")
 
-# Baseline vars
+# Baseline & 1y vars
 t1_ffmi_loss_vars_long <- baria_muscle_wide |>
   select(
     id, age_v0, sex, perc_change_ffmi_v4_group,
@@ -24,10 +24,14 @@ t1_ffmi_loss_vars_long <- baria_muscle_wide |>
   filter(!is.na(perc_change_ffmi_v4_group)) |>
   mutate(
     visit = factor(visit, levels = c("v0", "v4"), labels = c("Baseline", "1 year")),
-    perc_change_ffmi_v4_group = factor(perc_change_ffmi_v4_group, levels = c("high", "modest/low"), labels = c("High FFMI loss", "Modest/low FFMI loss"))
+    perc_change_ffmi_v4_group = factor(perc_change_ffmi_v4_group, levels = c("high", "modest/low"), labels = c("High FFMI loss", "Modest/low FFMI loss")),
+    ffmi_group_visit = factor(
+      interaction(perc_change_ffmi_v4_group, visit, sep = " - "),
+      levels = c("High FFMI loss - Baseline", "Modest/low FFMI loss - Baseline", "High FFMI loss - 1 year", "Modest/low FFMI loss - 1 year")
+    )
   ) |> 
   rename(
-    `Age (years)` = age_v0,
+    `Age at baseline (years)` = age_v0,
     `Sex` = sex,
     `BMI (kg/m²)` = bmi,
     `Waist circumference (cm)` = wc_cm,
@@ -52,7 +56,7 @@ t1_ffmi_loss_vars_long <- baria_muscle_wide |>
 
 # Table 1 vars (both v0 and v4)
 t1_vars <- c(
-  "Age (years)", "Sex", "BMI (kg/m²)", "Waist circumference (cm)",
+  "Age at baseline (years)", "Sex", "BMI (kg/m²)", "Waist circumference (cm)",
   "Fat mass (kg)", "Fat-free mass (kg)", "Fat-free mass index (kg/m²)",
   "Prediabetes", "T2D", "HbA1c (mmol/mol)", "Fasting glucose (mmol/L)", "Fasting insulin (pmol/L)", "HOMA-IR", "HOMA-B",
   "Total cholesterol (mmol/L)", "LDL cholesterol (mmol/L)", "HDL cholesterol (mmol/L)", "Triglycerides (mmol/L)",
@@ -109,3 +113,27 @@ t1_ffmi_loss_v4_matrix <- print(
 # Save tables
 write.csv(t1_ffmi_loss_v0_matrix, "results/tables/t1_ffmi_loss_v0_matrix.csv", row.names = TRUE)
 write.csv(t1_ffmi_loss_v4_matrix, "results/tables/t1_ffmi_loss_v4_matrix.csv", row.names = TRUE)
+
+
+#### Combined baseline & 1y table ####
+t1_ffmi_loss_v0_v4 <- CreateTableOne(
+  vars = t1_vars,
+  strata = "ffmi_group_visit",
+  data = t1_ffmi_loss_vars_long,
+  factorVars = c("Sex", "Prediabetes", "T2D", "Lipid-lowering medication", "Antidiabetic medication"),
+  test = FALSE
+)
+
+# Print
+t1_ffmi_loss_v0_v4_matrix <- print(
+  t1_ffmi_loss_v0_v4,
+  nonnormal = c("Fasting glucose (mmol/L)", "Fasting insulin (pmol/L)", "HbA1c (mmol/mol)", "HOMA-IR", "HOMA-B", "Triglycerides (mmol/L)"),
+  showAllLevels = FALSE,
+  quote = FALSE,
+  noSpaces = TRUE,
+  printToggle = FALSE,
+  contDigits = 1,
+  catDigits = 1
+)
+
+write.csv(t1_ffmi_loss_v0_v4_matrix, "results/tables/t1_ffmi_loss_v0_v4_matrix.csv", row.names = TRUE)
