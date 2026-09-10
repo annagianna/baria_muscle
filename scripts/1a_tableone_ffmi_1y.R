@@ -4,6 +4,7 @@
 # Packages
 library(tidyverse)
 library(tableone)
+library(gt)
 
 # Data
 baria_muscle_wide <- readRDS("data/processed_data/BARIA_muscle_wide.RDS")
@@ -56,12 +57,20 @@ t1_ffmi_loss_vars_long <- baria_muscle_wide |>
 
 # Table 1 vars (both v0 and v4)
 t1_vars <- c(
-  "Age at baseline (years)", "Sex", "BMI (kg/m²)", "Waist circumference (cm)",
-  "Fat mass (kg)", "Fat-free mass (kg)", "Fat-free mass index (kg/m²)",
+  "Age at baseline (years)", "Sex", 
+  "BMI (kg/m²)", "Waist circumference (cm)", "Fat mass (kg)", "Fat-free mass (kg)", "Fat-free mass index (kg/m²)",
   "Prediabetes", "T2D", "HbA1c (mmol/mol)", "Fasting glucose (mmol/L)", "Fasting insulin (pmol/L)", "HOMA-IR", "HOMA-B",
   "Total cholesterol (mmol/L)", "LDL cholesterol (mmol/L)", "HDL cholesterol (mmol/L)", "Triglycerides (mmol/L)",
   "Lipid-lowering medication", "Antidiabetic medication"
 )
+
+# Variable types
+nonnormal_vars <- c(
+  "HbA1c (mmol/mol)", "Fasting glucose (mmol/L)", "Fasting insulin (pmol/L)", "HOMA-IR", "HOMA-B",
+  "Total cholesterol (mmol/L)", "LDL cholesterol (mmol/L)", "HDL cholesterol (mmol/L)", "Triglycerides (mmol/L)"
+)
+categorical_vars <- c("Sex", "Prediabetes", "T2D", "Lipid-lowering medication", "Antidiabetic medication")
+paired_continuous_vars <- setdiff(t1_vars, c(nonnormal_vars, categorical_vars, "Age at baseline (years)"))
 
 ## Baseline ##
 # Baseline table stratified by %FFMI change group at 1y
@@ -70,13 +79,13 @@ t1_ffmi_loss_v0 <- CreateTableOne(
   strata = "1-year FFMI loss group",
   data = t1_ffmi_loss_vars_long |>
     filter(visit == "Baseline"),
-  factorVars = c("Sex", "Prediabetes", "T2D", "Lipid-lowering medication", "Antidiabetic medication"),
+  factorVars = categorical_vars,
   test = TRUE
 )
 # Print baseline table
 t1_ffmi_loss_v0_matrix <- print(
   t1_ffmi_loss_v0,
-  nonnormal = c("Fasting glucose (mmol/L)", "Fasting insulin (pmol/L)", "HbA1c (mmol/mol)", "HOMA-IR", "HOMA-B", "Triglycerides (mmol/L)"),
+  nonnormal = nonnormal_vars,
   showAllLevels = FALSE,
   quote = FALSE,
   noSpaces = TRUE,
@@ -93,14 +102,14 @@ t1_ffmi_loss_v4 <- CreateTableOne(
   strata = "1-year FFMI loss group",
   data = t1_ffmi_loss_vars_long |>
     filter(visit == "1 year"),
-  factorVars = c("Sex", "Prediabetes", "T2D", "Lipid-lowering medication", "Antidiabetic medication"),
+  factorVars = categorical_vars,
   test = TRUE
 )
 
 # Print 1y table
 t1_ffmi_loss_v4_matrix <- print(
   t1_ffmi_loss_v4,
-  nonnormal = c("Fasting glucose (mmol/L)", "Fasting insulin (pmol/L)", "HbA1c (mmol/mol)", "HOMA-IR", "HOMA-B", "Triglycerides (mmol/L)"),
+  nonnormal = nonnormal_vars,
   showAllLevels = FALSE,
   quote = FALSE,
   noSpaces = TRUE,
@@ -120,14 +129,14 @@ t1_ffmi_loss_v0_v4 <- CreateTableOne(
   vars = t1_vars,
   strata = "ffmi_group_visit",
   data = t1_ffmi_loss_vars_long,
-  factorVars = c("Sex", "Prediabetes", "T2D", "Lipid-lowering medication", "Antidiabetic medication"),
+  factorVars = categorical_vars,
   test = FALSE
 )
 
 # Print
 t1_ffmi_loss_v0_v4_matrix <- print(
   t1_ffmi_loss_v0_v4,
-  nonnormal = c("Fasting glucose (mmol/L)", "Fasting insulin (pmol/L)", "HbA1c (mmol/mol)", "HOMA-IR", "HOMA-B", "Triglycerides (mmol/L)"),
+  nonnormal = nonnormal_vars,
   showAllLevels = FALSE,
   quote = FALSE,
   noSpaces = TRUE,
@@ -135,5 +144,70 @@ t1_ffmi_loss_v0_v4_matrix <- print(
   contDigits = 1,
   catDigits = 1
 )
-
 write.csv(t1_ffmi_loss_v0_v4_matrix, "results/tables/t1_ffmi_loss_v0_v4_matrix.csv", row.names = TRUE)
+
+# Format table as gt
+t1_ffmi_loss_v0_v4_gt <- t1_ffmi_loss_v0_v4_matrix |> 
+  as.data.frame() |> 
+  rownames_to_column(var = "Variable") |> 
+  rename(
+    v0_high = `High FFMI loss - Baseline`,
+    v0_modest_low = `Modest/low FFMI loss - Baseline`,
+    v4_high = `High FFMI loss - 1 year`,
+    v4_modest_low = `Modest/low FFMI loss - 1 year`
+  ) |> 
+  gt(rowname_col = "Variable") |> 
+  tab_spanner(label = "%FFMI change", columns = everything(), level = 1) |> 
+  tab_spanner(label = "Baseline", columns = contains("v0"), level = 2) |> 
+  tab_spanner(label = "1 year", columns = contains("v4"), level = 2) |> 
+  cols_label(
+    v0_high = "High",
+    v0_modest_low = "Modest/low",
+    v4_high = "High",
+    v4_modest_low = "Modest/low"
+  )
+
+# Wide data for paired comparisons (v0 vs. v4)
+t1_ffmi_loss_vars_wide <- t1_ffmi_loss_vars_long |> 
+  select(id, visit, `1-year FFMI loss group`, all_of(t1_vars)) |> 
+  pivot_wider(
+    names_from = visit,
+    values_from = all_of(t1_vars),
+    names_glue = "{.value}_{visit}"
+  )
+
+### Tests ###
+# High vs. modest/low FFMI groups within one visit
+run_test_between <- function(var, visit_name, var_type) {
+
+  visit_data <- t1_ffmi_loss_vars_long |>
+    filter(visit == visit_name)
+
+  if (var_type == "normal") {
+    test <- t.test(visit_data[[var]] ~ visit_data[["1-year FFMI loss group"]])
+  } else if (var_type == "nonnormal") {
+    test <- wilcox.test(visit_data[[var]] ~ visit_data[["1-year FFMI loss group"]])
+  } else if (var_type == "categorical") {
+    test <- chisq.test(table(visit_data[[var]], visit_data[["1-year FFMI loss group"]]))
+  }
+  test$p.value
+}
+
+# Paired comparisons baseline -> 1 year
+run_test_paired <- function(var, ffmi_group, var_type) {
+
+  group_data <- t1_ffmi_loss_vars_wide |>
+    filter(`1-year FFMI loss group` == ffmi_group)
+
+  var_v0 <- paste0(var, "_Baseline")
+  var_v4 <- paste0(var, "_1 year")
+
+  if (var_type == "normal") {
+    test <- t.test(group_data[[var_v0]], group_data[[var_v4]], paired = TRUE)
+  } else if (var_type == "nonnormal") {
+    test <- wilcox.test(group_data[[var_v0]], group_data[[var_v4]], paired = TRUE)
+  } else if (var_type == "categorical") {
+    test <- mcnemar.test(table(group_data[[var_v0]], group_data[[var_v4]]))
+  }
+  test$p.value
+}
