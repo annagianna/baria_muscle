@@ -12,7 +12,10 @@ library(circlize)
 dir.create("results/graphs/HUMAnN", recursive = TRUE, showWarnings = FALSE)
 
 # Theme
-renoir_15 <- met.brewer("Renoir", n = 15)
+renopecies_label_colors <- setNames(
+  species_direction_colors[top15_species_labels$estimate_direction],
+  top15_species_labels$species_label
+)ir_15 <- met.brewer("Renoir", n = 15)
 source("scripts/assets/functions.R")
 
 # Data
@@ -39,10 +42,6 @@ top15_species_labels <- tibble(species = top15_species, species_label = species_
 
 # Colors for direction of species association with 1-year FFMI trajectory
 species_direction_colors <- c(positive = renoir_15[15], negative = renoir_15[9])
-species_label_colors <- setNames(
-  species_direction_colors[top15_species_labels$estimate_direction],
-  top15_species_labels$species_label
-)
 
 # Multi-visit abundance for the top 15 species (baria_mb spans v0/v4/v5, unlike the baseline-only object used in 4b/4c)
 top_species_long <- as(otu_table(baria_mb), "matrix") |>
