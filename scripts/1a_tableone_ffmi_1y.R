@@ -14,7 +14,7 @@ t1_ffmi_loss_vars_long <- baria_muscle_wide |>
   select(
     id, age_v0, sex, perc_change_ffmi_v4_group,
     matches(
-      "^(bmi|wc_cm|fm_kg|ffm_kg|ffmi|prediab_labs|t2d_labs|hba1c_mmolmol|glucose_mmoll_mmt_0|insulin_pmoll_mmt_0|homa_ir|homa_b|total_cholesterol_mmoll|ldl_cholesterol_mmoll|hdl_cholesterol_mmoll|triglycerides_mmoll|lipidlowering_meds|dm_meds)_v(0|4)$"
+      "^(bmi|wc_cm|fm_kg|ffm_kg|ffmi|prediab_labs|t2d_labs|hba1c_mmolmol|glucose_mmoll_mmt_0|insulin_pmoll_mmt_0|homa_ir|homa_b|total_cholesterol_mmoll|ldl_cholesterol_mmoll|hdl_cholesterol_mmoll|triglycerides_mmoll|creatinine_umoll|egfr_mlmin|lipidlowering_meds|dm_meds)_v(0|4)$"
     )
   ) |>
   pivot_longer(
@@ -50,6 +50,8 @@ t1_ffmi_loss_vars_long <- baria_muscle_wide |>
     `LDL cholesterol (mmol/L)` = ldl_cholesterol_mmoll,
     `HDL cholesterol (mmol/L)` = hdl_cholesterol_mmoll,
     `Triglycerides (mmol/L)` = triglycerides_mmoll,
+    `Creatinine (µmol/L)` = creatinine_umoll,
+    `eGFR (mL/min)` = egfr_mlmin,
     `Lipid-lowering medication` = lipidlowering_meds,
     `Antidiabetic medication` = dm_meds,
     `1-year %FFMI change group` = perc_change_ffmi_v4_group
@@ -61,13 +63,15 @@ t1_vars <- c(
   "BMI (kg/m²)", "Waist circumference (cm)", "Fat mass (kg)", "Fat-free mass (kg)", "Fat-free mass index (kg/m²)",
   "Prediabetes", "T2D", "HbA1c (mmol/mol)", "Fasting glucose (mmol/L)", "Fasting insulin (pmol/L)", "HOMA-IR", "HOMA-B",
   "Total cholesterol (mmol/L)", "LDL cholesterol (mmol/L)", "HDL cholesterol (mmol/L)", "Triglycerides (mmol/L)",
+  "Creatinine (µmol/L)", "eGFR (mL/min)",
   "Lipid-lowering medication", "Antidiabetic medication"
 )
 
 # Variable types
 nonnormal_vars <- c(
   "HbA1c (mmol/mol)", "Fasting glucose (mmol/L)", "Fasting insulin (pmol/L)", "HOMA-IR", "HOMA-B",
-  "Total cholesterol (mmol/L)", "LDL cholesterol (mmol/L)", "HDL cholesterol (mmol/L)", "Triglycerides (mmol/L)"
+  "Total cholesterol (mmol/L)", "LDL cholesterol (mmol/L)", "HDL cholesterol (mmol/L)", "Triglycerides (mmol/L)",
+  "Creatinine (µmol/L)", "eGFR (mL/min)"
 )
 categorical_vars <- c("Sex", "Prediabetes", "T2D", "Lipid-lowering medication", "Antidiabetic medication")
 normal_vars <- setdiff(t1_vars, c(nonnormal_vars, categorical_vars))
