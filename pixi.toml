@@ -8,32 +8,27 @@ version = "0.1.0"
 [tasks]
 datacleaning-clinical = "Rscript scripts/0a_datacleaning_clinical.R"
 datacleaning-omics = "Rscript scripts/0b_datacleaning_omics.R"
-table1 = "Rscript scripts/1a_tableone_v0.R"
-table1-ffmi1y = "Rscript scripts/1b_tableone_ffmi_1y.R"
-alphadiv = "Rscript scripts/2a_mb_alphadiversity_v0.R"
-betadiv = "Rscript scripts/2b_mb_betadiversity_v0.R"
-composition = "Rscript scripts/2c_mb_composition_v0.R"
-alphadiv-ffmi1y = "Rscript scripts/2d_mb_alphadiversity_ffmi_1y.R"
-betadiv-ffmi1y = "Rscript scripts/2e_mb_betadiversity_ffmi_1y.R"
-composition-ffmi1y = "Rscript scripts/2f_mb_composition_ffmi_1y.R"
+datacleaning-rnaseq = "Rscript scripts/0c_datacleaning_rnaseq.R"
+table1 = "Rscript scripts/1a_tableone_ffmi_1y.R"
+alphadiv = "Rscript scripts/2a_mb_alphadiversity_ffmi_1y.R"
+betadiv = "Rscript scripts/2b_mb_betadiversity_ffmi_1y.R"
+composition = "Rscript scripts/2c_mb_composition_ffmi_1y.R"
 ml-prep = "Rscript scripts/3a_ml_prep.R"
 ml-run = "bash scripts/3b_ml_run.sh"
 ml-process = "Rscript scripts/3c_ml_process.R"
 humann = "Rscript scripts/4a_humann_pathways.R"
 mb-metabolome = "Rscript scripts/4b_mb_metabolome_correlations.R"
 mb-diet = "Rscript scripts/4c_mb_diet_correlations.R"
+liver-rnaseq = "Rscript scripts/5a_liver_rnaseq.R"
+mmt = "Rscript scripts/6a_mmt.R"
 
 [tasks.datacleaning]
-depends-on = ["datacleaning-clinical", "datacleaning-omics"]
-description = "Clean clinical data, then omics data (microbiome, pathway, metabolomics)."
+depends-on = ["datacleaning-clinical", "datacleaning-omics", "datacleaning-rnaseq"]
+description = "Clean clinical data, then omics data (microbiome, pathway, metabolomics) and RNA-seq."
 
 [tasks.mb]
 depends-on = ["alphadiv", "betadiv", "composition"]
-description = "Baseline microbiome descriptive analyses: alpha diversity, beta diversity, composition."
-
-[tasks.mb-ffmi1y]
-depends-on = ["alphadiv-ffmi1y", "betadiv-ffmi1y", "composition-ffmi1y"]
-description = "Baseline microbiome descriptive analyses stratified by 1-year %FFMI change group."
+description = "Baseline microbiome descriptive analyses (alpha diversity, beta diversity, composition), stratified by 1-year %FFMI change group."
 
 [tasks.ml]
 depends-on = ["ml-prep", "ml-run", "ml-process"]
@@ -44,8 +39,8 @@ depends-on = ["humann", "mb-metabolome", "mb-diet"]
 description = "Top-15 species correlations against HUMAnN pathways, metabolome, and diet macronutrients."
 
 [tasks.all]
-depends-on = ["datacleaning", "table1", "table1-ffmi1y", "mb", "mb-ffmi1y", "ml-prep", "ml-process", "mb-correlations"]
-description = "Full pipeline except ml-run (submit the XGBeast job separately, then run ml-process)."
+depends-on = ["datacleaning", "table1", "mb", "ml-prep", "ml-process", "mb-correlations"]
+description = "Full pipeline except ml-run (submit the XGBeast job separately, then run ml-process). Excludes liver-rnaseq and mmt, which are still in progress."
 
 [dependencies]
 r-tidyverse = ">=2.0.0,<3"
