@@ -1,4 +1,4 @@
-# Correlations: top-15 species (deltaFFMI) and metabolites
+# Correlations: top-15 species (%FFMI change at 1y) and metabolites
 # Barbara Verhaar
 
 # Packages
@@ -12,7 +12,7 @@ source("scripts/assets/functions.R")
 out_dir <- "results/graphs/mb_metabolome_correlations"
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
-# Top-15 species by ML feature importance for deltaFFMI
+# Top-15 species by ML feature importance for %FFMI change at 1y
 fi <- get_feature_importance("results/mlmodels/perc_change_ffmi_v4/all", "perc_change_ffmi_v4_all", "reg")
 top15_species <- top_features(fi, n = 15)$FeatName
 
@@ -138,6 +138,20 @@ for (species_id in unique(sig$species)) {
 renoir_15 <- met.brewer("Renoir", n = 15)
 rho_max <- max(abs(cor_results$rho), na.rm = TRUE)
 col_fun <- colorRamp2(c(-rho_max, 0, rho_max), c(renoir_15[14], "white", renoir_15[6]))
+
+# Species label colours by direction of association with 1-year FFMI
+# trajectory (ML forest estimate) - same mapping as species_label_colors in
+# 4a_humann_pathways.R (Renoir[15] = positive, Renoir[9] = negative)
+forest_perc_change_ffmi_v4 <- read.csv("results/mlmodels/perc_change_ffmi_v4/all/forest_results_top15.csv")
+species_direction_colors <- c(positive = renoir_15[15], negative = renoir_15[9])
+species_direction <- tibble(species = top15_species, species_label = species_labels[top15_species]) |>
+  left_join(forest_perc_change_ffmi_v4 |> select(species, estimate), by = "species") |>
+  mutate(estimate_direction = if_else(estimate > 0, "positive", "negative"))
+species_label_colors <- setNames(
+  species_direction_colors[species_direction$estimate_direction],
+  species_direction$species_label
+)
+
 # Super pathway strip: a muted, earthy 9-colour set (moderate chroma ~35,
 # lightness alternating so adjacent picks aren't just hue-apart) chosen to
 # stay clear of both diverging-scale endpoints (Lab distance >=23 from each)
@@ -172,14 +186,15 @@ lgd_sig <- Legend(
 # Build & save one species x `metabs` correlation heatmap
 plot_corr_heatmap <- function(metabs, file, column_title, col_width, pdf_width_min,
                                column_fontsize = 8, cell_fontsize = 10,
-                               transpose = FALSE, row_height = 0.35) {
+                               transpose = FALSE, row_height = 0.35,
+                               species_subset = top15_species) {
   rho_mat <- cor_results |>
     filter(metabolite %in% metabs) |>
     select(species, metabolite, rho) |>
     pivot_wider(names_from = metabolite, values_from = rho) |>
     column_to_rownames("species") |>
     as.matrix()
-  rho_mat <- rho_mat[top15_species, metabs, drop = FALSE]
+  rho_mat <- rho_mat[species_subset, metabs, drop = FALSE]
 
   fdr_mat <- cor_results |>
     filter(metabolite %in% metabs) |>
@@ -187,10 +202,10 @@ plot_corr_heatmap <- function(metabs, file, column_title, col_width, pdf_width_m
     pivot_wider(names_from = metabolite, values_from = p_fdr) |>
     column_to_rownames("species") |>
     as.matrix()
-  fdr_mat <- fdr_mat[top15_species, metabs, drop = FALSE]
+  fdr_mat <- fdr_mat[species_subset, metabs, drop = FALSE]
 
   species_active <- rownames(fdr_mat)[apply(fdr_mat < 0.05, 1, any)]
-  cat(file, ":", length(species_active), "/", length(top15_species), "species have >=1 FDR-significant correlation\n")
+  cat(file, ":", length(species_active), "/", length(species_subset), "species have >=1 FDR-significant correlation\n")
   rho_mat <- rho_mat[species_active, , drop = FALSE]
   fdr_mat <- fdr_mat[species_active, , drop = FALSE]
 
@@ -222,6 +237,12 @@ plot_corr_heatmap <- function(metabs, file, column_title, col_width, pdf_width_m
     )
   }
 
+  # Species names always italic and coloured by direction of association
+  # with 1-year FFMI (positive/negative ML estimate); metabolite names plain
+  species_names <- if (transpose) colnames(rho_mat) else rownames(rho_mat)
+  species_gp <- gpar(fontsize = column_fontsize, fontface = "italic", col = species_label_colors[species_names])
+  metab_gp <- gpar(fontsize = 10)
+
   ht <- Heatmap(
     rho_mat,
     name = "Spearman rho",
@@ -234,9 +255,9 @@ plot_corr_heatmap <- function(metabs, file, column_title, col_width, pdf_width_m
       stars <- if (p < 0.001) "***" else if (p < 0.01) "**" else if (p < 0.05) "*" else ""
       if (stars != "") grid::grid.text(stars, x, y, gp = grid::gpar(fontsize = cell_fontsize, col = "black"))
     },
-    column_names_gp = grid::gpar(fontsize = column_fontsize),
+    column_names_gp = if (transpose) species_gp else metab_gp,
     column_names_rot = 45,
-    row_names_gp = grid::gpar(fontsize = 10),
+    row_names_gp = if (transpose) metab_gp else species_gp,
     row_names_side = "left",
     row_names_max_width = unit(14, "cm"),
     row_dend_side = "right",
@@ -295,6 +316,29 @@ if (length(sig_metabs_all) > 0) { # if anything is sig
     col_width = 0.45, pdf_width_min = 3, column_fontsize = 10,
     transpose = TRUE, row_height = 0.35
   )
+
+  # Compact slide version: top-20 metabolites (as above) further restricted
+  # to species with at least 10 significant correlations AMONG THOSE SAME 20
+  # metabolites (not the whole panel), so sparsely-hit species don't clutter
+  # a presentation-sized heatmap
+  min_species_hits <- 10
+  species_rank <- sig |>
+    filter(metabolite %in% sig_metabs_small) |>
+    group_by(species) |>
+    summarise(n_sig = n(), max_abs_rho = max(abs(rho)), .groups = "drop") |>
+    arrange(desc(n_sig), desc(max_abs_rho))
+  species_keep <- species_rank |> filter(n_sig >= min_species_hits) |> pull(species)
+  cat(length(species_keep), "/", length(top15_species), "species have >=", min_species_hits, "significant correlations among the top", length(sig_metabs_small), "metabolites\n")
+
+  if (length(species_keep) > 0) {
+    plot_corr_heatmap(
+      sig_metabs_small, file.path(out_dir, "microbe_metabolite_heatmap_top_species_compact_vertical.pdf"),
+      column_title = sprintf("Top %d metabolites, species with >=%d significant correlations", length(sig_metabs_small), min_species_hits),
+      col_width = 0.45, pdf_width_min = 3, column_fontsize = 10,
+      transpose = TRUE, row_height = 0.35,
+      species_subset = species_keep
+    )
+  }
 }
 
 cat("Done. Outputs in", out_dir, "\n")
