@@ -203,3 +203,42 @@ draw(ht)
 dev.off()
 
 # More compact heatmap: only species with ≥1 significant association among these 20 genes
+# Keep species with >=1 FDR-significant association among selected genes
+species_keep <- rownames(fdr_mat)[apply(fdr_mat < 0.05, 1, any)]
+rho_mat_compact <- rho_mat[species_keep, , drop = FALSE]
+fdr_mat_compact <- fdr_mat[species_keep, , drop = FALSE]
+rho_mat_compact <- t(rho_mat_compact)
+fdr_mat_compact <- t(fdr_mat_compact)
+
+# Compact heatmap: only species with >=1 significant association
+ht_compact <- Heatmap(
+  rho_mat_compact,
+  name = "Spearman\nrho",
+  col = col_fun,
+  cluster_rows = TRUE,
+  cluster_columns = TRUE,
+  row_dend_side = "right",
+  row_names_side = "left",
+  column_names_rot = 45,
+  column_names_gp = gpar(
+    fontsize = 10,
+    fontface = "italic",
+    col = species_label_colors[colnames(rho_mat_compact)]
+  ),
+  rect_gp = gpar(col = "white", lwd = 0.7),
+  cell_fun = function(j, i, x, y, width, height, fill) {
+    if (fdr_mat_compact[i, j] < 0.001) {
+      grid.text("***", x, y)
+    } else if (fdr_mat_compact[i, j] < 0.01) {
+      grid.text("**", x, y)
+    } else if (fdr_mat_compact[i, j] < 0.05) {
+      grid.text("*", x, y)
+    }
+  }
+)
+
+draw(ht_compact)
+# Save
+pdf("results/graphs/RNAseq/liver_species_genes_heatmap_compact.pdf",width = 9,height = 8)
+draw(ht_compact)
+dev.off()
