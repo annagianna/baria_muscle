@@ -1,4 +1,4 @@
-# Liver RNA-seq analysis
+# Liver RNA-seq
 # Anna Giannakogeorgou
 
 # Packages
@@ -7,9 +7,8 @@ library(phyloseq)
 library(ComplexHeatmap)
 library(circlize)
 library(MetBrewer)
-library(biomaRt)
+library(annotables)
 
-source("scripts/assets/functions.R")
 dir.create("results/graphs/RNAseq", recursive = TRUE, showWarnings = FALSE)
 
 # Theme
@@ -53,19 +52,18 @@ top15_species_log10 <- top15_species_v0 |>
   }))
 
 # Map gene ids to their names
-ensembl_ids <- liver_rnaseq |> 
-  dplyr::select(starts_with("ENSG")) |> 
-  colnames() |> 
-  str_remove("\\.\\d+$")
+gene_ids <- tibble(
+  ensembl_gene_id = liver_rnaseq |> 
+    dplyr::select(starts_with("ENSG")) |> 
+    colnames()
+) |>
+  mutate(ensgene = str_remove(ensembl_gene_id, "\\.\\d+$"))
 
-# Connect to Ensembl BioMart database
-mart <- useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl")
-gene_annotations <- getBM(
-  attributes = c("ensembl_gene_id", "description", "hgnc_symbol", "gene_biotype"),
-  filters = "ensembl_gene_id",
-  values = ensembl_ids,
-  mart = mart
-)
+# Gene annotations
+gene_annotations <- grch38 |>
+  filter(ensgene %in% gene_ids$ensgene) |>
+  dplyr::select(ensgene, symbol, biotype) |>
+  distinct()
 
 ### Liver RNA-seq x top15 species ###
 # Top15 species x liver RNA seq
@@ -81,6 +79,7 @@ liver_expr <- liver_rnaseq |>
 gene_prevalence <- apply(liver_expr, 2, \(x) mean(x > 0))
 genes_keep <- names(gene_prevalence[gene_prevalence >= 0.5])
 
+#### Untargeted ####
 ### Spearman correlations top15 species ###
 # Align species order
 species_mat <- liver_mb |>
@@ -126,15 +125,11 @@ genes_heatmap <- gene_rank |>
   filter(n_sig >= 4) |>
   mutate(ensembl_gene_id_clean = str_remove(ensembl_gene_id, "\\.\\d+$")) |>
   left_join(
-    gene_annotations |>
-      dplyr::select(ensembl_gene_id, hgnc_symbol, description),
-    by = c("ensembl_gene_id_clean" = "ensembl_gene_id")
-  ) |> 
-   mutate(gene_label = if_else(
-    is.na(hgnc_symbol) | hgnc_symbol == "",
-    ensembl_gene_id_clean,
-    hgnc_symbol
-  ))
+    gene_annotations |> 
+      dplyr::select(ensgene, symbol),
+    by = c("ensembl_gene_id_clean" = "ensgene")
+  ) |>
+  mutate(gene_label = if_else(is.na(symbol) | symbol == "", ensembl_gene_id_clean, symbol))
 
 # Heatmao data
 heatmap_data <- cor_results |>
@@ -236,9 +231,101 @@ ht_compact <- Heatmap(
     }
   }
 )
-
 draw(ht_compact)
+
 # Save
 pdf("results/graphs/RNAseq/liver_species_genes_heatmap_compact.pdf",width = 9,height = 8)
 draw(ht_compact)
 dev.off()
+list.files("results/graphs/RNAseq")
+
+#### Targeted genes #####
+# Create list of selected genes
+core_genes <- list(
+
+  hepatokines = c(
+    "FGF21","SELENOP","LECT2","ANGPTL3","ANGPTL4","ANGPTL8","AHSG","FETUB",
+    "FGL1","RBP4","IGF1","IGFBP1","IGFBP2","IGFBP3","INHBA","FST","FSTL3",
+    "GDF15","LEAP2","GPLD1","ENHO","TSKU","SHBG","SMOC1","APOA5"),
+
+  beta_oxidation = c(
+    "CPT1A","CPT1B","CPT2","CRAT","CROT","SLC25A20","SLC22A5",
+    "ACADVL","ACADL","ACADM","ACADS","ACADSB","ACAD9","ACAD8","ACAD11",
+    "HADHA","HADHB","HADH","ECHS1","EHHADH","ACAA1","ACAA2","DECR1",
+    "ECI1","ECI2","ETFA","ETFB","ETFDH","MLYCD","ACOX1","ACOX2",
+    "HSD17B4","SCP2","PPARA"),
+
+  mito_oxphos = c(
+    "PPARGC1A","PPARGC1B","PPARD","ESRRA","ESRRG","NRF1","GABPA",
+    "TFAM","TFB2M","POLG","MFN1","MFN2","OPA1","DNM1L",
+    "SDHA","SDHB","SDHC","SDHD","CYCS"),
+
+  oxidative_stress = c(
+    "NFE2L2","KEAP1","NQO1","HMOX1","GCLC","GCLM","GSR","GSTP1","GSTA1",
+    "GSTM1","SLC7A11","TXN","TXNRD1","PRDX1","PRDX3","PRDX5","PRDX6",
+    "SOD1","SOD2","SOD3","CAT","GPX1","GPX3","GPX4","SRXN1","G6PD",
+    "SESN2","FOXO3"),
+
+  aa_bcaa_turnover = c(
+    "BCAT1","BCAT2","BCKDHA","BCKDHB","DBT","DLD","BCKDK","PPM1K",
+    "HIBCH","HIBADH","IVD","MCCC1","MCCC2","AUH","HMGCL","PCCA","PCCB",
+    "MMUT","ALDH6A1",
+    "CPS1","OTC","ASS1","ASL","ARG1","NAGS","SLC25A15","SLC25A13",
+    "GLUD1","GLS","GLS2","GLUL","GOT1","GOT2","GPT","GPT2"),
+
+  gluconeogenesis = c(
+    "PCK1","PCK2","G6PC1","SLC37A4","FBP1","FBP2","PC","MDH1","MDH2",
+    "PDK1","PDK2","PDK4","FOXO1"),
+
+  glycogen_metabolism = c(
+    "GYS2","GYG1","GBE1","UGP2","PGM1","PYGL","AGL",
+    "PHKA2","PHKB","PHKG2","PPP1R3B","PPP1R3C"),
+
+  glycolysis_fructose = c(
+    "GCK","HK1","HK2","GPI","PFKL","ALDOA","ALDOB","TPI1","GAPDH",
+    "PGK1","PGAM1","ENO1","PKLR","PKM","PDHA1","PDHB","DLAT",
+    "LDHA","LDHB","KHK","TKFC","SORD","AKR1B1","SLC2A2","SLC2A5"),
+
+  insulin_signaling = c(
+    "INSR","IGF1R","IRS1","IRS2","PIK3R1","PIK3CA","PDPK1","AKT1","AKT2",
+    "GSK3B","MTOR","RPTOR","RPS6KB1","EIF4EBP1","TSC1","TSC2",
+    "PRKAA1","PRKAA2","STK11","PTEN","PTPN1","MLXIPL","SREBF1")
+)
+
+target_genes <- enframe(core_genes, name = "category", value = "symbol") |> 
+  unnest(symbol) |> 
+  left_join(
+    grch38 |> 
+      dplyr::select(symbol, ensgene, description) |> 
+      distinct(),
+    by = "symbol"
+  ) |> 
+  inner_join(gene_ids, by = "ensgene") |> 
+  filter(ensembl_gene_id %in% genes_keep) # adds prevalence filter (non-zero expression in >= 50% of participants)
+
+# Spearman correlations: top-15 species x targeted genes
+target_gene_mat <- liver_mb |>
+  dplyr::select(all_of(target_genes$ensembl_gene_id)) |>
+  as.matrix()
+
+cor_targeted <- expand_grid(
+  species = top15_species,
+  ensembl_gene_id = colnames(target_gene_mat)
+) |>
+  mutate(
+    test = map2(species, ensembl_gene_id, ~ cor.test(
+      species_mat[, .x],
+      target_gene_mat[, .y],
+      method = "spearman",
+      exact = FALSE
+    )),
+    rho = map_dbl(test, "estimate"),
+    p.value = map_dbl(test, "p.value")
+  ) |>
+  dplyr::select(-test) |> 
+  mutate(p_fdr = p.adjust(p.value, method = "BH")) |> 
+  left_join(
+    target_genes |>
+      dplyr::select(ensembl_gene_id, symbol, category),
+    by = "ensembl_gene_id"
+  )
