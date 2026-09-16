@@ -8,6 +8,7 @@ library(ComplexHeatmap)
 library(circlize)
 library(MetBrewer)
 library(annotables)
+source("scripts/assets/functions.R")
 
 dir.create("results/graphs/RNAseq", recursive = TRUE, showWarnings = FALSE)
 
@@ -129,7 +130,8 @@ genes_heatmap <- gene_rank |>
       dplyr::select(ensgene, symbol),
     by = c("ensembl_gene_id_clean" = "ensgene")
   ) |>
-  mutate(gene_label = if_else(is.na(symbol) | symbol == "", ensembl_gene_id_clean, symbol))
+  filter(!is.na(symbol), symbol != "") |> # Filter out unmapped/ENSG genes (but only after the correlations + FDR correction)
+  mutate(gene_label = symbol)
 
 # Heatmao data
 heatmap_data <- cor_results |>
@@ -322,10 +324,62 @@ cor_targeted <- expand_grid(
     rho = map_dbl(test, "estimate"),
     p.value = map_dbl(test, "p.value")
   ) |>
-  dplyr::select(-test) |> 
-  mutate(p_fdr = p.adjust(p.value, method = "BH")) |> 
+  dplyr::select(-test) |>
+  mutate(p_fdr = p.adjust(p.value, method = "BH")) |> # global FDR p for all selected genes
   left_join(
     target_genes |>
-      dplyr::select(ensembl_gene_id, symbol, category),
+      dplyr::select(ensembl_gene_id, symbol, category, description),
     by = "ensembl_gene_id"
   )
+
+# Genes with >=1 FDR-significant association
+target_genes_heatmap <- cor_targeted |>
+  filter(p_fdr < 0.05) |>
+  distinct(ensembl_gene_id, symbol, category)
+
+# Build matrices
+rho_targeted <- cor_targeted |>
+  filter(ensembl_gene_id %in% target_genes_heatmap$ensembl_gene_id) |>
+  dplyr::select(species, symbol, rho) |>
+  pivot_wider(names_from = species, values_from = rho) |>
+  column_to_rownames("symbol") |>
+  as.matrix()
+
+fdr_targeted <- cor_targeted |>
+  filter(ensembl_gene_id %in% target_genes_heatmap$ensembl_gene_id) |>
+  dplyr::select(species, symbol, p_fdr) |>
+  pivot_wider(names_from = species, values_from = p_fdr) |>
+  column_to_rownames("symbol") |>
+  as.matrix()
+
+# Define gene category annotations & colors
+# Gene categories
+gene_categories <- target_genes_heatmap$category[match(rownames(rho_targeted), target_genes_heatmap$symbol)]
+category_cols <- setNames(renoir_15[seq_along(unique(gene_categories))], unique(gene_categories))
+category_anno <- rowAnnotation(Category = gene_categories, col = list(Category = category_cols))
+
+# Species labels
+species_labels <- top15_species_labels$species_label[match(colnames(rho_targeted), top15_species_labels$species)]
+
+# Signif asterisks
+stars_targeted <- ifelse(fdr_targeted < 0.001, "***", ifelse(fdr_targeted < 0.01, "**", ifelse(fdr_targeted < 0.05, "*", "")))
+
+## Heatmap ##
+ht_targeted <- Heatmap(
+  rho_targeted,
+  name = "Spearman\nrho",
+  col = colorRamp2(c(-0.3, 0, 0.3), c(renoir_15[1], "white", renoir_15[15])),
+  left_annotation = category_anno,
+  row_split = gene_categories,
+  cluster_rows = TRUE,
+  cluster_columns = TRUE,
+  column_labels = species_labels,
+  cell_fun = function(j, i, x, y, width, height, fill) {grid.text(stars_targeted[i, j], x, y, gp = gpar(fontsize = 10))},
+  column_names_rot = 45,
+  column_names_gp = gpar(fontsize = 9, fontface = "italic"),
+  row_names_gp = gpar(fontsize = 9)
+)
+
+pdf("results/graphs/RNAseq/liver_top15_species_selected_genes_heatmap.pdf", width = 10, height = 8)
+draw(ht_targeted)
+dev.off()
