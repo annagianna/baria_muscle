@@ -20,7 +20,6 @@ humann = "Rscript scripts/4a_humann_pathways.R"
 mb-metabolome = "Rscript scripts/4b_mb_metabolome_correlations.R"
 mb-diet = "Rscript scripts/4c_mb_diet_correlations.R"
 liver-rnaseq = "Rscript scripts/5a_liver_rnaseq.R"
-mmt = "Rscript scripts/6a_mmt.R"
 
 [tasks.datacleaning]
 depends-on = ["datacleaning-clinical", "datacleaning-omics", "datacleaning-rnaseq"]
@@ -40,7 +39,7 @@ description = "Top-15 species correlations against HUMAnN pathways, metabolome, 
 
 [tasks.all]
 depends-on = ["datacleaning", "table1", "mb", "ml-prep", "ml-process", "mb-correlations"]
-description = "Full pipeline except ml-run (submit the XGBeast job separately, then run ml-process). Excludes liver-rnaseq and mmt, which are still in progress."
+description = "Full pipeline except ml-run (submit the XGBeast job separately, then run ml-process). Excludes liver-rnaseq, which is still in progress."
 
 [dependencies]
 r-tidyverse = ">=2.0.0,<3"

@@ -24,8 +24,7 @@ predict FFMI and its post-surgical change, with each model's top-15 features
 confirmed by LM/LMM forest plots (`3a`–`3c`); correlation analyses relating
 the species most predictive of 1-year FFMI change to HUMAnN pathways, the
 serum metabolome, and baseline dietary macronutrient intake (`4a`–`4c`); and
-two analyses still under active development — liver RNA-seq (`5a`) and
-baseline mixed-meal-test/MMT responses (`6a`).
+liver RNA-seq (`5a`), still under active development.
 
 ---
 
@@ -48,7 +47,6 @@ baria_muscle/
 │   ├── 4b_mb_metabolome_correlations.R     # Top-15 species x serum metabolome correlations
 │   ├── 4c_mb_diet_correlations.R           # Top-15 species x dietary macronutrient correlations
 │   ├── 5a_liver_rnaseq.R                   # Liver RNA-seq vs. top-15 species / FFMI change — in progress
-│   ├── 6a_mmt.R                            # Baseline mixed-meal-test (MMT) responses — in progress
 │   └── assets/
 │       ├── functions.R                     # Shared helper functions (plotting, XGBeast I/O, forest models)
 │       ├── XGBeast_new.py                  # Repeated-CV XGBoost + feature-importance framework
@@ -88,7 +86,7 @@ all three depend on `3b`'s output for the `perc_change_ffmi_v4`/`all` model,
 from which they take the top-15 species most predictive of 1-year FFMI
 change. `5a` additionally depends on `0c` (liver RNA-seq) and on `3c`'s
 forest-plot output for that same model, to colour species by the direction
-of their association with FFMI change. `6a` only depends on `0a`.
+of their association with FFMI change.
 
 ---
 
@@ -462,13 +460,6 @@ gene expression to those species and/or to FFMI change; as of now it loads
 the data and builds the labelled/coloured top-15 species table but does not
 yet run or plot an analysis.
 
-## Mixed-meal test responses (6a) — in progress
-
-`6a_mmt.R` sets up an output folder and loads the cleaned clinical data
-(`BARIA_muscle_wide.RDS`), which carries the baseline mixed-meal-test (MMT)
-glucose/insulin/C-peptide time course (`*_mmt_<0|10|20|30|60|90|120>`, see
-`0a`). No analysis or plotting code has been added yet.
-
 ---
 
 ## Dependencies
@@ -477,8 +468,8 @@ The environment is managed with **pixi** (`pixi.toml`, `pixi.lock`), and defines
 pixi tasks for every script plus grouped tasks (`datacleaning`, `mb`, `ml`,
 `mb-correlations`, `all`) that chain the steps within each stage — run e.g.
 `pixi run ml` or `pixi run datacleaning-clinical`; see `pixi.toml` for the
-full list. `liver-rnaseq` and `mmt` (`5a`/`6a`) are defined but excluded from
-`all`, since those scripts are still in progress. R packages loaded across
+full list. `liver-rnaseq` (`5a`) is defined but excluded from
+`all`, since that script is still in progress. R packages loaded across
 the scripts include: `tidyverse`, `phyloseq`, `vegan`,
 `tableone`, `gt`, `ggpubr`, `patchwork`, `ggthemes`, `ggsci`, `ggrepel`,
 `ape`, `grid`, `MetBrewer`, `lmerTest`, `broom` / `broom.mixed`,
