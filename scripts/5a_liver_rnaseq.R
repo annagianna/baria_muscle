@@ -368,18 +368,24 @@ stars_targeted <- ifelse(fdr_targeted < 0.001, "***", ifelse(fdr_targeted < 0.01
 ht_targeted <- Heatmap(
   rho_targeted,
   name = "Spearman\nrho",
-  col = colorRamp2(c(-0.3, 0, 0.3), c(renoir_15[1], "white", renoir_15[15])),
+  col = colorRamp2(c(-0.3, 0, 0.3), c(renoir_15[3], "white", renoir_15[11])),
   left_annotation = category_anno,
   row_split = gene_categories,
   cluster_rows = TRUE,
   cluster_columns = TRUE,
   column_labels = species_labels,
-  cell_fun = function(j, i, x, y, width, height, fill) {grid.text(stars_targeted[i, j], x, y, gp = gpar(fontsize = 10))},
+  cell_fun = function(j, i, x, y, width, height, fill) {
+    grid.text(stars_targeted[i, j], x, y, gp = gpar(fontsize = 10))
+  },
   column_names_rot = 45,
-  column_names_gp = gpar(fontsize = 9, fontface = "italic"),
+  column_names_gp = gpar(
+    fontsize = 9,
+    fontface = "italic",
+    col = species_label_colors[species_labels]
+  ),
   row_names_gp = gpar(fontsize = 9)
 )
 
-pdf("results/graphs/RNAseq/liver_top15_species_selected_genes_heatmap.pdf", width = 10, height = 8)
+pdf("results/graphs/RNAseq/liver_top15_species_targeted_genes_heatmap.pdf", width = 10, height = 8)
 draw(ht_targeted)
 dev.off()
