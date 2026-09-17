@@ -5,6 +5,7 @@ library(tidyverse)
 library(phyloseq)
 library(ComplexHeatmap)
 library(circlize)
+library(MetBrewer)
 source("scripts/assets/functions.R")
 
 base_out_dir <- "results/graphs/mb_diet_correlations"
@@ -44,9 +45,11 @@ format_pval <- function(p) if_else(p < 0.001, "<0.001", sprintf("%.3f", p))
 bug_labels <- species_label(feats) # as a make unique
 names(bug_labels) <- feats
 
-# Color pal - matches the species x pathway heatmap in 4a_humann_pathways.R
-# (MetBrewer Renoir[14]/[6]); olive = negative, mauve = positive correlation
-col_fun <- colorRamp2(c(-0.5, 0, 0.5), c("#939336", "#f0efec", "#AE7B9E"))
+# Diverging colour scale, violet/plum only (unlike the green/plum pairing in
+# 4a_humann_pathways.R / 4b_mb_metabolome_correlations.R): Renoir[2] negative,
+# Renoir[6] positive. rho_max and col_fun are computed per diet_group below,
+# once cor_results exists
+renoir_15 <- met.brewer("Renoir", n = 15)
 lgd_sig <- Legend(
   labels = c("p < 0.05", "p < 0.01", "p < 0.001"),
   title = "Significance (nominal)",
@@ -156,6 +159,9 @@ for (group in diet_groups) {
   }
 
   #### ComplexHeatmap: nutrients (rows) x bugs (columns), vertical ####
+  rho_max <- max(abs(cor_results$rho), na.rm = TRUE)
+  col_fun <- colorRamp2(c(-rho_max, 0, rho_max), c(renoir_15[2], "white", renoir_15[6]))
+
   rho_mat <- cor_results |>
     select(bug, nutrient, rho) |>
     pivot_wider(names_from = nutrient, values_from = rho) |>
@@ -206,7 +212,7 @@ for (group in diet_groups) {
       show_column_dend = FALSE
     )
 
-    cairo_pdf(file.path(out_dir, "microbe_diet_heatmap_vertical.pdf"),
+    quartz(type = "pdf", file = file.path(out_dir, "microbe_diet_heatmap_vertical.pdf"),
         width = max(5, 3 + ncol(rho_mat) * 0.55), height = max(4, 3 + nrow(rho_mat) * 0.4))
     draw(ht, heatmap_legend_side = "right", annotation_legend_side = "right",
          annotation_legend_list = list(lgd_sig), merge_legends = TRUE,
