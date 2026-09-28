@@ -25,7 +25,7 @@ long_vars <- c(
   "glucagon_ngl_mmt_0", "hba1c", "hba1c_mmolmol", "crp_mgl",
   "systolic_bp_mmhg", "diastolic_bp_mmhg", "total_cholesterol_mmoll", "ldl_cholesterol_mmoll", "hdl_cholesterol_mmoll", "triglycerides_mmoll",
   "creatinine_umoll", "egfr_mlmin",
-  "gammagt_ul", "asat_ul", "alat_ul", "tsh_miul", "ft4_pmoll",
+  "gammagt_ul", "asat_ul", "alat_ul", "tsh_miul", "ft4_pmoll", "platelets_10e9l", "albumin_gl",
 
   # Medication
   "medication_list", "medication_binary",
@@ -38,6 +38,11 @@ long_vars_pattern <- str_c("^(", str_c(long_vars, collapse = "|"), ")_(v\\d+)$")
 
 # Clinical data
 baria_muscle_vars <- baria_clinical_data_raw |>
+  mutate(
+    across(matches("^V[45]_t?h?rombocytes$"), ~ replace(.x, .x %in% c(-99, -98, -97), NA)), # v4/v5 platelets stored under two complementary spellings (no overlap)
+    V4_platelets = coalesce(V4_trombocytes, V4_thrombocytes), # merge two platelet spellings
+    V5_platelets = coalesce(V5_trombocytes, V5_thrombocytes)
+  ) |> 
   select(
     # Baseline & static vars
     id = Subject_ID, date_v0 = date, sg_type = type_surgery, age_v0 = Age, sex, t2d_v0 = dm,
@@ -48,13 +53,13 @@ baria_muscle_vars <- baria_clinical_data_raw |>
     glucose_mmoll_v0 = glucose, glucose_mmoll_mmt_0_v0 = min0gluc, insulin_pmoll_mmt_0_v0 = min0insulin,
     glucagon_ngl_mmt_0_v0 = min0glucagon, cpeptide_nmoll_mmt_0_v0 = min0cpept, hba1c_v0 = hba1c, hba1c_mmolmol_v0 = hba1c__IFCC_mmolmol,
     matches("^min(10|20|30|60|90|120)(gluc|insulin|cpept)$"), # MMT vars
-    gammagt_ul_v0 = ggt, alat_ul_v0 = alat, asat_ul_v0 = asat,
+    gammagt_ul_v0 = ggt, alat_ul_v0 = alat, asat_ul_v0 = asat,  platelets_10e9l_v0 = thrombocytes, albumin_gl_v0 = albumin,
     total_cholesterol_mmoll_v0 = totchol, ldl_cholesterol_mmoll_v0 = ldlchol, hdl_cholesterol_mmoll_v0 = hdlchol, triglycerides_mmoll_v0 = triglycerides,
     creatinine_umoll_v0 = creatinine, egfr_mlmin_v0 = egfrmdrd, 
     crp_mgl_v0 = crp, tsh_miul_v0 = tsh, ft4_pmoll_v0 = ft4,
 
     # v2-v5 (Repeated vars)
-    matches("^V[2-5]_(date|bmi|weight|taille|tbf|tbf_percent|ffm|ffm_percent|rawdata_50Khz_Resistance|upperleg|min0gluc|min0insulin|min0glucagon|min0cpept|hba1c|hba1c__IFCC_mmolmol|crp|ggt|asat|alat|totchol|ldlchol|hdlchol|triglycerides|creatinine|egfrmdrd|tsh|ft4)$"),
+    matches("^V[2-5]_(date|bmi|weight|taille|tbf|tbf_percent|ffm|ffm_percent|rawdata_50Khz_Resistance|upperleg|min0gluc|min0insulin|min0glucagon|min0cpept|hba1c|hba1c__IFCC_mmolmol|crp|ggt|asat|alat|totchol|ldlchol|hdlchol|triglycerides|creatinine|egfrmdrd|tsh|ft4|platelets|albumin)$"),
     matches("^V[2-5]_min(10|20|30|60|90|120)(gluc|insulin|cpept)$"),
     matches("^(systolic|diastolic)_pressure_v[45]$"),
 
@@ -111,7 +116,9 @@ baria_muscle_vars <- baria_clinical_data_raw |>
       str_replace("^creatinine_", "creatinine_umoll_") |>
       str_replace("^egfrmdrd_", "egfr_mlmin_") |> 
       str_replace("^tsh_", "tsh_miul_") |>
-      str_replace("^ft4_", "ft4_pmoll_"),
+      str_replace("^ft4_", "ft4_pmoll_") |> 
+      str_replace("^platelets_", "platelets_10e9l_") |>
+      str_replace("^albumin_", "albumin_gl_"),
     matches("_v[2-5]$")
 ) |>
   rename_with(
@@ -420,7 +427,22 @@ baria_muscle_long_all <- baria_muscle_vars_meds |>
     # HOMA-IR & HOMA-2B (insulin unit conversion from pmol/l to uU/ml)
     homa_ir = (insulin_pmoll_mmt_0 / 6.945) * glucose_mmoll_mmt_0 / 22.5,
     homa_b = (20 * (insulin_pmoll_mmt_0 / 6.945)) / (glucose_mmoll_mmt_0 - 3.5),
-
+     matsuda_index = 10000 / sqrt(
+      (glucose_mmoll_mmt_0 * 18.016) * (insulin_pmoll_mmt_0 / 6.945) *
+        (18.016 * (glucose_mmoll_mmt_0 + glucose_mmoll_mmt_30 + glucose_mmoll_mmt_60 + glucose_mmoll_mmt_90 + glucose_mmoll_mmt_120) / 5) *
+        ((insulin_pmoll_mmt_0 + insulin_pmoll_mmt_30 + insulin_pmoll_mmt_60 + insulin_pmoll_mmt_90 + insulin_pmoll_mmt_120) / 6.945 / 5)
+    ),
+    tyg = log((triglycerides_mmoll * 88.57) * (glucose_mmoll_mmt_0 * 18.016) / 2), # triglyceride-glucose index
+    
+    # Hepatic IR & hepatic insulin clearance (fasting & MMT-derived)
+    hepatic_ir_index = # hepatic IR index
+      (18.016 * (5 * glucose_mmoll_mmt_0 + 10 * glucose_mmoll_mmt_10 + 10 * glucose_mmoll_mmt_20 + 5 * glucose_mmoll_mmt_30)) *
+      ((5 * insulin_pmoll_mmt_0 + 10 * insulin_pmoll_mmt_10 + 10 * insulin_pmoll_mmt_20 + 5 * insulin_pmoll_mmt_30) / 6.945) / 1e6,
+    hic_fasting = (cpeptide_nmoll_mmt_0 * 1000) / insulin_pmoll_mmt_0,
+    hic_mmt = 
+      (1000 * (5 * cpeptide_nmoll_mmt_0 + 10 * cpeptide_nmoll_mmt_10 + 10 * cpeptide_nmoll_mmt_20 + 20 * cpeptide_nmoll_mmt_30 + 30 * cpeptide_nmoll_mmt_60 + 30 * cpeptide_nmoll_mmt_90 + 15 * cpeptide_nmoll_mmt_120)) /
+      (5 * insulin_pmoll_mmt_0 + 10 * insulin_pmoll_mmt_10 + 10 * insulin_pmoll_mmt_20 + 20 * insulin_pmoll_mmt_30 + 30 * insulin_pmoll_mmt_60 + 30 * insulin_pmoll_mmt_90 + 15 * insulin_pmoll_mmt_120),
+   
     # T2D incidence based on lab values at follow-up
     t2d_labs = case_when(
       is.na(hba1c_percent) & is.na(glucose_mmoll_mmt_0) ~ NA_character_,
@@ -435,6 +457,21 @@ baria_muscle_long_all <- baria_muscle_vars_meds |>
       (hba1c_percent >= 5.7 & hba1c_percent <= 6.4) | (glucose_mmoll_mmt_0 >= 5.6 & glucose_mmoll_mmt_0 <= 6.9) ~ "yes",
       TRUE ~ "no"
     ),
+    
+    t2d_any = case_when( # T2D: baseline = documented (t2d_v0) or lab-defined (t2d_labs); follow-up = lab-defined or on glucose-lowering meds (t2d_v0 would ignore remission)
+      visit == "v0" & (t2d_v0 == "yes" | t2d_labs == "yes") ~ "yes",
+      visit != "v0" & (t2d_labs == "yes" | dm_meds == "yes") ~ "yes",
+      is.na(t2d_labs) & (visit != "v0" | is.na(t2d_v0)) ~ NA_character_,
+      TRUE ~ "no"
+    ), 
+
+    # Liver NITs (steatosis & fibrosis)
+    fib4 = (age * asat_ul) / (platelets_10e9l * sqrt(alat_ul)),
+    fib4_cat = case_when(fib4 < 1.30 ~ "low", fib4 <= 2.67 ~ "indeterminate", !is.na(fib4) ~ "high"),
+    nfs = -1.675 + 0.037 * age + 0.094 * bmi + 1.13 * (t2d_any == "yes" | glucose_mmoll_mmt_0 >= 6.1) + 0.99 * (asat_ul / alat_ul) - 0.013 * platelets_10e9l - 0.66 * (albumin_gl / 10),
+    nfs_cat = case_when(nfs < -1.455 ~ "low", nfs <= 0.676 ~ "indeterminate", !is.na(nfs) ~ "high"),
+    fli = 100 * plogis(0.953 * log(triglycerides_mmoll * 88.57) + 0.139 * bmi + 0.718 * log(gammagt_ul) + 0.053 * wc_cm - 15.745),
+    hsi = 8 * (alat_ul / asat_ul) + bmi + 2 * (sex == "female") + 2 * (t2d_any == "yes"),
     ffmi = if_else(bia_valid, ffm_kg / ((height_cm / 100)^2), NA_real_),
     fmi = if_else(bia_valid, fm_kg / ((height_cm / 100)^2), NA_real_),
     smm_kg = if_else(bia_valid, ((height_cm^2) / bia_resistance_50khz * 0.401) + (age * -0.071) + 5.102 + if_else(sex == "male", 3.825, 0), NA_real_),
@@ -465,8 +502,10 @@ baria_muscle_wide <- baria_muscle_long_all |>
   pivot_wider(
     names_from = visit,
     values_from =  c(
-      all_of(long_vars), all_of(names(medication_classes)), "n_years_from_v0", "age", "hba1c_percent", "homa_ir", "homa_b", "t2d_labs", "prediab_labs",
-      contains("ffmi"), contains("fmi"), contains("smm"), contains("bia_"), contains("perc_change_"), contains("delta_")
+      all_of(long_vars), all_of(names(medication_classes)), 
+      contains("ffmi"), contains("fmi"), contains("smm"), contains("bia_"), contains("perc_change_"), contains("delta_"),
+      "n_years_from_v0", "age", "hba1c_percent", "homa_ir", "homa_b", "t2d_labs", "prediab_labs",
+      "t2d_any", "fib4", "fib4_cat", "nfs", "nfs_cat", "fli", "hsi", "tyg", "hepatic_ir_index", "hic_fasting", "hic_mmt", "matsuda_index"
     ),
     names_glue = "{.value}_{visit}"
   ) |>
@@ -519,6 +558,7 @@ baria_muscle_long <- baria_muscle_long_all |>
     all_of(long_vars), all_of(names(medication_classes)),
     date_baseline, n_years_from_v0, age,
     hba1c_percent, homa_ir, homa_b, t2d_labs, prediab_labs,
+    t2d_any, fib4, fib4_cat, nfs, nfs_cat, fli, hsi, tyg, hepatic_ir_index, hic_fasting, hic_mmt, matsuda_index,
     contains("ffmi"), contains("fmi"), contains("smm"), contains("bia_"), contains("perc_change_"), contains("delta_"), starts_with("low_")
   )
 
