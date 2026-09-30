@@ -9,6 +9,7 @@ library(circlize)
 library(MetBrewer)
 library(annotables)
 library(ggpubr)
+library(broom)
 source("scripts/assets/functions.R")
 
 dir.create("results/graphs/RNAseq", recursive = TRUE, showWarnings = FALSE)
@@ -17,7 +18,7 @@ dir.create("results/graphs/RNAseq", recursive = TRUE, showWarnings = FALSE)
 renoir_15 <- met.brewer("Renoir", n = 15)
 
 # Data
-liver_rnaseq <- readRDS("data/processed_data/BARIA_Liver_RNAseq.RDS")
+liver_rnaseq <- readRDS("data/processed_data/BARIA_Liver_RNAseq_vst.RDS") # VST normalized
 baria_muscle_wide <- readRDS("data/processed_data/BARIA_muscle_wide.RDS")
 baria_mb_v0 <- readRDS("data/processed_data/BARIA_mb_baseline.RDS")
 forest_perc_change_ffmi_v4 <- read.csv("results/mlmodels/perc_change_ffmi_v4/all/forest_results_top15.csv")
@@ -73,13 +74,17 @@ liver_mb <- liver_rnaseq |>
   mutate(id = as.numeric(id)) |> 
   inner_join(top15_species_log10, by = "id")
 
-liver_expr <- liver_rnaseq |>
-  dplyr::select(starts_with("ENSG")) |>
-  as.matrix()
+# QC: sequencing depth (DESeq2 size factor) vs. species abundance (no expected association)
+size_factor_qc <- map_dfr(top15_species,
+  ~ broom::tidy(cor.test(liver_mb$size_factor, liver_mb[[.x]], method = "spearman", exact = FALSE)
+) |> mutate(species = .x)) |>
+  dplyr::select(species, rho = estimate, p.value)
+size_factor_qc
 
-# Filter genes with non-zero expression in >= 50% of participants
-gene_prevalence <- apply(liver_expr, 2, \(x) mean(x > 0))
-genes_keep <- names(gene_prevalence[gene_prevalence >= 0.5])
+# Genes in the normalised file (already expression-filtered in cleaning script 0c)
+liver_genes <- liver_rnaseq |> 
+  dplyr::select(starts_with("ENSG")) |>
+  colnames()
 
 #### Untargeted ####
 ### Spearman correlations top15 species ###
@@ -89,7 +94,7 @@ species_mat <- liver_mb |>
   as.matrix()
 
 gene_mat <- liver_mb |>
-  dplyr::select(all_of(genes_keep)) |>
+  dplyr::select(all_of(liver_genes)) |>
   as.matrix()
 
 cor_results <- expand_grid(
@@ -109,32 +114,27 @@ cor_results <- expand_grid(
   dplyr::select(-test) |>
   mutate(p_fdr = p.adjust(p.value, method = "BH"))
 
-gene_rank <- cor_results |>
-  filter(p_fdr < 0.05) |> 
+# Top 25 (annotated) associated genes by |rho| (among FDR-signif associations)
+genes_heatmap <- cor_results |>
   group_by(ensembl_gene_id) |>
-  summarise(
-    n_sig = n(),
+  summarize(
+    min_fdr = min(p_fdr),
+    n_sig = sum(p_fdr < 0.05),
     max_abs_rho = max(abs(rho)),
     .groups = "drop"
   ) |>
-  arrange(desc(n_sig), desc(max_abs_rho))
-
-# Select genes with the greatest overlap across top-15 species:
-# 5 genes were FDR-significant for 5 species and 15 genes for 4 species,
-#  giving a natural set of 20 genes associated with >=4/15 species
-# Add annotations
-genes_heatmap <- gene_rank |>
-  filter(n_sig >= 4) |>
-  mutate(ensembl_gene_id_clean = str_remove(ensembl_gene_id, "\\.\\d+$")) |>
+  filter(min_fdr < 0.05) |>
+  mutate(ensgene = str_remove(ensembl_gene_id, "\\.\\d+$")) |>
   left_join(
-    gene_annotations |> 
-      dplyr::select(ensgene, symbol),
-    by = c("ensembl_gene_id_clean" = "ensgene")
+    gene_annotations |> distinct(ensgene, .keep_all = TRUE) |> dplyr::select(ensgene, symbol),
+    by = "ensgene"
   ) |>
-  filter(!is.na(symbol), symbol != "") |> # Filter out unmapped/ENSG genes (but only after the correlations + FDR correction)
+  filter(!is.na(symbol), symbol != "") |> # annotated genes only, selected after FDR correction
+  arrange(desc(max_abs_rho)) |>
+  slice_head(n = 25) |>
   mutate(gene_label = symbol)
 
-# Heatmao data
+# Heatmap data
 heatmap_data <- cor_results |>
   filter(ensembl_gene_id %in% genes_heatmap$ensembl_gene_id)
 
@@ -200,8 +200,7 @@ pdf("results/graphs/RNAseq/liver_top15_species_genes_heatmap.pdf", width = 10, h
 draw(ht)
 dev.off()
 
-# More compact heatmap: only species with ≥1 significant association among these 20 genes
-# Keep species with >=1 FDR-significant association among selected genes
+# More compact heatmap: only species with >=1 signif association among the selected genes
 species_keep <- rownames(fdr_mat)[apply(fdr_mat < 0.05, 1, any)]
 rho_mat_compact <- rho_mat[species_keep, , drop = FALSE]
 fdr_mat_compact <- fdr_mat[species_keep, , drop = FALSE]
@@ -234,10 +233,9 @@ ht_compact <- Heatmap(
     }
   }
 )
-draw(ht_compact)
 
 # Save
-pdf("results/graphs/RNAseq/liver_species_genes_heatmap_compact.pdf",width = 9,height = 8)
+pdf("results/graphs/RNAseq/liver_species_genes_heatmap_compact.pdf", width = 9, height = 8)
 draw(ht_compact)
 dev.off()
 
@@ -247,20 +245,21 @@ core_genes <- list(
 
   hepatokines = c(
     "FGF21","SELENOP","LECT2","ANGPTL3","ANGPTL4","ANGPTL8","AHSG","FETUB",
-    "FGL1","RBP4","IGF1","IGFBP1","IGFBP2","IGFBP3","INHBA","FST","FSTL3",
+    "FGL1","RBP4","IGF1","IGFBP1","IGFBP2","IGFBP3","INHBA","INHBE","FST","FSTL3",
     "GDF15","LEAP2","GPLD1","ENHO","TSKU","SHBG","SMOC1","APOA5"),
 
-  beta_oxidation = c(
+  # Fatty acid oxidation & ketogenesis
+  fao = c(
     "CPT1A","CPT1B","CPT2","CRAT","CROT","SLC25A20","SLC22A5",
     "ACADVL","ACADL","ACADM","ACADS","ACADSB","ACAD9","ACAD8","ACAD11",
     "HADHA","HADHB","HADH","ECHS1","EHHADH","ACAA1","ACAA2","DECR1",
     "ECI1","ECI2","ETFA","ETFB","ETFDH","MLYCD","ACOX1","ACOX2",
-    "HSD17B4","SCP2","PPARA"),
+    "HSD17B4","SCP2","PPARA","HMGCS2","BDH1"),
 
+  # Mitochondrial oxitative phosphorylation
   mito_oxphos = c(
-    "PPARGC1A","PPARGC1B","PPARD","ESRRA","ESRRG","NRF1","GABPA",
-    "TFAM","TFB2M","POLG","MFN1","MFN2","OPA1","DNM1L",
-    "SDHA","SDHB","SDHC","SDHD","CYCS"),
+    "PPARGC1A","PPARGC1B","PPARD","ESRRA","ESRRG","NRF1","GABPA", "TFAM","TFB2M",
+    "POLG","MFN1","MFN2","OPA1","DNM1L","SDHA","SDHB","SDHC","SDHD","CYCS"),
 
   oxidative_stress = c(
     "NFE2L2","KEAP1","NQO1","HMOX1","GCLC","GCLM","GSR","GSTP1","GSTA1",
@@ -269,30 +268,44 @@ core_genes <- list(
     "SESN2","FOXO3"),
 
   aa_bcaa_turnover = c(
-    "BCAT1","BCAT2","BCKDHA","BCKDHB","DBT","DLD","BCKDK","PPM1K",
-    "HIBCH","HIBADH","IVD","MCCC1","MCCC2","AUH","HMGCL","PCCA","PCCB",
-    "MMUT","ALDH6A1",
+    "BCAT1","BCAT2","BCKDHA","BCKDHB","DBT","DLD","BCKDK","PPM1K", "HIBCH","HIBADH",
+    "IVD","MCCC1","MCCC2","AUH","HMGCL","PCCA","PCCB", "MMUT","ALDH6A1",
     "CPS1","OTC","ASS1","ASL","ARG1","NAGS","SLC25A15","SLC25A13",
     "GLUD1","GLS","GLS2","GLUL","GOT1","GOT2","GPT","GPT2"),
 
   gluconeogenesis = c(
     "PCK1","PCK2","G6PC1","SLC37A4","FBP1","FBP2","PC","MDH1","MDH2",
-    "PDK1","PDK2","PDK4","FOXO1"),
+    "PDK1","PDK2","PDK4","FOXO1","HNF4A","CREB3L3","NR3C1"),
 
-  glycogen_metabolism = c(
-    "GYS2","GYG1","GBE1","UGP2","PGM1","PYGL","AGL",
-    "PHKA2","PHKB","PHKG2","PPP1R3B","PPP1R3C"),
+  glycogen_synthesis = c("GYS2","GYG1","GBE1","UGP2","PGM1","PPP1R3B","PPP1R3C","PPP1R3G"),
 
-  glycolysis_fructose = c(
-    "GCK","HK1","HK2","GPI","PFKL","ALDOA","ALDOB","TPI1","GAPDH",
-    "PGK1","PGAM1","ENO1","PKLR","PKM","PDHA1","PDHB","DLAT",
-    "LDHA","LDHB","KHK","TKFC","SORD","AKR1B1","SLC2A2","SLC2A5"),
+  glycogenolysis = c("PYGL","AGL","PHKA2","PHKB","PHKG2"),
 
-  insulin_signaling = c(
+  glycolysis = c(
+    "GCK","GCKR","HK1","HK2","GPI","PFKL","ALDOA","TPI1","GAPDH", "PGK1","PGAM1",
+    "ENO1","PKLR","PKM","PDHA1","PDHB","DLAT", "LDHA","LDHB","SLC2A2"),
+
+  fructose_metabolism = c("KHK","ALDOB","TKFC","SORD","AKR1B1","SLC2A5"),
+
+  # De-novo lipogenesis
+  dnl = c(
+    "SREBF1","MLXIPL","NR1H3","INSIG1","SCAP","THRSP","MID1IP1",
+    "ACLY","ACSS2","ACACA","ACACB","FASN","ELOVL6","SCD","ME1"),
+
+  # Triglyceride synthesis/VLDL
+  tg_vldl = c("GPAM","AGPAT2","LPIN1","DGAT1","DGAT2","MTTP","APOB","PNPLA3","TM6SF2"),
+
+  ins_signaling = c(
     "INSR","IGF1R","IRS1","IRS2","PIK3R1","PIK3CA","PDPK1","AKT1","AKT2",
     "GSK3B","MTOR","RPTOR","RPS6KB1","EIF4EBP1","TSC1","TSC2",
-    "PRKAA1","PRKAA2","STK11","PTEN","PTPN1","MLXIPL","SREBF1")
+    "PRKAA1","PRKAA2","STK11","PTEN","PTPN1","PRKCE","SOCS3","TRIB3"),
+
+  ins_clearance = c("CEACAM1","IDE"),
+
+  # Glucagon/incretin receptors + cAMP/PKA/CREB + glucagon-driven amino-acid uptake
+  gluc_incr_signaling = c( "GCGR","GIPR","GLP1R","GLP2R","DPP4", "GNAS","PRKACA","CREB1","CRTC2", "SLC7A2","SLC38A4","SLC38A5")
 )
+stopifnot(!anyDuplicated(unlist(core_genes))) # each gene in exactly one category
 
 target_genes <- enframe(core_genes, name = "category", value = "symbol") |> 
   unnest(symbol) |> 
@@ -302,8 +315,7 @@ target_genes <- enframe(core_genes, name = "category", value = "symbol") |>
       distinct(),
     by = "symbol"
   ) |> 
-  inner_join(gene_ids, by = "ensgene") |> 
-  filter(ensembl_gene_id %in% genes_keep) # adds prevalence filter (non-zero expression in >= 50% of participants)
+  inner_join(gene_ids, by = "ensgene")
 
 # Spearman correlations: top-15 species x targeted genes
 target_gene_mat <- liver_mb |>
@@ -340,38 +352,25 @@ target_genes_heatmap <- cor_targeted |>
 # Build matrices
 rho_targeted <- cor_targeted |>
   filter(ensembl_gene_id %in% target_genes_heatmap$ensembl_gene_id) |>
-  dplyr::select(species, description, rho) |>
+  dplyr::select(species, symbol, rho) |>
   pivot_wider(names_from = species, values_from = rho) |>
-  column_to_rownames("description") |>
+  column_to_rownames("symbol") |>
   as.matrix()
 
 fdr_targeted <- cor_targeted |>
   filter(ensembl_gene_id %in% target_genes_heatmap$ensembl_gene_id) |>
-  dplyr::select(species, description, p_fdr) |>
+  dplyr::select(species, symbol, p_fdr) |>
   pivot_wider(names_from = species, values_from = p_fdr) |>
-  column_to_rownames("description") |>
+  column_to_rownames("symbol") |>
   as.matrix()
 
 # Gene categories
-gene_categories <- target_genes_heatmap$category[
-  match(rownames(rho_targeted), target_genes_heatmap$description)
-]
-
-category_cols <- setNames(
-  renoir_15[c(1, 5, 7, 10, 13, 2, 6, 12, 14)],
-  names(core_genes)
-)
-
-category_anno <- rowAnnotation(
-  Category = gene_categories,
-  col = list(Category = category_cols),
-  show_annotation_name = FALSE
-)
+gene_categories <- target_genes_heatmap$category[match(rownames(rho_targeted), target_genes_heatmap$symbol)]
+category_cols <- setNames(met.brewer("Renoir", n = length(core_genes)), names(core_genes))
+category_anno <- rowAnnotation(Category = gene_categories, col = list(Category = category_cols), show_annotation_name = FALSE)
 
 # Species labels
-species_labels <- top15_species_labels$species_label[
-  match(colnames(rho_targeted), top15_species_labels$species)
-]
+species_labels <- top15_species_labels$species_label[match(colnames(rho_targeted), top15_species_labels$species)]
 
 # Significance asterisks
 stars_targeted <- ifelse(
@@ -381,14 +380,10 @@ stars_targeted <- ifelse(
 )
 
 # Full targeted heatmap
-# Full targeted heatmap
 ht_targeted <- Heatmap(
   rho_targeted,
   name = "Spearman\nrho",
-  col = colorRamp2(
-    c(-0.3, 0, 0.3),
-    c(renoir_15[3], "white", renoir_15[11])
-  ),
+  col = colorRamp2(c(-0.3, 0, 0.3), c(renoir_15[3], "white", renoir_15[11])),
   left_annotation = category_anno,
   row_split = gene_categories,
   row_title = NULL,
@@ -398,23 +393,13 @@ ht_targeted <- Heatmap(
   cluster_columns = TRUE,
   column_labels = species_labels,
   column_names_rot = 45,
-  column_names_gp = gpar(
-    fontsize = 9,
-    fontface = "italic",
-    col = species_label_colors[species_labels]
-  ),
+  column_names_gp = gpar(fontsize = 9, fontface = "italic", col = species_label_colors[species_labels]),
   row_names_gp = gpar(fontsize = 8),
-  cell_fun = function(j, i, x, y, width, height, fill) {
-    grid.text(stars_targeted[i, j], x, y, gp = gpar(fontsize = 10))
-  }
+  cell_fun = function(j, i, x, y, width, height, fill) {grid.text(stars_targeted[i, j], x, y, gp = gpar(fontsize = 10))}
 )
 
 # Save
-pdf(
-  "results/graphs/RNAseq/liver_top15_species_targeted_genes_heatmap.pdf",
-  width = 13,
-  height = 8
-)
+pdf("results/graphs/RNAseq/liver_top15_species_targeted_genes_heatmap.pdf", width = 13, height = 8)
 draw(ht_targeted, newpage = FALSE)
 dev.off()
 
@@ -440,7 +425,7 @@ cor_plots <- pmap(
 
     ggplot(plot_data, aes(x = abundance, y = expression)) +
       geom_point(alpha = 0.7, size = 1.8) +
-      geom_smooth(method = "lm", se = FALSE, linewidth = 0.7, color = renoir_15[3]) +
+      geom_smooth(method = "lm", formula = y ~ x, se = FALSE, linewidth = 0.7, color = renoir_15[3]) +
       labs(
         title = description,
         subtitle = paste0(
@@ -448,7 +433,7 @@ cor_plots <- pmap(
           " | FDR = ", signif(p_fdr, 2)
         ),
         x = paste0(species_name, "\nlog10 relative abundance"),
-        y = "Liver gene expression"
+        y = "Liver gene expression (VST)"
       ) +
       theme_minimal(base_size = 10) +
       theme(
@@ -461,8 +446,8 @@ cor_plots <- pmap(
 )
 
 # Arrange individual cor plots
-cor_plots_arranged <- ggarrange(plotlist = cor_plots, ncol = 3, nrow = 4)
-ggsave("results/graphs/RNAseq/liver_targeted_significant_correlations.pdf", cor_plots_arranged,  width = 12, height = 12)
+cor_plots_arranged <- ggarrange(plotlist = cor_plots, ncol = 5, nrow = 4)
+ggsave("results/graphs/RNAseq/liver_targeted_significant_correlations.pdf", cor_plots_arranged, width = 12, height = 10)
 
 ## Compact targeted heatmap ##
 # Species with >=1 FDR-significant association x liver gene (targeted)
@@ -518,10 +503,6 @@ ht_targeted_compact <- Heatmap(
 )
 
 # Save
-pdf(
-  "results/graphs/RNAseq/liver_species_targeted_genes_heatmap_compact.pdf",
-  width = 11,
-  height = 8
-)
+pdf("results/graphs/RNAseq/liver_species_targeted_genes_heatmap_compact.pdf", width = 7, height = 8)
 draw(ht_targeted_compact, newpage = FALSE)
 dev.off()
