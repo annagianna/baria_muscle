@@ -506,3 +506,37 @@ ht_targeted_compact <- Heatmap(
 pdf("results/graphs/RNAseq/liver_species_targeted_genes_heatmap_compact.pdf", width = 7, height = 8)
 draw(ht_targeted_compact, newpage = FALSE)
 dev.off()
+
+sig_targeted |>
+  left_join(top15_species_labels |> dplyr::select(species, species_label, estimate_direction), by = "species") |>
+  dplyr::select(category, symbol, species_label, rho, p_fdr, estimate_direction, description) |>
+  arrange(species_label, category, p_fdr) |>
+  print(n = Inf)
+
+
+liver_idx <- c("fib4_v0", "fli_v0", "hsi_v0", "nfs_v0", "homa_ir_v0", "tyg_v0",
+               "hepatic_ir_index_v0", "hic_fasting_v0", "matsuda_index_v0")
+
+map_dfr(liver_idx, \(v) {
+  broom::tidy(cor.test(baria_muscle_wide[[v]], baria_muscle_wide$perc_change_ffmi_v4,
+                       method = "spearman", exact = FALSE)) |>
+    mutate(var = v, n = sum(complete.cases(baria_muscle_wide[[v]], baria_muscle_wide$perc_change_ffmi_v4)))
+}) |>
+  mutate(p_fdr = p.adjust(p.value, method = "BH")) |>
+  dplyr::select(var, n, rho = estimate, p.value, p_fdr)
+
+sp_liver <- baria_muscle_wide |>
+  mutate(id = as.numeric(as.character(id))) |>
+  dplyr::select(id, all_of(liver_idx)) |>
+  inner_join(top15_species_log10, by = "id")
+
+cor_sp_liver <- expand_grid(species = top15_species, var = liver_idx) |>
+  mutate(
+    test = map2(species, var, ~ cor.test(sp_liver[[.x]], sp_liver[[.y]], method = "spearman", exact = FALSE)),
+    rho = map_dbl(test, "estimate"),
+    p.value = map_dbl(test, "p.value")
+  ) |>
+  dplyr::select(-test) |>
+  mutate(p_fdr = p.adjust(p.value, method = "BH"))
+
+cor_sp_liver |> filter(p_fdr < 0.05) |> arrange(p_fdr)
