@@ -520,7 +520,3 @@ if (nrow(target_genes_heatmap) == 0) {
     print(n = Inf)
 
 }
-
-
-nrow(vfat_mb)
-ncol(gene_mat)
