@@ -24,7 +24,8 @@ predict FFMI and its post-surgical change, with each model's top-15 features
 confirmed by LM/LMM forest plots (`3a`–`3c`); correlation analyses relating
 the species most predictive of 1-year FFMI change to HUMAnN pathways, the
 serum metabolome, and baseline dietary macronutrient intake (`4a`–`4c`); and
-liver RNA-seq (`5a`), still under active development.
+liver and visceral adipose tissue RNA-seq (`5a`–`5b`), still under active
+development.
 
 ---
 
@@ -47,6 +48,7 @@ baria_muscle/
 │   ├── 4b_mb_metabolome_correlations.R     # Top-15 species x serum metabolome correlations
 │   ├── 4c_mb_diet_correlations.R           # Top-15 species x dietary macronutrient correlations
 │   ├── 5a_liver_rnaseq.R                   # Liver RNA-seq vs. top-15 species / FFMI change — in progress
+│   ├── 5b_vadipose_rnaseq.R                # Visceral adipose RNA-seq vs. top-15 species / FFMI change — in progress
 │   └── assets/
 │       ├── functions.R                     # Shared helper functions (plotting, XGBeast I/O, forest models)
 │       ├── XGBeast_new.py                  # Repeated-CV XGBoost + feature-importance framework
@@ -84,9 +86,9 @@ order, since each step reads the previous step's output under
 `results/mlmodels/`. `4a`, `4b` and `4c` are independent of one another but
 all three depend on `3b`'s output for the `perc_change_ffmi_v4`/`all` model,
 from which they take the top-15 species most predictive of 1-year FFMI
-change. `5a` additionally depends on `0c` (liver RNA-seq) and on `3c`'s
-forest-plot output for that same model, to colour species by the direction
-of their association with FFMI change.
+change. `5a` and `5b` additionally depend on `0c` (liver and visceral adipose RNA-seq,
+respectively) and on `3c`'s forest-plot output for that same model, to colour
+species by the direction of their association with FFMI change.
 
 ---
 
@@ -129,11 +131,15 @@ the raw counts):
 
 | File | Description |
 |------|-------------|
-| `BARIA_Liver_RNAseq.RDS` | Liver RNA-seq counts (one row per participant, `ENSG*` gene columns) |
-| `BARIA_Jejunum_RNAseq.RDS` | Jejunum RNA-seq counts |
-| `BARIA_vFat_RNAseq.RDS` | Visceral fat RNA-seq counts |
-| `BARIA_subFat_RNAseq.RDS` | Subcutaneous fat RNA-seq counts |
-| `BARIA_muscle_RNAseq_clean.RDS` | All four tissues combined, one row per participant × tissue |
+| `BARIA_Liver_RNAseq.RDS` | Liver RNA-seq raw counts (one row per participant, `ENSG*` gene columns) |
+| `BARIA_Jejunum_RNAseq.RDS` | Jejunum RNA-seq raw counts |
+| `BARIA_vFat_RNAseq.RDS` | Visceral fat RNA-seq raw counts |
+| `BARIA_subFat_RNAseq.RDS` | Subcutaneous fat RNA-seq raw counts |
+| `BARIA_Liver_RNAseq_vst.RDS` | Liver: DESeq2 size factor + VST-normalised expression, genes expression-filtered (≥10 normalised reads in ≥50% of participants) — used by `5a` |
+| `BARIA_Jejunum_RNAseq_vst.RDS` | Jejunum: DESeq2 size factor + VST-normalised expression, same filter |
+| `BARIA_vFat_RNAseq_vst.RDS` | Visceral fat: DESeq2 size factor + VST-normalised expression, same filter — used by `5b` |
+| `BARIA_subFat_RNAseq_vst.RDS` | Subcutaneous fat: DESeq2 size factor + VST-normalised expression, same filter |
+| `BARIA_muscle_RNAseq_clean.RDS` | All four tissues combined, one row per participant × tissue (raw counts) |
 
 Visit coding: `v0` = baseline (raw `V-1` / MetaPhlAn `Time_Point == "V-1"`),
 `v2`–`v5` = yearly follow-ups, `v6` = 5 years, `v7` = 10 years.
@@ -251,6 +257,50 @@ All formulas applied in `0a_datacleaning_clinical.R`. Superscripts refer to the
 
   (insulin is converted from pmol/L to µU/mL, 1 µU/mL = 6.945 pmol/L)
 
+### Insulin sensitivity, hepatic insulin resistance and insulin clearance
+
+Fasting values are the `0`-min mixed-meal test (MMT) samples. Unit conversions:
+glucose mmol/L × 18.016 → mg/dL; insulin pmol/L / 6.945 → µU/mL; C-peptide
+nmol/L × 1000 → pmol/L; triglycerides mmol/L × 88.57 → mg/dL. MMT-derived indices
+were originally validated on the OGTT and are applied here to the MMT; each is
+computed only where all required timepoints are available.
+
+- **Triglyceride–glucose index (TyG)** — `ln(TG_mg/dL × glucose_mg/dL / 2)` <sup>[14]</sup>
+- **Matsuda index** (whole-body insulin sensitivity; 0/30/60/90/120 min) <sup>[16]</sup>
+
+  ```
+  Matsuda = 10000 / √(G0 × I0 × mean(G0–120) × mean(I0–120))      [G mg/dL, I µU/mL]
+  ```
+- **Hepatic insulin resistance index** (0/10/20/30 min, trapezoidal AUC) <sup>[15]</sup>
+
+  ```
+  hepatic_ir_index = AUC0–30 glucose [mg/dL·min] × AUC0–30 insulin [µU/mL·min] / 10^6
+  ```
+- **Hepatic insulin clearance, fasting** — `C-peptide_pmol/L / insulin_pmol/L` (molar ratio) <sup>[17, 18]</sup>
+- **Hepatic insulin clearance, MMT** — ratio of trapezoidal AUC0–120 C-peptide to
+  AUC0–120 insulin (0/10/20/30/60/90/120 min) <sup>[18]</sup>
+
+### Liver non-invasive tests (NITs)
+
+- **FIB-4** — `age × AST / (platelets × √ALT)` <sup>[8]</sup>
+- **NAFLD fibrosis score (NFS)** <sup>[11]</sup>
+
+  ```
+  NFS = −1.675 + 0.037 × age + 0.094 × BMI + 1.13 × (IFG or diabetes)
+        + 0.99 × (AST/ALT) − 0.013 × platelets − 0.66 × albumin_g/dL
+  ```
+
+  IFG = fasting glucose ≥ 6.1 mmol/L; diabetes = `t2d_any`; albumin g/L / 10 → g/dL.
+- **Fatty liver index (FLI)** <sup>[12]</sup>
+
+  ```
+  FLI = 100 × e^y / (1 + e^y),
+  y   = 0.953 × ln(TG_mg/dL) + 0.139 × BMI + 0.718 × ln(GGT) + 0.053 × waist_cm − 15.745
+  ```
+- **Hepatic steatosis index (HSI)** — `8 × (ALT/AST) + BMI (+2 if female; +2 if diabetes)` <sup>[13]</sup>
+
+Units: AST, ALT, GGT in U/L; platelets ×10⁹/L; age in years at the visit.
+
 ### Time and trajectory
 
 - **Follow-up time** — `n_years_from_v0 = (date − date_baseline) / 365.25`
@@ -267,6 +317,9 @@ All formulas applied in `0a_datacleaning_clinical.R`. Superscripts refer to the
 
 - Numeric sentinel values **-99, -98, -97** are recoded to `NA`.
 - Placeholder dates **`01-01-2999`, `01-01-2997`, `01-01-2995`** are recoded to `NA`.
+- Platelet counts at `v4`/`v5` are stored under two complementary (non-overlapping)
+  field spellings in the raw export (`trombocytes` / `thrombocytes`); sentinel codes are
+  set to `NA` first, then the two are merged with `coalesce()`.
 
 ### Categorical recoding
 
@@ -290,6 +343,19 @@ follow the ADA Standards of Care <sup>[7]</sup>.
 - **Incident prediabetes / T2D** at follow-up (`new_*`) is defined only among
   participants normoglycaemic at baseline on all of: reported T2D, lab-based T2D,
   and lab-based prediabetes.
+- **T2D, any (`t2d_any`)** — used in the liver NITs. At baseline: reported T2D
+  (`t2d_v0`) **or** lab-based T2D. At follow-up: lab-based T2D **or** use of
+  glucose-lowering medication (the baseline report is not carried forward, so that
+  post-surgical remission is reflected).
+
+### Liver NIT categories
+
+- **FIB-4** (`fib4_cat`) — < 1.30 low, 1.30–2.67 indeterminate, > 2.67 high risk of
+  advanced fibrosis <sup>[9]</sup>. The age-adjusted low cut-off of 2.0 for ages ≥ 65
+  <sup>[10]</sup> is not applied.
+- **NFS** (`nfs_cat`) — < −1.455 low, −1.455 to 0.676 indeterminate, > 0.676 high <sup>[11]</sup>.
+- FLI (< 30 rules out, ≥ 60 rules in steatosis) <sup>[12]</sup> and HSI (< 30 rules out,
+  > 36 rules in) <sup>[13]</sup> are kept continuous.
 
 ### Low-muscle-mass cut-offs
 
@@ -450,15 +516,33 @@ forest-plot estimate for this model).
 
 ---
 
-## Liver RNA-seq (0c, 5a) — in progress
+## Tissue RNA-seq (0c, 5a–5b) — in progress
 
 `0c_datacleaning_rnaseq.R` cleans the raw kallisto count table into one
-processed dataset per tissue (see **Data**). `5a_liver_rnaseq.R` starts from
-the liver counts and the same top-15 species (`perc_change_ffmi_v4`/`all`
-model) used in the correlation analyses above, intending to relate hepatic
-gene expression to those species and/or to FFMI change; as of now it loads
-the data and builds the labelled/coloured top-15 species table but does not
-yet run or plot an analysis.
+VST-normalised dataset per tissue (DESeq2 size factors, an expression filter
+of ≥10 normalised reads in ≥50% of participants, variance-stabilising
+transformation; see **Data**). `5a_liver_rnaseq.R` and `5b_vadipose_rnaseq.R`
+each start from one tissue's VST-normalised expression and the same top-15
+species (`perc_change_ffmi_v4`/`all` model) used in the correlation analyses
+above, and run the same two-part analysis: an untargeted genome-wide Spearman
+screen (species × all expressed genes, BH-FDR per species, with the top 25
+annotated genes by |rho| among FDR-significant hits taken forward to a
+`ComplexHeatmap`) and a targeted screen restricted to a curated, tissue-specific
+gene panel (grouped into biological categories, each tested the same way, with
+individual correlation scatter plots for FDR-significant pairs). The liver
+panel covers hepatokines, fatty-acid oxidation, mitochondrial OXPHOS,
+oxidative stress, BCAA turnover, gluconeogenesis/glycogen metabolism,
+glycolysis, de-novo lipogenesis/VLDL, insulin signaling and glucagon/incretin
+signaling. The visceral adipose panel covers adipokines, adipogenesis,
+lipolysis/lipid storage, lipogenesis/fatty-acid uptake, mitochondrial OXPHOS,
+insulin signaling, macrophage/inflammation, fibrosis/ECM, oxidative stress,
+BCAA turnover and glycolysis — browning/thermogenesis markers were
+deliberately left out, since omental/mesenteric visceral fat has minimal
+beiging potential in adult humans (browning localises mainly to subcutaneous
+and supraclavicular/cervical/perirenal depots). Both scripts guard against
+the case where no gene (untargeted) or no targeted gene reaches FDR < 0.05 for
+any species: rather than erroring, they skip the corresponding heatmap(s) and
+print the closest-to-significant associations by raw p-value instead.
 
 ---
 
@@ -469,18 +553,20 @@ pixi tasks for every script plus grouped tasks (`datacleaning`, `mb`, `ml`,
 `mb-correlations`, `all`) that chain the steps within each stage — run e.g.
 `pixi run ml` or `pixi run datacleaning-clinical`; see `pixi.toml` for the
 full list. `liver-rnaseq` (`5a`) is defined but excluded from
-`all`, since that script is still in progress. R packages loaded across
-the scripts include: `tidyverse`, `phyloseq`, `vegan`,
+`all`, since that script is still in progress; `5b_vadipose_rnaseq.R` has no
+pixi task yet and is run directly (`Rscript scripts/5b_vadipose_rnaseq.R`). R
+packages loaded across the scripts include: `tidyverse`, `phyloseq`, `vegan`,
 `tableone`, `gt`, `ggpubr`, `patchwork`, `ggthemes`, `ggsci`, `ggrepel`,
 `ape`, `grid`, `MetBrewer`, `lmerTest`, `broom` / `broom.mixed`,
-`ComplexHeatmap` / `circlize`, and (`5a`) `biomaRt`. The ML pipeline (`3b`)
-additionally uses Python: `xgboost`, `scikit-learn`, `numpy`, `pandas`,
-`matplotlib`, `seaborn`, `shap`, `tqdm`.
+`ComplexHeatmap` / `circlize`, and (`5a`, `5b`) `annotables` and `DESeq2`
+(the latter via `0c`). The ML pipeline (`3b`) additionally uses Python:
+`xgboost`, `scikit-learn`, `numpy`, `pandas`, `matplotlib`, `seaborn`, `shap`,
+`tqdm`.
 
-> **Note:** `ape`, `ggsci`, `ggrepel` and `biomaRt` are not currently pinned
-> in `pixi.toml` — install them separately until the manifest is updated.
-> `ComplexHeatmap`, `circlize` and `gt` *are* already pinned, unlike in an
-> earlier version of this README.
+> **Note:** `ggrepel` and `annotables` are not currently pinned in
+> `pixi.toml` — install them separately until the manifest is updated.
+> `ComplexHeatmap`, `circlize`, `gt`, `ape`, `ggsci` and `DESeq2` *are*
+> already pinned, unlike in an earlier version of this README.
 
 Expected working-directory layout (script paths are relative to the repo root):
 
@@ -522,3 +608,38 @@ before writing to them, so `results/` does not need to exist beforehand.
    doi:10.1373/clinchem.2003.024802.
 7. American Diabetes Association. Standards of Care in Diabetes — 2026.
    *Diabetes Care.* 2026;49(Suppl 1). (Diagnostic thresholds for T2D and prediabetes.)
+8. Sterling RK, Lissen E, Clumeck N, et al. Development of a simple noninvasive index
+   to predict significant fibrosis in patients with HIV/HCV coinfection. *Hepatology.*
+   2006;43(6):1317–1325. doi:10.1002/hep.21178.
+9. Shah AG, Lydecker A, Murray K, et al. Comparison of noninvasive markers of fibrosis
+   in patients with nonalcoholic fatty liver disease. *Clin Gastroenterol Hepatol.*
+   2009;7(10):1104–1112. doi:10.1016/j.cgh.2009.05.033.
+10. McPherson S, Hardy T, Dufour JF, et al. Age as a confounding factor for the
+    accurate non-invasive diagnosis of advanced NAFLD fibrosis. *Am J Gastroenterol.*
+    2017;112(5):740–751. doi:10.1038/ajg.2016.453.
+11. Angulo P, Hui JM, Marchesini G, et al. The NAFLD fibrosis score: a noninvasive
+    system that identifies liver fibrosis in patients with NAFLD. *Hepatology.*
+    2007;45(4):846–854. doi:10.1002/hep.21496.
+12. Bedogni G, Bellentani S, Miglioli L, et al. The Fatty Liver Index: a simple and
+    accurate predictor of hepatic steatosis in the general population. *BMC
+    Gastroenterol.* 2006;6:33. doi:10.1186/1471-230X-6-33.
+13. Lee JH, Kim D, Kim HJ, et al. Hepatic steatosis index: a simple screening tool
+    reflecting nonalcoholic fatty liver disease. *Dig Liver Dis.* 2010;42(7):503–508.
+    doi:10.1016/j.dld.2009.08.002.
+14. Simental-Mendía LE, Rodríguez-Morán M, Guerrero-Romero F. The product of fasting
+    glucose and triglycerides as surrogate for identifying insulin resistance in
+    apparently healthy subjects. *Metab Syndr Relat Disord.* 2008;6(4):299–304.
+    doi:10.1089/met.2008.0034.
+15. Abdul-Ghani MA, Matsuda M, Balas B, DeFronzo RA. Muscle and liver insulin
+    resistance indexes derived from the oral glucose tolerance test. *Diabetes Care.*
+    2007;30(1):89–94. doi:10.2337/dc06-1519.
+16. Matsuda M, DeFronzo RA. Insulin sensitivity indices obtained from oral glucose
+    tolerance testing: comparison with the euglycemic insulin clamp. *Diabetes Care.*
+    1999;22(9):1462–1470. doi:10.2337/diacare.22.9.1462.
+17. Matsubayashi Y, Yoshida A, Suganami H, et al. Role of fatty liver in the
+    association between obesity and reduced hepatic insulin clearance. *Diabetes
+    Metab.* 2018;44(2):135–142. doi:10.1016/j.diabet.2017.12.003.
+18. Tricò D, Galderisi A, Mari A, et al. Intrahepatic fat, irrespective of ethnicity,
+    is associated with reduced endogenous insulin clearance and hepatic insulin
+    resistance in obese youths. *Diabetes Obes Metab.* 2020;22(9):1628–1638.
+    doi:10.1111/dom.14076.
