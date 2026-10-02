@@ -10,6 +10,7 @@ library(MetBrewer)
 library(annotables)
 library(ggpubr)
 library(broom)
+library(DESeq2)
 source("scripts/assets/functions.R")
 
 dir.create("results/graphs/RNAseq", recursive = TRUE, showWarnings = FALSE)
@@ -503,7 +504,6 @@ pdf("results/graphs/RNAseq/liver_species_targeted_genes_heatmap_compact.pdf", wi
 draw(ht_targeted_compact, newpage = FALSE)
 dev.off()
 
-#### Metabolomics ####
 # Helper function: Spearman correlations for every x–y pair, BH-correction within the block
 cor_block <- function(df, x_vars, y_vars) {
   expand_grid(x = x_vars, y = y_vars) |>
@@ -619,3 +619,48 @@ ht_metab <- Heatmap(
 pdf("results/graphs/RNAseq/liver_genes_metabolites_heatmap.pdf", width = 9, height = 12)
 draw(ht_metab)
 dev.off()
+
+#### DE: %FFMI-change groups (1y) ####
+coldata <- baria_muscle_wide |>
+  mutate(id = as.numeric(id)) |>
+  filter(
+    id %in% liver_rnaseq$id,
+    !is.na(perc_change_ffmi_v4_group), !is.na(age_v0), !is.na(fmi_v0) # DESeq2 can't handle NAs
+  ) |>
+  mutate(
+    ffmi_group_1y = factor(
+      if_else(perc_change_ffmi_v4_group == "high", "high_loss", "moderate_low_loss"),
+      levels = c("moderate_low_loss", "high_loss") # moderate_low_loss is the reference
+    ),
+    age_v0_z = as.numeric(scale(age_v0)),  # centre on the final sample set
+    fmi_v0_z = as.numeric(scale(fmi_v0))
+  ) |>
+  arrange(id) |>  # same order as count_data
+  select(id, sex, age_v0_z, fmi_v0_z, ffmi_group_1y)
+
+count_data <- liver_rnaseq |> 
+  filter(id %in% coldata$id) |> 
+  arrange(id) |> # same sample order as coldata
+  column_to_rownames(var = "id") |> 
+  dplyr::select(starts_with("ENSG")) |> 
+  as.matrix() |> 
+  t() |> 
+  round() # raw counts as integers
+stopifnot(identical(colnames(count_data), as.character(coldata$id)))
+
+# Create DESeq2 dataset
+dds <- DESeqDataSetFromMatrix(
+  countData = count_data,
+  colData = coldata,
+  design =  ~ sex + age_v0_z + fmi_v0_z + ffmi_group_1y
+)
+
+# Pre-filter: >= 10 normalised counts in >= 50% of samples (same filter as in 0c_datacleaning_rnaseq.R)
+dds <- estimateSizeFactors(dds)
+keep <- rowMeans(counts(dds, normalized = TRUE) >= 10) >= 0.5
+dds <- dds[keep, ]
+nrow(dds)  # n of genes tested
+
+# DE analysis
+dds <- DESeq(dds)
+resultsNames(dds)  # exact coefficient name for the group effect
