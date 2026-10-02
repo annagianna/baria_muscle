@@ -18,7 +18,7 @@ dir.create("results/graphs/RNAseq", recursive = TRUE, showWarnings = FALSE)
 renoir_15 <- met.brewer("Renoir", n = 15)
 
 # Data
-liver_rnaseq <- readRDS("data/processed_data/BARIA_Liver_RNAseq.RDS") # raw counts for
+liver_rnaseq <- readRDS("data/processed_data/BARIA_Liver_RNAseq.RDS") # raw counts for DESeq2
 liver_rnaseq_vst <- readRDS("data/processed_data/BARIA_Liver_RNAseq_vst.RDS") # VST normalized
 baria_muscle_wide <- readRDS("data/processed_data/BARIA_muscle_wide.RDS")
 baria_mb_v0 <- readRDS("data/processed_data/BARIA_mb_baseline.RDS")
@@ -504,7 +504,7 @@ ht_targeted_compact <- Heatmap(
   row_title = NULL,
   row_names_side = "left",
   row_dend_side = "right",
-  row_labels = gene_label(rownames(rho_targeted)),
+  row_labels = gene_label(rownames(rho_targeted_compact)),
   row_names_max_width = max_text_width(gene_label(rownames(rho_targeted_compact)), gp = gpar(fontsize = 8)),
   cluster_rows = TRUE,
   cluster_columns = TRUE,
