@@ -503,7 +503,7 @@ pdf("results/graphs/RNAseq/liver_species_targeted_genes_heatmap_compact.pdf", wi
 draw(ht_targeted_compact, newpage = FALSE)
 dev.off()
 
-#### Liver integration: FFMI, metabolites ####
+#### Metabolomics ####
 # Helper function: Spearman correlations for every x–y pair, BH-correction within the block
 cor_block <- function(df, x_vars, y_vars) {
   expand_grid(x = x_vars, y = y_vars) |>
@@ -532,7 +532,11 @@ liver_df <- liver_mb |>
   rename_with(~ sig_genes$symbol[match(.x, sig_genes$ensembl_gene_id)], starts_with("ENSG")) |>
   left_join(clin, by = "id")
 
-#### Liver RNAseq x plasma metabolites ####
+#### Liver RNA seq x %FFMI change 1y ####
+cor_genes_ffmi <- cor_block(liver_df, sig_genes$symbol, "perc_change_ffmi_v4")
+cor_genes_ffmi
+
+#### Metabolomics ####
 # Prep metab data
 metab_df <- as(otu_table(metab), "matrix") |> # samples x metabolites
   as_tibble(rownames = "sample") |>
@@ -575,7 +579,7 @@ pathway_colors <- c(
   "Xenobiotics"                        = "#814956",
   "Partially Characterized Molecules"  = "#6A4F7E"
 )
-tax <- as(tax_table(metab), "matrix")
+metab_tax <- as(tax_table(metab), "matrix")
 
 # Figure 3: liver genes × top metabolites heatmap (shows 30 metabolites with the strongest signif associations)
 top_metabs <- cor_genes_metab |>
@@ -588,15 +592,19 @@ top_metabs <- cor_genes_metab |>
 metab_sub   <- cor_genes_metab |> filter(y %in% top_metabs) |> rename(x = y, y = x)  # metabolites as rows
 rho_metab   <- to_matrix(metab_sub, "rho")
 fdr_metab   <- to_matrix(metab_sub, "p_fdr")[rownames(rho_metab), colnames(rho_metab)]
-
 metab_gene_categories <- target_genes$category[match(colnames(rho_metab), target_genes$symbol)]
 
 ht_metab <- Heatmap(
   rho_metab,
   name = "Spearman\nrho",
   col = colorRamp2(c(-0.4, 0, 0.4), c(renoir_15[3], "white", renoir_15[11])),
-  top_annotation = HeatmapAnnotation(Category = metab_gene_categories,
-                                     col = list(Category = category_cols), show_annotation_name = FALSE),
+  top_annotation = HeatmapAnnotation(Category = metab_gene_categories, col = list(Category = category_cols), show_annotation_name = FALSE),
+  left_annotation = rowAnnotation(
+    `Super pathway` = metab_tax[rownames(rho_metab), "SUPER_PATHWAY"],
+    col = list(`Super pathway` = pathway_colors),
+    show_annotation_name = TRUE,
+    annotation_name_gp = gpar(fontsize = 8)
+  ),
   row_labels = str_trunc(rownames(rho_metab), 45),
   row_names_side = "left",
   row_dend_side = "right",
@@ -606,7 +614,7 @@ ht_metab <- Heatmap(
   row_names_gp = gpar(fontsize = 8),
   rect_gp = gpar(col = "white", lwd = 0.7),
   cell_fun = function(j, i, x, y, width, height, fill) grid.text(stars(fdr_metab[i, j]), x, y, gp = gpar(fontsize = 8))
-  )
+)
 
 pdf("results/graphs/RNAseq/liver_genes_metabolites_heatmap.pdf", width = 9, height = 12)
 draw(ht_metab)
