@@ -18,7 +18,8 @@ dir.create("results/graphs/RNAseq", recursive = TRUE, showWarnings = FALSE)
 renoir_15 <- met.brewer("Renoir", n = 15)
 
 # Data
-liver_rnaseq <- readRDS("data/processed_data/BARIA_Liver_RNAseq_vst.RDS") # VST normalized
+liver_rnaseq <- readRDS("data/processed_data/BARIA_Liver_RNAseq.RDS") # raw counts for
+liver_rnaseq_vst <- readRDS("data/processed_data/BARIA_Liver_RNAseq_vst.RDS") # VST normalized
 baria_muscle_wide <- readRDS("data/processed_data/BARIA_muscle_wide.RDS")
 baria_mb_v0 <- readRDS("data/processed_data/BARIA_mb_baseline.RDS")
 forest_perc_change_ffmi_v4 <- read.csv("results/mlmodels/perc_change_ffmi_v4/all/forest_results_top15.csv")
@@ -57,7 +58,7 @@ top15_species_log10 <- top15_species_v0 |>
 
 # Map gene ids to their names
 gene_ids <- tibble(
-  ensembl_gene_id = liver_rnaseq |> 
+  ensembl_gene_id = liver_rnaseq_vst |> 
     dplyr::select(starts_with("ENSG")) |> 
     colnames()
 ) |>
@@ -66,12 +67,28 @@ gene_ids <- tibble(
 # Gene annotations
 gene_annotations <- grch38 |>
   filter(ensgene %in% gene_ids$ensgene) |>
-  dplyr::select(ensgene, symbol, biotype) |>
+  dplyr::select(ensgene, symbol, biotype, description) |>
   distinct()
 
-### Liver RNA-seq x top15 species ###
+# Display labels for heatmaps: "SYMBOL – short description" / only symbol / only description
+gene_label <- function(symbols, type = c("both", "symbol", "description"), max_char = 45) {
+
+  type <- match.arg(type)
+
+  desc <- gene_annotations$description[match(symbols, gene_annotations$symbol)] |>
+    str_remove("\\s*\\[Source.*\\]$") |> # grch38 descriptions can carry a "[Source:...]" suffix
+    str_trunc(max_char) |>
+    coalesce(symbols) # fall back to symbol if no description
+
+  switch(type,
+         both = paste0(symbols, " – ", desc),
+         symbol = symbols,
+         description = desc)
+}
+
+#### Liver RNA-seq x top15 species ####
 # Top15 species x liver RNA seq
-liver_mb <- liver_rnaseq |>
+liver_mb <- liver_rnaseq_vst |>
   mutate(id = as.numeric(id)) |> 
   inner_join(top15_species_log10, by = "id")
 
@@ -82,13 +99,13 @@ size_factor_qc <- map_dfr(top15_species,
   dplyr::select(species, rho = estimate, p.value)
 size_factor_qc
 
-# Genes in the normalised file (already expression-filtered in cleaning script 0c)
-liver_genes <- liver_rnaseq |> 
+# Genes in the (VST-)normalized file (already expression-filtered in cleaning script 0c)
+liver_genes <- liver_rnaseq_vst |> 
   dplyr::select(starts_with("ENSG")) |>
   colnames()
 
-#### Untargeted ####
-### Spearman correlations top15 species ###
+### Untargeted ###
+# Spearman correlations top15 species
 # Align species order
 species_mat <- liver_mb |>
   dplyr::select(all_of(top15_species)) |>
@@ -127,7 +144,7 @@ genes_heatmap <- cor_results |>
   filter(min_fdr < 0.05) |>
   mutate(ensgene = str_remove(ensembl_gene_id, "\\.\\d+$")) |>
   left_join(
-    gene_annotations |> distinct(ensgene, .keep_all = TRUE) |> dplyr::select(ensgene, symbol),
+    gene_annotations |> distinct(ensgene, .keep_all = TRUE) |> dplyr::select(ensgene, symbol, description),
     by = "ensgene"
   ) |>
   filter(!is.na(symbol), symbol != "") |> # annotated genes only, selected after FDR correction
@@ -180,6 +197,9 @@ ht <- Heatmap(
   cluster_columns = TRUE,
   row_dend_side = "right",
   row_names_side = "left",
+  row_labels = gene_label(rownames(rho_mat_t)),
+  row_names_gp = gpar(fontsize = 9),
+  row_names_max_width = max_text_width(gene_label(rownames(rho_mat_t)), gp = gpar(fontsize = 9)),
   column_names_rot = 45,
   column_names_gp = gpar(
     fontsize = 10,
@@ -217,6 +237,9 @@ ht_compact <- Heatmap(
   cluster_columns = TRUE,
   row_dend_side = "right",
   row_names_side = "left",
+  row_labels = gene_label(rownames(rho_mat_compact)),
+  row_names_gp = gpar(fontsize = 9),
+  row_names_max_width = max_text_width(gene_label(rownames(rho_mat_compact)), gp = gpar(fontsize = 9)),
   column_names_rot = 45,
   column_names_gp = gpar(
     fontsize = 10,
@@ -310,21 +333,8 @@ stopifnot(!anyDuplicated(unlist(core_genes))) # each gene in exactly one categor
 
 target_genes <- enframe(core_genes, name = "category", value = "symbol") |> 
   unnest(symbol) |> 
-  left_join(
-    grch38 |> 
-      dplyr::select(symbol, ensgene, description) |> 
-      distinct(),
-    by = "symbol"
-  ) |> 
+  left_join(gene_annotations, by = "symbol") |> 
   inner_join(gene_ids, by = "ensgene")
-
-# Display label: SYMBOL - short description (grch38 descriptions can carry a "[Source:...]" suffix)
-gene_desc_label <- function(symbols, max_char = 40) {
-  desc <- target_genes$description[match(symbols, target_genes$symbol)] |>
-    str_remove("\\s*\\[Source.*\\]$") |>
-    str_trunc(max_char)
-  paste0(symbols, " – ", desc)
-}
 
 # Spearman correlations: top-15 species x targeted genes
 target_gene_mat <- liver_mb |>
@@ -400,7 +410,8 @@ ht_targeted <- Heatmap(
   row_dend_side = "right",
   cluster_rows = TRUE,
   cluster_columns = TRUE,
-  row_labels = gene_desc_label(rownames(rho_targeted)),
+  row_labels = gene_label(rownames(rho_targeted)),
+  row_names_max_width = max_text_width(gene_label(rownames(rho_targeted)), gp = gpar(fontsize = 8)),
   column_labels = species_labels,
   column_names_rot = 45,
   column_names_gp = gpar(fontsize = 9, fontface = "italic", col = species_label_colors[species_labels]),
@@ -437,7 +448,7 @@ cor_plots <- pmap(
       geom_point(alpha = 0.7, size = 1.8) +
       geom_smooth(method = "lm", formula = y ~ x, se = FALSE, linewidth = 0.7, color = renoir_15[3]) +
       labs(
-        title = description,
+        title = gene_label(symbol),
         subtitle = paste0(
           "Spearman rho = ", round(rho, 2),
           " | FDR = ", signif(p_fdr, 2)
@@ -493,9 +504,10 @@ ht_targeted_compact <- Heatmap(
   row_title = NULL,
   row_names_side = "left",
   row_dend_side = "right",
+  row_labels = gene_label(rownames(rho_targeted)),
+  row_names_max_width = max_text_width(gene_label(rownames(rho_targeted_compact)), gp = gpar(fontsize = 8)),
   cluster_rows = TRUE,
   cluster_columns = TRUE,
-  row_labels = gene_desc_label(rownames(rho_targeted_compact)),
   column_labels = species_labels_compact,
   column_names_rot = 45,
   column_names_gp = gpar(
@@ -547,11 +559,6 @@ liver_df <- liver_mb |>
   rename_with(~ sig_genes$symbol[match(.x, sig_genes$ensembl_gene_id)], starts_with("ENSG")) |>
   left_join(clin, by = "id")
 
-## Liver genes -> %FFMI change at 1y (outcome)
-cor_genes_ffmi <- cor_block(liver_df, sig_genes$symbol, "perc_change_ffmi_v4")
-cor_genes_ffmi # no signif associations after FDR
-
-
 #### Liver RNAseq x plasma metabolites ####
 # Prep metab data
 metab_df <- as(otu_table(metab), "matrix") |> # samples x metabolites
@@ -571,7 +578,6 @@ cor_genes_metab |> filter(p_fdr < 0.05) |> slice_head(n = 30)
 metab_hits <- cor_genes_metab |> filter(p_fdr < 0.05) |> distinct(y) |> pull(y)
 cor_metab_ffmi <- cor_block(liver_metab_df, metab_hits, "perc_change_ffmi_v4")
 cor_metab_ffmi |> slice_head(n = 20)
-
 
 ## Plots ##
 # Helper functions
@@ -610,7 +616,8 @@ ht_metab <- Heatmap(
   row_labels = str_trunc(rownames(rho_metab), 45),
   row_names_side = "left",
   row_dend_side = "right",
-  column_labels = gene_desc_label(colnames(rho_metab)),
+  column_labels = gene_label(colnames(rho_metab)),
+  column_names_max_height = max_text_width(gene_label(colnames(rho_metab))),
   column_names_rot = 45,
   row_names_gp = gpar(fontsize = 8),
   rect_gp = gpar(col = "white", lwd = 0.7),
