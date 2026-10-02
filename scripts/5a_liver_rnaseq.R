@@ -17,6 +17,9 @@ dir.create("results/graphs/RNAseq", recursive = TRUE, showWarnings = FALSE)
 # Theme
 renoir_15 <- met.brewer("Renoir", n = 15)
 
+# Significance asterisks based on p_fdr
+stars <- function(p_fdr) ifelse(p_fdr < 0.001, "***", ifelse(p_fdr < 0.01, "**", ifelse(p_fdr < 0.05, "*", "")))
+
 # Data
 liver_rnaseq <- readRDS("data/processed_data/BARIA_Liver_RNAseq.RDS") # raw counts for DESeq2
 liver_rnaseq_vst <- readRDS("data/processed_data/BARIA_Liver_RNAseq_vst.RDS") # VST normalized
@@ -206,15 +209,7 @@ ht <- Heatmap(
     fontface = "italic",
     col = species_label_colors[colnames(rho_mat_t)]
   ),
-  cell_fun = function(j, i, x, y, width, height, fill) {
-    if (fdr_mat_t[i, j] < 0.001) {
-      grid.text("***", x, y)
-    } else if (fdr_mat_t[i, j] < 0.01) {
-      grid.text("**", x, y)
-    } else if (fdr_mat_t[i, j] < 0.05) {
-      grid.text("*", x, y)
-    }
-  }
+  cell_fun = function(j, i, x, y, width, height, fill) {grid.text(stars(fdr_mat_t[i, j]), x, y)}
 )
 
 pdf("results/graphs/RNAseq/liver_top15_species_genes_heatmap.pdf", width = 10, height = 8)
@@ -247,15 +242,7 @@ ht_compact <- Heatmap(
     col = species_label_colors[colnames(rho_mat_compact)]
   ),
   rect_gp = gpar(col = "white", lwd = 0.7),
-  cell_fun = function(j, i, x, y, width, height, fill) {
-    if (fdr_mat_compact[i, j] < 0.001) {
-      grid.text("***", x, y)
-    } else if (fdr_mat_compact[i, j] < 0.01) {
-      grid.text("**", x, y)
-    } else if (fdr_mat_compact[i, j] < 0.05) {
-      grid.text("*", x, y)
-    }
-  }
+  cell_fun = function(j, i, x, y, width, height, fill) {grid.text(stars(fdr_mat_compact[i, j]), x, y)}
 )
 
 # Save
@@ -385,18 +372,11 @@ fdr_targeted <- cor_targeted |>
 
 # Gene categories
 gene_categories <- target_genes_heatmap$category[match(rownames(rho_targeted), target_genes_heatmap$symbol)]
-category_cols <- setNames(met.brewer("Renoir", n = length(core_genes)), names(core_genes))
+category_cols <- setNames(met.brewer("Renoir", n = length(unique(gene_categories))), unique(gene_categories))
 category_anno <- rowAnnotation(Category = gene_categories, col = list(Category = category_cols), show_annotation_name = FALSE)
 
 # Species labels
 species_labels <- top15_species_labels$species_label[match(colnames(rho_targeted), top15_species_labels$species)]
-
-# Significance asterisks
-stars_targeted <- ifelse(
-  fdr_targeted < 0.001, "***",
-  ifelse(fdr_targeted < 0.01, "**",
-         ifelse(fdr_targeted < 0.05, "*", ""))
-)
 
 # Full targeted heatmap
 ht_targeted <- Heatmap(
@@ -416,7 +396,7 @@ ht_targeted <- Heatmap(
   column_names_rot = 45,
   column_names_gp = gpar(fontsize = 9, fontface = "italic", col = species_label_colors[species_labels]),
   row_names_gp = gpar(fontsize = 8),
-  cell_fun = function(j, i, x, y, width, height, fill) {grid.text(stars_targeted[i, j], x, y, gp = gpar(fontsize = 10))}
+  cell_fun = function(j, i, x, y, width, height, fill) {grid.text(stars(fdr_targeted[i, j]), x, y, gp = gpar(fontsize = 10))}
 )
 
 # Save
@@ -484,13 +464,6 @@ species_labels_compact <- top15_species_labels$species_label[
   match(colnames(rho_targeted_compact), top15_species_labels$species)
 ]
 
-# Significance asterisks
-stars_targeted_compact <- ifelse(
-  fdr_targeted_compact < 0.001, "***",
-  ifelse(fdr_targeted_compact < 0.01, "**",
-         ifelse(fdr_targeted_compact < 0.05, "*", ""))
-)
-
 # Heatmap
 ht_targeted_compact <- Heatmap(
   rho_targeted_compact,
@@ -518,7 +491,7 @@ ht_targeted_compact <- Heatmap(
   row_names_gp = gpar(fontsize = 8),
   cell_fun = function(j, i, x, y, width, height, fill) {
     grid.text(
-      stars_targeted_compact[i, j],
+      stars(fdr_targeted_compact[i, j]),
       x, y,
       gp = gpar(fontsize = 10)
     )
@@ -530,7 +503,7 @@ pdf("results/graphs/RNAseq/liver_species_targeted_genes_heatmap_compact.pdf", wi
 draw(ht_targeted_compact, newpage = FALSE)
 dev.off()
 
-#### Liver integration: FFMI, indices, metabolites ####
+#### Liver integration: FFMI, metabolites ####
 # Helper function: Spearman correlations for every x–y pair, BH-correction within the block
 cor_block <- function(df, x_vars, y_vars) {
   expand_grid(x = x_vars, y = y_vars) |>
@@ -590,7 +563,19 @@ to_matrix <- function(df, value) {
     as.matrix()
 }
 
-to_stars <- function(fdr) ifelse(fdr < 0.001, "***", ifelse(fdr < 0.01, "**", ifelse(fdr < 0.05, "*", "")))
+# Super-pathway strip: same as in 4b_mb_metabolome_correlations.R
+pathway_colors <- c(
+  "Amino Acid"                         = "#3C9189",
+  "Carbohydrate"                       = "#765135",
+  "Cofactors and Vitamins"             = "#385C7E",
+  "Energy"                             = "#3E6330",
+  "Lipid"                              = "#CCA38D",
+  "Nucleotide"                         = "#8EAFCF",
+  "Peptide"                            = "#96B485",
+  "Xenobiotics"                        = "#814956",
+  "Partially Characterized Molecules"  = "#6A4F7E"
+)
+tax <- as(tax_table(metab), "matrix")
 
 # Figure 3: liver genes × top metabolites heatmap (shows 30 metabolites with the strongest signif associations)
 top_metabs <- cor_genes_metab |>
@@ -603,7 +588,6 @@ top_metabs <- cor_genes_metab |>
 metab_sub   <- cor_genes_metab |> filter(y %in% top_metabs) |> rename(x = y, y = x)  # metabolites as rows
 rho_metab   <- to_matrix(metab_sub, "rho")
 fdr_metab   <- to_matrix(metab_sub, "p_fdr")[rownames(rho_metab), colnames(rho_metab)]
-stars_metab <- to_stars(fdr_metab)
 
 metab_gene_categories <- target_genes$category[match(colnames(rho_metab), target_genes$symbol)]
 
@@ -621,8 +605,8 @@ ht_metab <- Heatmap(
   column_names_rot = 45,
   row_names_gp = gpar(fontsize = 8),
   rect_gp = gpar(col = "white", lwd = 0.7),
-  cell_fun = function(j, i, x, y, width, height, fill) grid.text(stars_metab[i, j], x, y, gp = gpar(fontsize = 8))
-)
+  cell_fun = function(j, i, x, y, width, height, fill) grid.text(stars(fdr_metab[i, j]), x, y, gp = gpar(fontsize = 8))
+  )
 
 pdf("results/graphs/RNAseq/liver_genes_metabolites_heatmap.pdf", width = 9, height = 12)
 draw(ht_metab)
