@@ -22,6 +22,7 @@ liver_rnaseq <- readRDS("data/processed_data/BARIA_Liver_RNAseq_vst.RDS") # VST 
 baria_muscle_wide <- readRDS("data/processed_data/BARIA_muscle_wide.RDS")
 baria_mb_v0 <- readRDS("data/processed_data/BARIA_mb_baseline.RDS")
 forest_perc_change_ffmi_v4 <- read.csv("results/mlmodels/perc_change_ffmi_v4/all/forest_results_top15.csv")
+metab <- readRDS("data/processed_data/BARIA_metabolon_clean.RDS")
 
 # Prep data
 ## Top15 species
@@ -317,6 +318,14 @@ target_genes <- enframe(core_genes, name = "category", value = "symbol") |>
   ) |> 
   inner_join(gene_ids, by = "ensgene")
 
+# Display label: SYMBOL - short description (grch38 descriptions can carry a "[Source:...]" suffix)
+gene_desc_label <- function(symbols, max_char = 40) {
+  desc <- target_genes$description[match(symbols, target_genes$symbol)] |>
+    str_remove("\\s*\\[Source.*\\]$") |>
+    str_trunc(max_char)
+  paste0(symbols, " – ", desc)
+}
+
 # Spearman correlations: top-15 species x targeted genes
 target_gene_mat <- liver_mb |>
   dplyr::select(all_of(target_genes$ensembl_gene_id)) |>
@@ -391,6 +400,7 @@ ht_targeted <- Heatmap(
   row_dend_side = "right",
   cluster_rows = TRUE,
   cluster_columns = TRUE,
+  row_labels = gene_desc_label(rownames(rho_targeted)),
   column_labels = species_labels,
   column_names_rot = 45,
   column_names_gp = gpar(fontsize = 9, fontface = "italic", col = species_label_colors[species_labels]),
@@ -399,7 +409,7 @@ ht_targeted <- Heatmap(
 )
 
 # Save
-pdf("results/graphs/RNAseq/liver_top15_species_targeted_genes_heatmap.pdf", width = 13, height = 8)
+pdf("results/graphs/RNAseq/liver_top15_species_targeted_genes_heatmap.pdf", width = 15, height = 8)
 draw(ht_targeted, newpage = FALSE)
 dev.off()
 
@@ -485,6 +495,7 @@ ht_targeted_compact <- Heatmap(
   row_dend_side = "right",
   cluster_rows = TRUE,
   cluster_columns = TRUE,
+  row_labels = gene_desc_label(rownames(rho_targeted_compact)),
   column_labels = species_labels_compact,
   column_names_rot = 45,
   column_names_gp = gpar(
@@ -503,40 +514,109 @@ ht_targeted_compact <- Heatmap(
 )
 
 # Save
-pdf("results/graphs/RNAseq/liver_species_targeted_genes_heatmap_compact.pdf", width = 7, height = 8)
+pdf("results/graphs/RNAseq/liver_species_targeted_genes_heatmap_compact.pdf", width = 10, height = 8)
 draw(ht_targeted_compact, newpage = FALSE)
 dev.off()
 
-sig_targeted |>
-  left_join(top15_species_labels |> dplyr::select(species, species_label, estimate_direction), by = "species") |>
-  dplyr::select(category, symbol, species_label, rho, p_fdr, estimate_direction, description) |>
-  arrange(species_label, category, p_fdr) |>
-  print(n = Inf)
+#### Liver integration: FFMI, indices, metabolites ####
+# Helper function: Spearman correlations for every x–y pair, BH-correction within the block
+cor_block <- function(df, x_vars, y_vars) {
+  expand_grid(x = x_vars, y = y_vars) |>
+    mutate(
+      n = map2_int(x, y, ~ sum(complete.cases(df[[.x]], df[[.y]]))),
+      test = map2(x, y, ~ cor.test(df[[.x]], df[[.y]], method = "spearman", exact = FALSE)),
+      rho = map_dbl(test, "estimate"),
+      p.value = map_dbl(test, "p.value")
+    ) |>
+    dplyr::select(-test) |>
+    mutate(p_fdr = p.adjust(p.value, method = "BH")) |>
+    arrange(p.value)
+}
 
+# FDR-significant genes from top15_species x signif genes (from targeted cors above)
+sig_genes <- target_genes |>
+  filter(ensembl_gene_id %in% sig_targeted$ensembl_gene_id) |>
+  distinct(ensembl_gene_id, symbol)
 
-liver_idx <- c("fib4_v0", "fli_v0", "hsi_v0", "nfs_v0", "homa_ir_v0", "tyg_v0",
-               "hepatic_ir_index_v0", "hic_fasting_v0", "matsuda_index_v0")
-
-map_dfr(liver_idx, \(v) {
-  broom::tidy(cor.test(baria_muscle_wide[[v]], baria_muscle_wide$perc_change_ffmi_v4,
-                       method = "spearman", exact = FALSE)) |>
-    mutate(var = v, n = sum(complete.cases(baria_muscle_wide[[v]], baria_muscle_wide$perc_change_ffmi_v4)))
-}) |>
-  mutate(p_fdr = p.adjust(p.value, method = "BH")) |>
-  dplyr::select(var, n, rho = estimate, p.value, p_fdr)
-
-sp_liver <- baria_muscle_wide |>
+clin <- baria_muscle_wide |>
   mutate(id = as.numeric(as.character(id))) |>
-  dplyr::select(id, all_of(liver_idx)) |>
-  inner_join(top15_species_log10, by = "id")
+  dplyr::select(id, perc_change_ffmi_v4)
 
-cor_sp_liver <- expand_grid(species = top15_species, var = liver_idx) |>
-  mutate(
-    test = map2(species, var, ~ cor.test(sp_liver[[.x]], sp_liver[[.y]], method = "spearman", exact = FALSE)),
-    rho = map_dbl(test, "estimate"),
-    p.value = map_dbl(test, "p.value")
-  ) |>
-  dplyr::select(-test) |>
-  mutate(p_fdr = p.adjust(p.value, method = "BH"))
+liver_df <- liver_mb |>
+  dplyr::select(id, all_of(sig_genes$ensembl_gene_id)) |>
+  rename_with(~ sig_genes$symbol[match(.x, sig_genes$ensembl_gene_id)], starts_with("ENSG")) |>
+  left_join(clin, by = "id")
 
-cor_sp_liver |> filter(p_fdr < 0.05) |> arrange(p_fdr)
+## Liver genes -> %FFMI change at 1y (outcome)
+cor_genes_ffmi <- cor_block(liver_df, sig_genes$symbol, "perc_change_ffmi_v4")
+cor_genes_ffmi # no signif associations after FDR
+
+
+#### Liver RNAseq x plasma metabolites ####
+# Prep metab data
+metab_df <- as(otu_table(metab), "matrix") |> # samples x metabolites
+  as_tibble(rownames = "sample") |>
+  mutate(id = sample |> str_remove("^BARIA_") |> str_remove("_v0$") |> as.numeric()) |>
+  dplyr::select(-sample)
+metab_names <- setdiff(names(metab_df), "id")
+liver_metab_df <- liver_df |> inner_join(metab_df, by = "id")
+nrow(liver_metab_df)  # overlap n
+
+# Correlation liver genes x metabolites
+cor_genes_metab <- cor_block(liver_metab_df, sig_genes$symbol, metab_names)
+cor_genes_metab |> filter(p_fdr < 0.05) |> count(x, sort = TRUE) # hits per gene
+cor_genes_metab |> filter(p_fdr < 0.05) |> slice_head(n = 30)
+
+# Correlation metabolites × outcome (%FFMI change at 1y) -> triangulation
+metab_hits <- cor_genes_metab |> filter(p_fdr < 0.05) |> distinct(y) |> pull(y)
+cor_metab_ffmi <- cor_block(liver_metab_df, metab_hits, "perc_change_ffmi_v4")
+cor_metab_ffmi |> slice_head(n = 20)
+
+
+## Plots ##
+# Helper functions
+# Long cor_block output -> wide matrix (rows = x, cols = y)
+to_matrix <- function(df, value) {
+  df |>
+    dplyr::select(x, y, all_of(value)) |>
+    pivot_wider(names_from = y, values_from = all_of(value)) |>
+    column_to_rownames("x") |>
+    as.matrix()
+}
+
+to_stars <- function(fdr) ifelse(fdr < 0.001, "***", ifelse(fdr < 0.01, "**", ifelse(fdr < 0.05, "*", "")))
+
+# Figure 3: liver genes × top metabolites heatmap (shows 30 metabolites with the strongest signif associations)
+top_metabs <- cor_genes_metab |>
+  group_by(y) |>
+  summarize(min_fdr = min(p_fdr), max_abs_rho = max(abs(rho)), .groups = "drop") |>
+  filter(min_fdr < 0.05) |>
+  slice_max(max_abs_rho, n = 30) |>
+  pull(y)
+
+metab_sub   <- cor_genes_metab |> filter(y %in% top_metabs) |> rename(x = y, y = x)  # metabolites as rows
+rho_metab   <- to_matrix(metab_sub, "rho")
+fdr_metab   <- to_matrix(metab_sub, "p_fdr")[rownames(rho_metab), colnames(rho_metab)]
+stars_metab <- to_stars(fdr_metab)
+
+metab_gene_categories <- target_genes$category[match(colnames(rho_metab), target_genes$symbol)]
+
+ht_metab <- Heatmap(
+  rho_metab,
+  name = "Spearman\nrho",
+  col = colorRamp2(c(-0.4, 0, 0.4), c(renoir_15[3], "white", renoir_15[11])),
+  top_annotation = HeatmapAnnotation(Category = metab_gene_categories,
+                                     col = list(Category = category_cols), show_annotation_name = FALSE),
+  row_labels = str_trunc(rownames(rho_metab), 45),
+  row_names_side = "left",
+  row_dend_side = "right",
+  column_labels = gene_desc_label(colnames(rho_metab)),
+  column_names_rot = 45,
+  row_names_gp = gpar(fontsize = 8),
+  rect_gp = gpar(col = "white", lwd = 0.7),
+  cell_fun = function(j, i, x, y, width, height, fill) grid.text(stars_metab[i, j], x, y, gp = gpar(fontsize = 8))
+)
+
+pdf("results/graphs/RNAseq/liver_genes_metabolites_heatmap.pdf", width = 9, height = 12)
+draw(ht_metab)
+dev.off()
