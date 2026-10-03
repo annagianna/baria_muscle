@@ -638,14 +638,14 @@ coldata <- baria_muscle_wide |>
   arrange(id) |>  # same order as count_data
   select(id, sex, age_v0_z, fmi_v0_z, ffmi_group_1y)
 
-count_data <- liver_rnaseq |> 
-  filter(id %in% coldata$id) |> 
-  arrange(id) |> # same sample order as coldata
-  column_to_rownames(var = "id") |> 
-  dplyr::select(starts_with("ENSG")) |> 
-  as.matrix() |> 
-  t() |> 
-  round() # raw counts as integers
+count_data <- liver_rnaseq |>
+  filter(!qc_exclude, id %in% coldata$id) |> # QC-excluded samples out (main analysis)
+  arrange(id) |>
+  column_to_rownames(var = "id") |>
+  dplyr::select(starts_with("ENSG")) |> # drops qc_exclude, keeps genes only
+  as.matrix() |>
+  t() |>
+  round()
 stopifnot(identical(colnames(count_data), as.character(coldata$id)))
 
 # Create DESeq2 dataset
