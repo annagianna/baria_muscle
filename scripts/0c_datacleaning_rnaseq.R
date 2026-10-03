@@ -68,9 +68,11 @@ qc_rnaseq_tissue <- function(rnaseq_data, tissue_name) {
   # VST on all samples (no exclusions yet)
   qc <- run_vst(count_matrix)
 
-  # PCA: samples as rows
-  pca <- prcomp(t(qc$vst))
-  var_expl <- round(100 * summary(pca)$importance[2, 1:2], 1)   # % variance explained by PC1 and PC2
+  # PCA on the 500 most variable genes
+  # centred, not scaled (as in DESeq2::plotPCA, ntop = 500)
+  top_genes <- order(matrixStats::rowVars(qc$vst), decreasing = TRUE)[1:500]
+  pca <- prcomp(t(qc$vst[top_genes, ]))
+  var_expl <- round(100 * pca$sdev^2 / sum(pca$sdev^2), 1)[1:2] # %variance explained by PC1 and PC2
 
   # QC table: one row per sample
   qc_tbl <- tibble(
@@ -79,118 +81,110 @@ qc_rnaseq_tissue <- function(rnaseq_data, tissue_name) {
     library_size = colSums(count_matrix), # total reads per sample (raw counts)
     size_factor = sizeFactors(qc$dds),
     PC1 = pca$x[, 1],
-    PC2 = pca$x[, 2]
+    PC2 = pca$x[, 2],
+    PC1_var = var_expl[1], # same value in every row; used for the axis labels
+    PC2_var  = var_expl[2]
   )
+}
 
-  ## QC Plots ##
+## QC Plots ##
+# QC plots per tissue: 1. library size, 2. PCA;
+plot_qc_tissue <- function(qc_tbl, label_ids = NULL) { # label_ids = ids to label (NULL = label all)
+
+  tissue_name <- unique(qc_tbl$tissue) # gets tissue name out of the table
+
   # Plot 1: library size per sample (sorted)
   plot_library <- qc_tbl |>
     mutate(id = fct_reorder(as.character(id), library_size)) |>
-    ggplot(aes(id, library_size / 1e6)) +
-    geom_col() +
+    ggplot(aes(x = id, y = library_size / 1e6)) +
+    geom_col(fill = renoir_15[2]) +
     labs(
       title = paste0(tissue_name, ": library size per sample"),
-      x = "Sample (sorted)", y = "Library size (million reads)"
+      x = "Sample (sorted)",
+      y = "Library size (million reads)"
     ) +
     theme_minimal_custom() +
     theme(axis.text.x = element_blank())
 
-  # Plot 2: PCA
-  plot_pca <- ggplot(qc_tbl, aes(PC1, PC2, colour = library_size / 1e6)) +
+  # Which points get an ID label
+  label_data <- if (is.null(label_ids)) qc_tbl else filter(qc_tbl, id %in% label_ids) # label only outlier cluster IDs with ggrepel
+
+  # Plot 2: PCA, coloured by library size
+  plot_pca <- ggplot(qc_tbl, aes(x = PC1, y = PC2, colour = library_size / 1e6)) +
     geom_point(size = 2, alpha = 0.8) +
-    ggrepel::geom_text_repel(
+    ggrepel::geom_label_repel(
+      data = label_data,
       aes(label = id),
-      size = 1.8,
-      colour = "grey30",
-      max.overlaps = Inf,       # label every point, even where they crowd
-      segment.size = 0.2,       # thin line from label to its point
-      min.segment.length = 0    # always draw that line, so each label is traceable to its dot
+      size = 2, colour = "grey20", fill = "white", label.size = 0.2,
+      max.overlaps = Inf, segment.size = 0.2, min.segment.length = 0
     ) +
-    scale_colour_gradient(low = renoir_15[3], high = renoir_15[11]) +
+    scale_colour_gradient(low = renoir_15[1], high = renoir_15[12]) +
     labs(
-      title = paste0(tissue_name, ": PCA on VST (all samples)"),
-      x = paste0("PC1 (", var_expl[1], "%)"),
-      y = paste0("PC2 (", var_expl[2], "%)"),
+      title = paste0(tissue_name, ": PCA on VST (top 500 variable genes, all samples)"),
+      x = paste0("PC1 (", unique(qc_tbl$PC1_var), "%)"),
+      y = paste0("PC2 (", unique(qc_tbl$PC2_var), "%)"),
       colour = "Library size\n(million reads)"
     ) +
     theme_minimal_custom()
 
   ggsave(paste0("results/graphs/RNAseq/qc_librarysize_", tissue_name, ".pdf"), plot_library, width = 8, height = 4)
   ggsave(paste0("results/graphs/RNAseq/qc_pca_", tissue_name, ".pdf"), plot_pca, width = 9, height = 7)
-  qc_tbl
-
 }
 
-# Run QC for all tissues
+# Run QC for all tissues (computes VST + PCA once per tissue)
 tissues <- c("Liver", "Jejunum", "vFat", "subFat")
 qc_all <- map(tissues, ~ qc_rnaseq_tissue(baria_muscle_rnaseq, .x)) |>
   set_names(tissues)
 
 ## Outlier exclusions
-# Liver: distinct cluster on PC1 (small library size; visible cluster in plot vs. main cloud on inspection)
+# Liver: Upon inspection 20 samples form a distinct cluster outside the main cloud on the QC PCA, all with small library size
 liver_exclude <- c(361, 362, 377, 382, 383, 386, 388, 390, 395, 399, 401, 402, 405, 407, 408, 409, 413, 415, 421, 424)
-
-# Inspect library sizes + PC coordinates
-qc_all$Liver |> 
-  filter(id %in% liver_exclude) |> 
-  arrange(desc(library_size))   
-
 qc_exclude <- list(Liver = liver_exclude, Jejunum = numeric(0), vFat = numeric(0), subFat = numeric(0))
 
+# QC plots: excluded samples labelled
+walk(tissues, ~ plot_qc_tissue(qc_all[[.x]], label_ids = qc_exclude[[.x]]))
+
+# QC table: library size, size factor, PC coordinates, exclusion flag per sample
+dir.create("results/tables", recursive = TRUE, showWarnings = FALSE)
+bind_rows(qc_all) |>
+  mutate(qc_excluded = map2_lgl(tissue, id, ~ .y %in% qc_exclude[[.x]])) |>
+  write_csv("results/tables/rnaseq_qc_samples.csv")
+
 ## Save RNA-seq data per tissue
-# i. Raw counts
-# ii. DESeq2-normalized (VST)
-save_rnaseq_tissue <- function(rnaseq_data, tissue_name, min_count = 10, min_prop = 0.5) {
+# i. Raw counts: all samples + qc_exclude flag (5a: excluded in main analysis, included in sensitivity analysis)
+# ii. VST: excluded samples removed; size factors, expression filter and VST recomputed on the remaining samples
+save_rnaseq_tissue <- function(rnaseq_data, tissue_name, exclude_ids) {
 
-  # Select one tissue; one sample per id 
-  tissue_data <- rnaseq_data |> 
-    filter(tissue == tissue_name)
-  stopifnot(anyDuplicated(tissue_data$id) == 0)
+  count_matrix <- make_count_matrix(rnaseq_data, tissue_name)
 
-  ## i. Save raw count data
-  tissue_data |> 
-    select(id, everything(), -Sample, -tissue) |> 
-    saveRDS(paste0("data/processed_data/BARIA_", tissue_name, "_RNAseq.RDS"))
-
-  ## ii. Create DESeq2-style count matrix (genes x samples)
-  count_matrix <- tissue_data |> 
-    select(starts_with("ENSG")) |> 
-    as.matrix() |> 
-    t()
-  colnames(count_matrix) <- tissue_data$id
-
-  # Create DESeq2 object: rounded kallisto raw order counts & size factors (seq depths & composition)
-  dds <- DESeqDataSetFromMatrix(
-    countData = round(count_matrix),
-    colData = data.frame(id = colnames(count_matrix)),
-    design = ~ 1
-  )
-  dds <- estimateSizeFactors(dds)
-
-  # Gene expression filter:
-  # >= 10 normalized reads (min_count)
-  # >= 50% of patients (min_prop)
-  genes_keep <- rowMeans(counts(dds, normalized = TRUE) >= min_count) >= min_prop
-  dds <- dds[genes_keep, ]
-
-  # Variance-stabilizing transformation
-  vst_matrix <- assay(vst(dds, blind = TRUE)) # pull out the plain matrix
-
-  # Save VST-normalized matrix
-  vst_matrix |> 
-    t() |> # id x gene
-    as.data.frame() |> 
-    rownames_to_column(var = "id") |> 
+  # i. Raw counts (samples as rows) with QC flag
+  count_matrix |>
+    t() |>
+    as.data.frame() |>
+    rownames_to_column("id") |>
     mutate(
       id = as.numeric(id),
-      size_factor = sizeFactors(dds)
-    ) |> 
-    relocate(id, size_factor) |> 
+      qc_exclude = id %in% exclude_ids
+    ) |>
+    relocate(id, qc_exclude) |>
+    saveRDS(paste0("data/processed_data/BARIA_", tissue_name, "_RNAseq.RDS"))
+
+  # ii. VST without excluded samples
+  keep_samples <- !(colnames(count_matrix) %in% as.character(exclude_ids))
+  clean <- run_vst(count_matrix[, keep_samples, drop = FALSE])
+
+  clean$vst |>
+    t() |>
+    as.data.frame() |>
+    rownames_to_column("id") |>
+    mutate(
+      id = as.numeric(id),
+      size_factor = sizeFactors(clean$dds)
+    ) |>
+    relocate(id, size_factor) |>
     saveRDS(paste0("data/processed_data/BARIA_", tissue_name, "_RNAseq_vst.RDS"))
 
+  message(tissue_name, ": ", sum(!keep_samples), " excluded, ", sum(keep_samples), " retained")
 }
 
-walk(c("Liver", "Jejunum", "vFat", "subFat"), ~ save_rnaseq_tissue(baria_muscle_rnaseq, .x))
-
-# Save clean RNAseq data for all tissues
-saveRDS(baria_muscle_rnaseq, file = "data/processed_data/BARIA_muscle_RNAseq_clean.RDS")
+walk(tissues, ~ save_rnaseq_tissue(baria_muscle_rnaseq, .x, qc_exclude[[.x]]))
