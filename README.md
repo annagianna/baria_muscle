@@ -75,7 +75,8 @@ scripts run (see **Data** below) and are not part of the repository.
 datasets; `0b` runs next and reads `0a`'s output alongside the raw
 microbiome, HUMAnN and metabolomics files to write the processed omics
 datasets; `0c` also reads `0a`'s output (to restrict to the analysis cohort)
-alongside the raw RNA-seq counts, writing one processed dataset per tissue.
+alongside the raw RNA-seq counts, runs a per-tissue sample QC (library size and
+PCA) and writes one processed dataset per tissue (see **Tissue RNA-seq**).
 `1a` and the `2*` descriptive scripts are independent of one another and read
 the processed data written by `0a`/`0b`.
 
@@ -126,20 +127,23 @@ species by the direction of their association with FFMI change.
 
 **Outputs written by `0c`** to `data/processed_data/` (RNA-seq; `0c` reads
 `0a`'s `BARIA_muscle_wide.RDS` to restrict samples to the analysis cohort,
-and drops duplicated `REFER` runs and non-numeric/comma-decimal artefacts in
-the raw counts):
+keeps baseline (`V1`) samples only, and drops duplicated `REFER` runs and
+non-numeric/comma-decimal artefacts in the raw counts):
 
 | File | Description |
 |------|-------------|
-| `BARIA_Liver_RNAseq.RDS` | Liver RNA-seq raw counts (one row per participant, `ENSG*` gene columns) |
-| `BARIA_Jejunum_RNAseq.RDS` | Jejunum RNA-seq raw counts |
-| `BARIA_vFat_RNAseq.RDS` | Visceral fat RNA-seq raw counts |
-| `BARIA_subFat_RNAseq.RDS` | Subcutaneous fat RNA-seq raw counts |
-| `BARIA_Liver_RNAseq_vst.RDS` | Liver: DESeq2 size factor + VST-normalised expression, genes expression-filtered (≥10 normalised reads in ≥50% of participants) — used by `5a` |
-| `BARIA_Jejunum_RNAseq_vst.RDS` | Jejunum: DESeq2 size factor + VST-normalised expression, same filter |
-| `BARIA_vFat_RNAseq_vst.RDS` | Visceral fat: DESeq2 size factor + VST-normalised expression, same filter — used by `5b` |
-| `BARIA_subFat_RNAseq_vst.RDS` | Subcutaneous fat: DESeq2 size factor + VST-normalised expression, same filter |
-| `BARIA_muscle_RNAseq_clean.RDS` | All four tissues combined, one row per participant × tissue (raw counts) |
+| `BARIA_Liver_RNAseq.RDS` | Liver RNA-seq raw counts, **all** samples (one row per participant, `ENSG*` gene columns) plus a `qc_exclude` flag (TRUE = excluded at sample QC) |
+| `BARIA_Jejunum_RNAseq.RDS` | Jejunum RNA-seq raw counts, same structure |
+| `BARIA_vFat_RNAseq.RDS` | Visceral fat RNA-seq raw counts, same structure |
+| `BARIA_subFat_RNAseq.RDS` | Subcutaneous fat RNA-seq raw counts, same structure |
+| `BARIA_Liver_RNAseq_vst.RDS` | Liver: DESeq2 size factor + VST-normalised expression for QC-retained samples only; size factors, expression filter (≥10 normalised reads in ≥50% of participants) and VST computed on the retained samples — used by `5a` |
+| `BARIA_Jejunum_RNAseq_vst.RDS` | Jejunum: same processing |
+| `BARIA_vFat_RNAseq_vst.RDS` | Visceral fat: same processing — used by `5b` |
+| `BARIA_subFat_RNAseq_vst.RDS` | Subcutaneous fat: same processing |
+
+`0c` also writes its sample-QC outputs: `results/graphs/RNAseq/qc_librarysize_<tissue>.pdf`,
+`results/graphs/RNAseq/qc_pca_<tissue>.pdf` and `results/tables/rnaseq_qc_samples.csv`
+(see **Tissue RNA-seq**).
 
 Visit coding: `v0` = baseline (raw `V-1` / MetaPhlAn `Time_Point == "V-1"`),
 `v2`–`v5` = yearly follow-ups, `v6` = 5 years, `v7` = 10 years.
@@ -521,7 +525,31 @@ forest-plot estimate for this model).
 `0c_datacleaning_rnaseq.R` cleans the raw kallisto count table into one
 VST-normalised dataset per tissue (DESeq2 size factors, an expression filter
 of ≥10 normalised reads in ≥50% of participants, variance-stabilising
-transformation; see **Data**). `5a_liver_rnaseq.R` and `5b_vadipose_rnaseq.R`
+transformation; see **Data**), after a per-tissue sample QC:
+
+- **QC metrics.** For each tissue, library size (total raw reads per sample)
+  and a principal component analysis on the VST of all samples, restricted to
+  the 500 most variable genes, centred and not scaled — the convention of
+  DESeq2's `plotPCA()` (`ntop = 500`) <sup>[19, 20]</sup>. The % variance shown
+  on the PCA axes refers to these 500 genes.
+- **Exclusion.** Samples forming a distinct cluster outside the main cloud on
+  the QC PCA, together with small library size, were excluded on visual
+  inspection, following the approach used for the same BARIA tissue RNA-seq by
+  Zwartjes et al. <sup>[21]</sup> (see also <sup>[22]</sup>). This applied to
+  liver only: 20 samples formed a separate low-library-size cluster (the same
+  participants' visceral adipose samples did not separate, indicating a
+  liver-specific sample/library issue). Jejunum, visceral and subcutaneous fat
+  showed no distinct cluster and had no exclusions. Retained samples: liver
+  340, jejunum 212, visceral fat 227, subcutaneous fat 220.
+- **Outputs.** QC plots per tissue (`qc_librarysize_<tissue>.pdf`,
+  `qc_pca_<tissue>.pdf`, excluded samples labelled) and one QC table across
+  tissues (`rnaseq_qc_samples.csv`: library size, size factor, PC1/PC2, % variance,
+  exclusion flag). Excluded samples are removed before the size factors,
+  expression filter and VST are recomputed, so they do not influence the
+  normalisation of retained samples; the raw-count files keep all samples with
+  a `qc_exclude` flag.
+
+`5a_liver_rnaseq.R` and `5b_vadipose_rnaseq.R`
 each start from one tissue's VST-normalised expression and the same top-15
 species (`perc_change_ffmi_v4`/`all` model) used in the correlation analyses
 above, and run the same two-part analysis: an untargeted genome-wide Spearman
@@ -559,7 +587,8 @@ packages loaded across the scripts include: `tidyverse`, `phyloseq`, `vegan`,
 `tableone`, `gt`, `ggpubr`, `patchwork`, `ggthemes`, `ggsci`, `ggrepel`,
 `ape`, `grid`, `MetBrewer`, `lmerTest`, `broom` / `broom.mixed`,
 `ComplexHeatmap` / `circlize`, and (`5a`, `5b`) `annotables` and `DESeq2`
-(the latter via `0c`). The ML pipeline (`3b`) additionally uses Python:
+(the latter via `0c`; `0c` also uses `matrixStats`, installed as a DESeq2
+dependency, and `ggrepel`). The ML pipeline (`3b`) additionally uses Python:
 `xgboost`, `scikit-learn`, `numpy`, `pandas`, `matplotlib`, `seaborn`, `shap`,
 `tqdm`.
 
@@ -574,7 +603,7 @@ Expected working-directory layout (script paths are relative to the repo root):
 data/raw_data/          # inputs (see Data)
 data/processed_data/    # created by 0a (clinical), 0b (omics) and 0c (RNA-seq)
 results/graphs/          # figures, in per-analysis subfolders
-results/tables/          # Table 1 output
+results/tables/          # Table 1 output; RNA-seq sample-QC table (0c)
 results/mlmodels/        # ML input data + XGBeast output, per outcome/subgroup
 ```
 
@@ -643,3 +672,17 @@ before writing to them, so `results/` does not need to exist beforehand.
     is associated with reduced endogenous insulin clearance and hepatic insulin
     resistance in obese youths. *Diabetes Obes Metab.* 2020;22(9):1628–1638.
     doi:10.1111/dom.14076.
+19. Love MI, Huber W, Anders S. Moderated estimation of fold change and dispersion
+    for RNA-seq data with DESeq2. *Genome Biol.* 2014;15(12):550.
+    doi:10.1186/s13059-014-0550-8.
+20. Love MI, Anders S, Huber W. Analyzing RNA-seq data with DESeq2 (package
+    vignette, section "Principal component plot of the samples").
+    https://bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html;
+    `plotPCA()` source: https://github.com/thelovelab/DESeq2/blob/devel/R/plots.R.
+21. Zwartjes MSZ, de Jonge PA, van de Laar AW, et al. Adipose tissue inflammation,
+    oxidative stress, and altered adipogenesis are associated with dyslipidemia in
+    obesity: a multiomics profiling study. *J Am Heart Assoc.* 2026;15(11):e047397
+    (Supplemental Methods). doi:10.1161/JAHA.125.047397.
+22. Meijnikman AS, Davids M, Herrema H, et al. Microbiome-derived ethanol in
+    nonalcoholic fatty liver disease. *Nat Med.* 2022;28(10):2100–2106.
+    doi:10.1038/s41591-022-02016-6.
