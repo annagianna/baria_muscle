@@ -624,7 +624,7 @@ dev.off()
 coldata <- baria_muscle_wide |>
   mutate(id = as.numeric(id)) |>
   filter(
-    id %in% liver_rnaseq$id,
+    id %in% liver_rnaseq$id[!liver_rnaseq$qc_exclude],
     !is.na(perc_change_ffmi_v4_group), !is.na(age_v0), !is.na(fmi_v0) # DESeq2 can't handle NAs
   ) |>
   mutate(
@@ -664,3 +664,7 @@ nrow(dds)  # n of genes tested
 # DE analysis
 dds <- DESeq(dds)
 resultsNames(dds)  # exact coefficient name for the group effect
+
+# Results: High vs. moderate/low % FFMI change (moderate/low group is the reference), adj. for sex, age, FMI
+res_de <- results(dds, name = "ffmi_group_1y_high_loss_vs_moderate_low_loss", alpha = 0.05)
+summary(res_de)
