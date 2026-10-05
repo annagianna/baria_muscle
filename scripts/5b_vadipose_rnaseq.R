@@ -10,6 +10,8 @@ library(MetBrewer)
 library(annotables)
 library(ggpubr)
 library(broom)
+library(DESeq2)
+library(apeglm)
 source("scripts/assets/functions.R")
 dir.create("results/graphs/RNAseq", recursive = TRUE, showWarnings = FALSE)
 
@@ -17,6 +19,7 @@ dir.create("results/graphs/RNAseq", recursive = TRUE, showWarnings = FALSE)
 renoir_15 <- met.brewer("Renoir", n = 15)
 
 # Data
+vfat_rnaseq_counts <- readRDS("data/processed_data/BARIA_vFat_RNAseq.RDS") # raw counts for DESeq2
 vfat_rnaseq <- readRDS("data/processed_data/BARIA_vFat_RNAseq_vst.RDS") # VST normalized
 baria_muscle_wide <- readRDS("data/processed_data/BARIA_muscle_wide.RDS")
 baria_mb_v0 <- readRDS("data/processed_data/BARIA_mb_baseline.RDS")
@@ -520,3 +523,62 @@ if (nrow(target_genes_heatmap) == 0) {
     print(n = Inf)
 
 }
+
+#### DE: %FFMI-change groups (1y) ####
+# All vFat samples passed QC in 0c (no qc_exclude), so no samples are dropped here
+coldata <- baria_muscle_wide |>
+  mutate(id = as.numeric(id)) |>
+  filter(
+    id %in% vfat_rnaseq_counts$id,
+    !is.na(perc_change_ffmi_v4_group), !is.na(age_v0), !is.na(fmi_v0) # DESeq2 can't handle NAs
+  ) |>
+  mutate(
+    ffmi_group_1y = factor(
+      if_else(perc_change_ffmi_v4_group == "high", "high_loss", "moderate_low_loss"),
+      levels = c("moderate_low_loss", "high_loss") # moderate_low_loss is the reference
+    ),
+    age_v0_z = as.numeric(scale(age_v0)),  # centre on the final sample set
+    fmi_v0_z = as.numeric(scale(fmi_v0))
+  ) |>
+  arrange(id) |>  # same order as count_data
+  select(id, sex, age_v0_z, fmi_v0_z, ffmi_group_1y)
+
+count_data <- vfat_rnaseq_counts |>
+  filter(id %in% coldata$id) |>
+  arrange(id) |>
+  column_to_rownames(var = "id") |>
+  dplyr::select(starts_with("ENSG")) |> # drops qc_exclude, keeps genes only
+  as.matrix() |>
+  t() |>
+  round()
+stopifnot(identical(colnames(count_data), as.character(coldata$id)))
+
+# Create DESeq2 dataset
+dds <- DESeqDataSetFromMatrix(
+  countData = count_data,
+  colData = coldata,
+  design =  ~ sex + age_v0_z + fmi_v0_z + ffmi_group_1y
+)
+
+# Pre-filter: >= 10 normalised counts in >= 50% of samples (same filter as in 0c_datacleaning_rnaseq.R)
+dds <- estimateSizeFactors(dds)
+keep <- rowMeans(counts(dds, normalized = TRUE) >= 10) >= 0.5
+dds <- dds[keep, ]
+nrow(dds)  # n of genes tested
+
+# DE analysis
+dds <- DESeq(dds)
+resultsNames(dds)  # exact coefficient name for the group effect
+
+# Results: High vs. moderate/low % FFMI change (moderate/low group is the reference), adj. for sex, age, FMI
+res_de <- results(dds, name = "ffmi_group_1y_high_loss_vs_moderate_low_loss", alpha = 0.05)
+summary(res_de)
+
+# Shrink log2FC: pulls noisy/low-information estimates toward 0; padj remains unchanged
+res_de_shr <- lfcShrink(dds, coef = "ffmi_group_1y_high_loss_vs_moderate_low_loss", type = "apeglm", res = res_de)
+
+# MA plots (base R plotting)
+par(mfrow = c(1, 2))
+plotMA(res_de,     ylim = c(-2, 2), main = "Before (MLE)")
+plotMA(res_de_shr, ylim = c(-2, 2), main = "After shrinkage (apeglm)")
+par(mfrow = c(1, 1))
