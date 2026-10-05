@@ -13,8 +13,13 @@ library(broom)
 library(DESeq2)
 library(apeglm)
 source("scripts/assets/functions.R")
-
 dir.create("results/graphs/RNAseq", recursive = TRUE, showWarnings = FALSE)
+
+# Bioconductor packages (DESeq2/S4Vectors/matrixStats) mask some dplyr verbs; always use dplyr's
+select <- dplyr::select
+rename <- dplyr::rename
+count  <- dplyr::count
+filter <- dplyr::filter
 
 # Theme
 renoir_15 <- met.brewer("Renoir", n = 15)
@@ -402,7 +407,10 @@ ht_targeted <- Heatmap(
 )
 
 # Save
-pdf("results/graphs/RNAseq/liver_top15_species_targeted_genes_heatmap.pdf", width = 15, height = 8)
+pdf(
+  "results/graphs/RNAseq/liver_top15_species_targeted_genes_heatmap.pdf",
+    width = 15, height = 2 + 0.18 * nrow(rho_targeted)
+  )
 draw(ht_targeted, newpage = FALSE)
 dev.off()
 
@@ -500,7 +508,11 @@ ht_targeted_compact <- Heatmap(
 )
 
 # Save
-pdf("results/graphs/RNAseq/liver_species_targeted_genes_heatmap_compact.pdf", width = 10, height = 8)
+# Size grows with the number of genes (rows) and species (columns)
+pdf(
+  "results/graphs/RNAseq/liver_species_targeted_genes_heatmap_compact.pdf", 
+  width  = 6 + 0.45 * ncol(rho_targeted_compact), height = 2 + 0.18 * nrow(rho_targeted_compact)
+)
 draw(ht_targeted_compact, newpage = FALSE)
 dev.off()
 
@@ -548,8 +560,13 @@ nrow(liver_metab_df)  # overlap n
 
 # Correlation liver genes x metabolites
 cor_genes_metab <- cor_block(liver_metab_df, sig_genes$symbol, metab_names)
-cor_genes_metab |> filter(p_fdr < 0.05) |> count(x, sort = TRUE) # hits per gene
-cor_genes_metab |> filter(p_fdr < 0.05) |> slice_head(n = 30)
+cor_genes_metab |> 
+  filter(p_fdr < 0.05) |> 
+  dplyr::count(x, sort = TRUE) # hits per gene
+
+cor_genes_metab |> 
+  filter(p_fdr < 0.05) |> 
+  slice_head(n = 30)
 
 # Correlation metabolites × outcome (%FFMI change at 1y) -> triangulation
 metab_hits <- cor_genes_metab |> filter(p_fdr < 0.05) |> distinct(y) |> pull(y)
@@ -589,7 +606,7 @@ top_metabs <- cor_genes_metab |>
   slice_max(max_abs_rho, n = 30) |>
   pull(y)
 
-metab_sub   <- cor_genes_metab |> filter(y %in% top_metabs) |> rename(x = y, y = x)  # metabolites as rows
+metab_sub   <- cor_genes_metab |> filter(y %in% top_metabs) |> dplyr::rename(x = y, y = x)  # metabolites as rows
 rho_metab   <- to_matrix(metab_sub, "rho")
 fdr_metab   <- to_matrix(metab_sub, "p_fdr")[rownames(rho_metab), colnames(rho_metab)]
 metab_gene_categories <- target_genes$category[match(colnames(rho_metab), target_genes$symbol)]
@@ -670,7 +687,7 @@ res_de <- results(dds, name = "ffmi_group_1y_high_loss_vs_moderate_low_loss", al
 summary(res_de)
 
 # Shrink log2FC: pulls noisy/low-information estimates toward 0; padj remains unchanged
-res_de_shr <- apeglm::lfcShrink(dds, coef = "ffmi_group_1y_high_loss_vs_moderate_low_loss", type = "apeglm", res  = res_de)
+res_de_shr <- lfcShrink(dds, coef = "ffmi_group_1y_high_loss_vs_moderate_low_loss", type = "apeglm", res  = res_de)
 
 # MA plots (base R plotting)
 par(mfrow = c(1, 2))
