@@ -11,6 +11,7 @@ library(annotables)
 library(ggpubr)
 library(broom)
 library(DESeq2)
+library(apeglm)
 source("scripts/assets/functions.R")
 
 dir.create("results/graphs/RNAseq", recursive = TRUE, showWarnings = FALSE)
@@ -413,6 +414,7 @@ sig_targeted <- cor_targeted |>
 
 cor_plots <- pmap(
   sig_targeted,
+
   function(species, ensembl_gene_id, rho, p.value, p_fdr, symbol, category, description) {
 
     plot_data <- liver_mb |>
@@ -421,9 +423,7 @@ cor_plots <- pmap(
         expression = all_of(ensembl_gene_id)
       )
 
-    species_name <- top15_species_labels$species_label[
-      match(species, top15_species_labels$species)
-    ]
+    species_name <- top15_species_labels$species_label[match(species, top15_species_labels$species)]
 
     ggplot(plot_data, aes(x = abundance, y = expression)) +
       geom_point(alpha = 0.7, size = 1.8) +
@@ -448,31 +448,31 @@ cor_plots <- pmap(
 )
 
 # Arrange individual cor plots
-cor_plots_arranged <- ggarrange(plotlist = cor_plots, ncol = 5, nrow = 4)
-ggsave("results/graphs/RNAseq/liver_targeted_significant_correlations.pdf", cor_plots_arranged, width = 12, height = 10)
+n_cols_cor_plots <- 5
+n_rows_cor_plots <- ceiling(length(cor_plots) / n_cols_cor_plots) # grid grows with the number of significant pairs
+cor_plots_arranged <- ggarrange(plotlist = cor_plots, ncol = n_cols_cor_plots, nrow = n_rows_cor_plots)
+ggsave(
+  "results/graphs/RNAseq/liver_targeted_significant_correlations.pdf",
+   cor_plots_arranged,
+   width = 12,
+   height = 2.5 * n_rows_cor_plots, # keeps each individual cor plot the same size
+   limitsize = FALSE
+  )
 
 ## Compact targeted heatmap ##
 # Species with >=1 FDR-significant association x liver gene (targeted)
-species_keep_targeted <- colnames(fdr_targeted)[
-  apply(fdr_targeted < 0.05, 2, any)
-]
-
+species_keep_targeted <- colnames(fdr_targeted)[apply(fdr_targeted < 0.05, 2, any)]
 rho_targeted_compact <- rho_targeted[, species_keep_targeted, drop = FALSE]
 fdr_targeted_compact <- fdr_targeted[, species_keep_targeted, drop = FALSE]
 
 # Species labels
-species_labels_compact <- top15_species_labels$species_label[
-  match(colnames(rho_targeted_compact), top15_species_labels$species)
-]
+species_labels_compact <- top15_species_labels$species_label[match(colnames(rho_targeted_compact), top15_species_labels$species)]
 
 # Heatmap
 ht_targeted_compact <- Heatmap(
   rho_targeted_compact,
   name = "Spearman\nrho",
-  col = colorRamp2(
-    c(-0.3, 0, 0.3),
-    c(renoir_15[3], "white", renoir_15[11])
-  ),
+  col = colorRamp2(c(-0.3, 0, 0.3), c(renoir_15[3], "white", renoir_15[11])),
   left_annotation = category_anno,
   row_split = gene_categories,
   row_title = NULL,
@@ -668,3 +668,13 @@ resultsNames(dds)  # exact coefficient name for the group effect
 # Results: High vs. moderate/low % FFMI change (moderate/low group is the reference), adj. for sex, age, FMI
 res_de <- results(dds, name = "ffmi_group_1y_high_loss_vs_moderate_low_loss", alpha = 0.05)
 summary(res_de)
+
+# Shrink log2FC: pulls noisy/low-information estimates toward 0; padj remains unchanged
+res_de_shr <- apeglm::lfcShrink(dds, coef = "ffmi_group_1y_high_loss_vs_moderate_low_loss", type = "apeglm", res  = res_de)
+
+# MA plots (base R plotting)
+par(mfrow = c(1, 2))
+plotMA(res_de,     ylim = c(-2, 2), main = "Before (MLE)")
+plotMA(res_de_shr, ylim = c(-2, 2), main = "After shrinkage (apeglm)")
+par(mfrow = c(1, 1))
+
