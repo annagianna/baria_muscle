@@ -53,8 +53,8 @@ make_count_matrix <- function(rnaseq_data, tissue_name) {
   count_matrix <- tissue_data |>
     select(starts_with("ENSG")) |>
     as.matrix() |>
-    t()                                          # transpose: genes become rows, samples columns
-  colnames(count_matrix) <- tissue_data$id      # column names = patient ids
+    t() # transpose: genes x samples
+  colnames(count_matrix) <- tissue_data$id
 
   count_matrix
 
