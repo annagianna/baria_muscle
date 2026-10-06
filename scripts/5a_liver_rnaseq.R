@@ -745,9 +745,9 @@ p_thresh <- max(de_df$pvalue[de_df$padj < 0.05], na.rm = TRUE) # Largest raw p-v
 
 liver_de_volcano_ffmi_1y <- de_df |>
   filter(!is.na(padj)) |>
-  arrange(desc(direction == "not significant")) |>   # grey points drawn first, coloured on top
+  arrange(desc(direction == "not significant")) |>
   ggplot(aes(x = log2FoldChange, y = -log10(pvalue), colour = direction)) +
-  geom_point(size = 0.8, alpha = 0.7) +
+  geom_point(size = 1.2, alpha = 0.7) +
   geom_hline(yintercept = -log10(p_thresh), linetype = "dashed", colour = "grey40", linewidth = 0.3) +
   geom_vline(xintercept = 0, colour = "grey30", linewidth = 0.3) +
   ggrepel::geom_text_repel(
@@ -757,9 +757,8 @@ liver_de_volcano_ffmi_1y <- de_df |>
   ) +
   scale_colour_manual(values = de_cols, name = NULL) +
   labs(
-    x = "log2 fold change (apeglm-shrunken)\nhigh vs modest/low FFMI loss",
+    x = "log2FC (apeglm-shrunken)\nHigh vs. modest/low FFMI loss",
     y = "-log10(p-value)"
   ) +
   theme_minimal_custom()
-
 ggsave("results/graphs/RNAseq/liver_de_volcano_ffmi_1y.pdf", liver_de_volcano_ffmi_1y, width = 8, height = 6)
