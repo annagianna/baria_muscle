@@ -136,24 +136,44 @@ tissues <- c("Liver", "Jejunum", "vFat", "subFat")
 qc_all <- map(tissues, ~ qc_rnaseq_tissue(baria_muscle_rnaseq, .x)) |>
   set_names(tissues)
 
-## Outlier exclusions
-# Liver: Upon inspection 20 samples form a distinct cluster outside the main cloud on the QC PCA, all with small library size
-liver_exclude <- c(361, 362, 377, 382, 383, 386, 388, 390, 395, 399, 401, 402, 405, 407, 408, 409, 413, 415, 421, 424)
-qc_exclude <- list(Liver = liver_exclude, Jejunum = numeric(0), vFat = numeric(0), subFat = numeric(0))
+## Outlier exclusions (IDs in gitignored file, not in public repo)
+# Liver
+qc_reasons <- read_csv("data/processed_data/rnaseq_qc_exclusions.csv", col_types = "cdc") # tissue, id, qc_reason
+
+# i. low depth: samples forming a distinct cluster outside the main cloud on the QC PCA, all with small library size
+liver_exclude_lowdepth <- qc_reasons |> 
+  filter(tissue == "Liver", qc_reason == "low_depth") |> 
+  pull(id)
+
+# ii. adipose tissue profile: clear adipose-tissue expression profile (ADIPOQ, LEP, PLIN1, FABP4, CIDEA; CPM from raw counts)
+liver_exclude_adipose <- qc_reasons |> 
+  filter(tissue == "Liver", qc_reason == "adipose_profile") |> 
+  pull(id)
+
+liver_exclude <- c(liver_exclude_lowdepth, liver_exclude_adipose)
+
+stopifnot(
+  length(liver_exclude_lowdepth) == 20,
+  length(liver_exclude_adipose) == 2,
+  !anyDuplicated(liver_exclude)# no sample listed under both reasons
+)
+
+qc_exclude <- map(set_names(tissues), ~ qc_reasons$id[qc_reasons$tissue == .x])
 
 # QC plots: excluded samples labelled
 walk(tissues, ~ plot_qc_tissue(qc_all[[.x]], label_ids = qc_exclude[[.x]]))
 
-# QC table: library size, size factor, PC coordinates, exclusion flag per sample
+# QC table: library size, size factor, PC coordinates, exclusion flag per sample and qc reason
 dir.create("results/tables", recursive = TRUE, showWarnings = FALSE)
 bind_rows(qc_all) |>
-  mutate(qc_excluded = map2_lgl(tissue, id, ~ .y %in% qc_exclude[[.x]])) |>
+  left_join(qc_reasons, by = c("tissue", "id")) |>   # qc_reason: NA = passed QC
+  mutate(qc_excluded = !is.na(qc_reason)) |>
   write_csv("results/tables/rnaseq_qc_samples.csv")
 
 ## Save RNA-seq data per tissue
 # i. Raw counts: all samples + qc_exclude flag (5a: excluded in main analysis, included in sensitivity analysis)
 # ii. VST: excluded samples removed; size factors, expression filter and VST recomputed on the remaining samples
-save_rnaseq_tissue <- function(rnaseq_data, tissue_name, exclude_ids) {
+save_rnaseq_tissue <- function(rnaseq_data, tissue_name, exclude_ids, reasons) {
 
   count_matrix <- make_count_matrix(rnaseq_data, tissue_name)
 
@@ -162,11 +182,10 @@ save_rnaseq_tissue <- function(rnaseq_data, tissue_name, exclude_ids) {
     t() |>
     as.data.frame() |>
     rownames_to_column("id") |>
-    mutate(
-      id = as.numeric(id),
-      qc_exclude = id %in% exclude_ids
-    ) |>
-    relocate(id, qc_exclude) |>
+    mutate(id = as.numeric(id)) |>
+    left_join(reasons |> filter(tissue == tissue_name) |> select(id, qc_reason), by = "id") |>
+    mutate(qc_exclude = id %in% exclude_ids) |>
+    relocate(id, qc_exclude, qc_reason) |>
     saveRDS(paste0("data/processed_data/BARIA_", tissue_name, "_RNAseq.RDS"))
 
   # ii. VST without excluded samples
@@ -187,4 +206,4 @@ save_rnaseq_tissue <- function(rnaseq_data, tissue_name, exclude_ids) {
   message(tissue_name, ": ", sum(!keep_samples), " excluded, ", sum(keep_samples), " retained")
 }
 
-walk(tissues, ~ save_rnaseq_tissue(baria_muscle_rnaseq, .x, qc_exclude[[.x]]))
+walk(tissues, ~ save_rnaseq_tissue(baria_muscle_rnaseq, .x, qc_exclude[[.x]], qc_reasons))
