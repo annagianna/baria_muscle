@@ -12,6 +12,7 @@ library(ggpubr)
 library(broom)
 library(DESeq2)
 library(apeglm)
+library(ppcor)
 source("scripts/assets/functions.R")
 dir.create("results/graphs/RNAseq", recursive = TRUE, showWarnings = FALSE)
 
@@ -474,10 +475,21 @@ ggsave(
   )
 
 ## Compact targeted heatmap ##
-# Species with >=1 FDR-significant association x liver gene (targeted)
-species_keep_targeted <- colnames(fdr_targeted)[apply(fdr_targeted < 0.05, 2, any)]
-rho_targeted_compact <- rho_targeted[, species_keep_targeted, drop = FALSE]
-fdr_targeted_compact <- fdr_targeted[, species_keep_targeted, drop = FALSE]
+# Display threshold for slides: genes and species with >= min_hits FDR-significant associations
+min_hits <- 2
+sig_targeted_mat <- fdr_targeted < 0.05   # genes x species; TRUE = FDR-significant
+
+genes_keep_targeted   <- rownames(fdr_targeted)[rowSums(sig_targeted_mat) >= min_hits]
+species_keep_targeted <- colnames(fdr_targeted)[colSums(sig_targeted_mat) >= min_hits]
+c(genes = length(genes_keep_targeted), species = length(species_keep_targeted))  # check before plotting
+
+rho_targeted_compact <- rho_targeted[genes_keep_targeted, species_keep_targeted, drop = FALSE]
+fdr_targeted_compact <- fdr_targeted[genes_keep_targeted, species_keep_targeted, drop = FALSE]
+
+# Category annotation for the kept genes only
+gene_categories_compact <- gene_categories[match(genes_keep_targeted, rownames(rho_targeted))]
+category_anno_compact <- rowAnnotation(Category = gene_categories_compact, col = list(Category = category_cols), show_annotation_name = FALSE
+)
 
 # Species labels
 species_labels_compact <- top15_species_labels$species_label[match(colnames(rho_targeted_compact), top15_species_labels$species)]
@@ -487,8 +499,8 @@ ht_targeted_compact <- Heatmap(
   rho_targeted_compact,
   name = "Spearman\nrho",
   col = colorRamp2(c(-0.3, 0, 0.3), c(renoir_15[3], "white", renoir_15[11])),
-  left_annotation = category_anno,
-  row_split = gene_categories,
+  left_annotation = category_anno_compact,
+  row_split = gene_categories_compact,
   row_title = NULL,
   row_names_side = "left",
   row_dend_side = "right",
@@ -612,9 +624,9 @@ top_metabs <- cor_genes_metab |>
   slice_max(max_abs_rho, n = 30) |>
   pull(y)
 
-metab_sub   <- cor_genes_metab |> filter(y %in% top_metabs) |> dplyr::rename(x = y, y = x)  # metabolites as rows
-rho_metab   <- to_matrix(metab_sub, "rho")
-fdr_metab   <- to_matrix(metab_sub, "p_fdr")[rownames(rho_metab), colnames(rho_metab)]
+metab_sub <- cor_genes_metab |> filter(y %in% top_metabs) |> dplyr::rename(x = y, y = x)  # metabolites as rows
+rho_metab <- to_matrix(metab_sub, "rho")
+fdr_metab <- to_matrix(metab_sub, "p_fdr")[rownames(rho_metab), colnames(rho_metab)]
 metab_gene_categories <- target_genes$category[match(colnames(rho_metab), target_genes$symbol)]
 
 ht_metab <- Heatmap(
@@ -741,14 +753,13 @@ de_df |> select(symbol, description, baseMean, log2FoldChange, padj, biotype) |>
 write_csv(de_df, "results/tables/liver_de_ffmi_group_1y.csv")
 
 ## Volcano plot
-p_thresh <- max(de_df$pvalue[de_df$padj < 0.05], na.rm = TRUE) # Largest raw p-value still significant after BH: the FDR 5% line on the -log10(p) scale
-
+## Volcano plot
 liver_de_volcano_ffmi_1y <- de_df |>
   filter(!is.na(padj)) |>
-  arrange(desc(direction == "not significant")) |>
-  ggplot(aes(x = log2FoldChange, y = -log10(pvalue), colour = direction)) +
+  arrange(desc(direction == "not significant")) |>   # grey points drawn first, coloured on top
+  ggplot(aes(x = log2FoldChange, y = -log10(padj), colour = direction)) +
   geom_point(size = 1.2, alpha = 0.7) +
-  geom_hline(yintercept = -log10(p_thresh), linetype = "dashed", colour = "grey40", linewidth = 0.3) +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed", colour = "grey40", linewidth = 0.3) + # FDR 5%
   geom_vline(xintercept = 0, colour = "grey30", linewidth = 0.3) +
   ggrepel::geom_text_repel(
     data = filter(de_df, padj < 0.05),
@@ -758,7 +769,32 @@ liver_de_volcano_ffmi_1y <- de_df |>
   scale_colour_manual(values = de_cols, name = NULL) +
   labs(
     x = "log2FC (apeglm-shrunken)\nHigh vs. modest/low FFMI loss",
-    y = "-log10(p-value)"
+    y = "-log10(FDR-adjusted p-value)"
   ) +
   theme_minimal_custom()
 ggsave("results/graphs/RNAseq/liver_de_volcano_ffmi_1y.pdf", liver_de_volcano_ffmi_1y, width = 8, height = 6)
+
+## Forest plot
+# Plot data
+forest_df <- de_df |>
+  filter(padj < 0.05, !str_detect(symbol, "^ENSG")) |>
+  mutate(
+    # Approximate 95% CI
+    lower = log2FoldChange - 1.96 * lfcSE,
+    upper = log2FoldChange + 1.96 * lfcSE,
+    label = fct_reorder(gene_label(symbol), log2FoldChange)
+  )
+renoir_15
+# Plot
+liver_de_forest_ffmi_1y <- forest_df |> 
+  ggplot(aes(x = log2FoldChange, y = label, colour = direction)) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey40", linewidth = 0.3) +
+  geom_errorbar(aes(xmin = lower, xmax = upper), width = 0.2) +
+  geom_point(size = 2.5) +
+  scale_colour_manual(values = de_cols, name = NULL) +
+  labs(
+    x = "log2FC (apeglm-shrunken, ~95% CI)\nHigh vs. modest/low FFMI loss",
+    y = NULL
+  ) +
+  theme_minimal_custom()
+ggsave("results/graphs/RNAseq/liver_de_forest_ffmi_1y.pdf", liver_de_forest_ffmi_1y, width = 9, height = 1.5 + 0.4 * nrow(forest_df))
