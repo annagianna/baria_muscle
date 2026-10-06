@@ -23,6 +23,12 @@ filter <- dplyr::filter
 
 # Theme
 renoir_15 <- met.brewer("Renoir", n = 15)
+renoir_cols_20 <- met.brewer("Renoir", n = 20)
+de_cols <- c( # same high/low colors used in the alpha, beta diveristy scripts
+  "higher in high FFMI loss" = renoir_cols_20[18],
+  "lower in high FFMI loss"  = renoir_cols_20[5],
+  "not significant" = "grey80"
+)
 
 # Significance asterisks based on p_fdr
 stars <- function(p_fdr) ifelse(p_fdr < 0.001, "***", ifelse(p_fdr < 0.01, "**", ifelse(p_fdr < 0.05, "*", "")))
@@ -690,8 +696,70 @@ summary(res_de)
 res_de_shr <- lfcShrink(dds, coef = "ffmi_group_1y_high_loss_vs_moderate_low_loss", type = "apeglm", res  = res_de)
 
 # MA plots (base R plotting)
-par(mfrow = c(1, 2))
-plotMA(res_de,     ylim = c(-2, 2), main = "Before (MLE)")
-plotMA(res_de_shr, ylim = c(-2, 2), main = "After shrinkage (apeglm)")
-par(mfrow = c(1, 1))
+ma_df <- bind_rows(
+  plotMA(res_de, returnData = TRUE) |> mutate(type = "Before shrinkage (MLE)"),
+  plotMA(res_de_shr, returnData = TRUE) |> mutate(type = "After shrinkage (apeglm)")
+) |>
+  mutate(type = factor(type, levels = c("Before shrinkage (MLE)", "After shrinkage (apeglm)")))
 
+ma_plot <- ggplot(ma_df, aes(x = mean, y = lfc, colour = isDE)) +
+  geom_point(size = 0.6, alpha = 0.6) +
+  geom_hline(yintercept = 0, colour = "grey30") +
+  scale_x_log10() +
+  coord_cartesian(ylim = c(-2, 2)) +
+  scale_colour_manual(
+    values = c(`FALSE` = "grey75", `TRUE` = renoir_15[11]),
+    labels = c("not significant", "FDR < 0.05"), name = NULL
+  ) +
+  facet_wrap(~ type) +
+  labs(x = "Mean of normalised counts", y = "log2 fold change") +
+  theme_minimal_custom()
+ggsave("results/graphs/RNAseq/liver_de_MA_before_after_shrinkage.pdf", ma_plot, width = 10, height = 5)
+
+# DE Results
+de_df <- res_de_shr |>
+  as.data.frame() |>
+  rownames_to_column("ensembl_gene_id") |>
+  mutate(ensgene = str_remove(ensembl_gene_id, "\\.\\d+$")) |>
+  left_join(
+    gene_annotations |> 
+      distinct(ensgene, .keep_all = TRUE), 
+    by = "ensgene"
+  ) |>
+  mutate(
+    symbol = coalesce(na_if(symbol, ""), ensgene),
+    direction = case_when(
+      padj < 0.05 & log2FoldChange > 0 ~ "higher in high FFMI loss",
+      padj < 0.05 & log2FoldChange < 0 ~ "lower in high FFMI loss",
+      TRUE ~ "not significant"
+    )
+  ) |>
+  arrange(padj)
+
+summary(de_df$log2FoldChange[de_df$padj < 0.05])
+de_df |> select(symbol, description, baseMean, log2FoldChange, padj, biotype) |> filter(padj < 0.05)
+write_csv(de_df, "results/tables/liver_de_ffmi_group_1y.csv")
+
+## Volcano plot
+p_thresh <- max(de_df$pvalue[de_df$padj < 0.05], na.rm = TRUE) # Largest raw p-value still significant after BH: the FDR 5% line on the -log10(p) scale
+
+liver_de_volcano_ffmi_1y <- de_df |>
+  filter(!is.na(padj)) |>
+  arrange(desc(direction == "not significant")) |>   # grey points drawn first, coloured on top
+  ggplot(aes(x = log2FoldChange, y = -log10(pvalue), colour = direction)) +
+  geom_point(size = 0.8, alpha = 0.7) +
+  geom_hline(yintercept = -log10(p_thresh), linetype = "dashed", colour = "grey40", linewidth = 0.3) +
+  geom_vline(xintercept = 0, colour = "grey30", linewidth = 0.3) +
+  ggrepel::geom_text_repel(
+    data = filter(de_df, padj < 0.05),
+    aes(label = symbol), size = 2.8, colour = "grey20",
+    max.overlaps = Inf, segment.size = 0.2, min.segment.length = 0
+  ) +
+  scale_colour_manual(values = de_cols, name = NULL) +
+  labs(
+    x = "log2 fold change (apeglm-shrunken)\nhigh vs modest/low FFMI loss",
+    y = "-log10(p-value)"
+  ) +
+  theme_minimal_custom()
+
+ggsave("results/graphs/RNAseq/liver_de_volcano_ffmi_1y.pdf", liver_de_volcano_ffmi_1y, width = 8, height = 6)
