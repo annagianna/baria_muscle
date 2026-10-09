@@ -551,6 +551,14 @@ cor_block <- function(df, x_vars, y_vars) {
     arrange(p.value)
 }
 
+sig_genes <- target_genes |>
+  filter(ensembl_gene_id %in% sig_targeted$ensembl_gene_id) |>
+  distinct(ensembl_gene_id, symbol)
+
+clin <- baria_muscle_wide |>
+  mutate(id = as.numeric(as.character(id))) |>
+  select(id, perc_change_ffmi_v4)
+
 liver_df <- liver_mb |>
   dplyr::select(id, all_of(sig_genes$ensembl_gene_id)) |>
   rename_with(~ sig_genes$symbol[match(.x, sig_genes$ensembl_gene_id)], starts_with("ENSG")) |>
@@ -648,53 +656,57 @@ pdf("results/graphs/RNAseq/liver_genes_metabolites_heatmap.pdf", width = 9, heig
 draw(ht_metab)
 dev.off()
 
-#### DE: %FFMI-change groups (1y) ####
-coldata <- baria_muscle_wide |>
+#### DE: continuous %FFMI loss (1y) ####
+# Prep data
+coldata_cont <- baria_muscle_wide |>
   mutate(id = as.numeric(as.character(id))) |>
   filter(
     id %in% liver_rnaseq$id[!liver_rnaseq$qc_exclude],
-    !is.na(perc_change_ffmi_v4_group), !is.na(age_v0), !is.na(fmi_v0) # DESeq2 can't handle NAs
+    !is.na(perc_change_ffmi_v4), !is.na(age_v0), !is.na(fmi_v0)
   ) |>
+  mutate(ffmi_loss = -perc_change_ffmi_v4) # Positive LFC = higher baseline liver expression with greater FFMI loss at 1y
+
+ffmi_unit <- 6 # <- set after checking the SD (sd(coldata_cont$ffmi_loss)); rounded to zero decimals; used for more interpretable plots
+
+coldata_cont <- coldata_cont |>
   mutate(
-    ffmi_group_1y = factor(
-      if_else(perc_change_ffmi_v4_group == "high", "high_loss", "moderate_low_loss"),
-      levels = c("moderate_low_loss", "high_loss") # moderate_low_loss is the reference
-    ),
-    age_v0_z = as.numeric(scale(age_v0)),  # centre on the final sample set
+    ffmi_loss_u = (ffmi_loss - mean(ffmi_loss)) / ffmi_unit,
+    age_v0_z = as.numeric(scale(age_v0)),
     fmi_v0_z = as.numeric(scale(fmi_v0))
   ) |>
-  arrange(id) |>  # same order as count_data
-  select(id, sex, age_v0_z, fmi_v0_z, ffmi_group_1y)
+  arrange(id) |>
+  select(id, sex, age_v0_z, fmi_v0_z, ffmi_loss_u)
 
-count_data <- liver_rnaseq |>
-  filter(!qc_exclude, id %in% coldata$id) |> # QC-excluded samples out (main analysis)
+count_data_cont <- liver_rnaseq |>
+  filter(!qc_exclude, id %in% coldata_cont$id) |>
   arrange(id) |>
   column_to_rownames(var = "id") |>
-  dplyr::select(starts_with("ENSG")) |> # drops qc_exclude, keeps genes only
-  as.matrix() |>
-  t() |>
+  select(starts_with("ENSG")) |>
+  as.matrix() |> 
+  t() |> 
   round()
-stopifnot(identical(colnames(count_data), as.character(coldata$id)))
+stopifnot(identical(colnames(count_data_cont), as.character(coldata_cont$id)))
 
-# Create DESeq2 dataset
-dds <- DESeqDataSetFromMatrix(
-  countData = count_data,
-  colData = coldata,
-  design =  ~ sex + age_v0_z + fmi_v0_z + ffmi_group_1y
-)
+dds_cont <- DESeqDataSetFromMatrix(count_data_cont, coldata_cont, design = ~ sex + age_v0_z + fmi_v0_z + ffmi_loss_u)
+dds_cont <- estimateSizeFactors(dds_cont)
+dds_cont <- dds_cont[rowMeans(counts(dds_cont, normalized = TRUE) >= 10) >= 0.5, ]
+dds_cont <- DESeq(dds_cont)
+resultsNames(dds_cont)
 
-# Pre-filter: >= 10 normalised counts in >= 50% of samples (same filter as in 0c_datacleaning_rnaseq.R)
-dds <- estimateSizeFactors(dds)
-keep <- rowMeans(counts(dds, normalized = TRUE) >= 10) >= 0.5
-dds <- dds[keep, ]
-nrow(dds)  # n of genes tested
+res_cont <- results(dds_cont, name = "ffmi_loss_u")
+res_cont_shr <- lfcShrink(dds_cont, coef = "ffmi_loss_u", type = "apeglm", res = res_cont) # apeglm shrunken results
 
-# DE analysis
-dds <- DESeq(dds)
-resultsNames(dds)  # exact coefficient name for the group effect
-
-
-
-pdf("results/graphs/RNAseq/liver_de_genes_top15_species_heatmap.pdf", width = 11, height = 2.5 + 0.35 * nrow(rho_de_sp))
-draw(ht_de_species)
-dev.off()
+# Targeted genes: apply BH within the pre-specified target gene set
+de_cont_targeted <- as.data.frame(res_cont) |>
+  rownames_to_column("ensembl_gene_id") |>
+  select(ensembl_gene_id, baseMean, log2FC_mle = log2FoldChange, pvalue) |>
+  left_join(
+    as.data.frame(res_cont_shr) |> 
+      rownames_to_column("ensembl_gene_id") |>
+      select(ensembl_gene_id, log2FC_shr = log2FoldChange, lfcSE_shr = lfcSE),
+    by = "ensembl_gene_id") |>
+  inner_join(target_genes |> 
+    distinct(ensembl_gene_id, symbol, category, description), by = "ensembl_gene_id") |>
+  mutate(padj_targeted = p.adjust(pvalue, method = "BH")) |>
+  arrange(pvalue)
+c(tested = nrow(de_cont_targeted), targeted = n_distinct(target_genes$ensembl_gene_id), na_p = sum(is.na(de_cont_targeted$pvalue)))
