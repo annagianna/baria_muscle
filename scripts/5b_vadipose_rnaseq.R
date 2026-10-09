@@ -15,6 +15,12 @@ library(apeglm)
 source("scripts/assets/functions.R")
 dir.create("results/graphs/RNAseq", recursive = TRUE, showWarnings = FALSE)
 
+# Bioconductor packages (DESeq2/S4Vectors/matrixStats) mask some dplyr verbs; always use dplyr's
+select <- dplyr::select
+rename <- dplyr::rename
+count  <- dplyr::count
+filter <- dplyr::filter
+
 # Theme
 renoir_15 <- met.brewer("Renoir", n = 15)
 
