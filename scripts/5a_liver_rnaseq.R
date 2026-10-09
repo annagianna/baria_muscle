@@ -692,3 +692,9 @@ nrow(dds)  # n of genes tested
 # DE analysis
 dds <- DESeq(dds)
 resultsNames(dds)  # exact coefficient name for the group effect
+
+
+
+pdf("results/graphs/RNAseq/liver_de_genes_top15_species_heatmap.pdf", width = 11, height = 2.5 + 0.35 * nrow(rho_de_sp))
+draw(ht_de_species)
+dev.off()
