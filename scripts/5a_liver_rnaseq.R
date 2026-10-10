@@ -270,7 +270,7 @@ core_genes <- list(
 
   hepatokines = c(
     "FGF21","SELENOP","LECT2","ANGPTL3","ANGPTL4","ANGPTL8","AHSG","FETUB",
-    "FGL1","RBP4","IGF1","IGFBP1","IGFBP2","IGFBP3","INHBA","INHBE","FST","FSTL3",
+    "FGL1","RBP4","INHBA","INHBE","FST","FSTL3",
     "GDF15","LEAP2","GPLD1","ENHO","TSKU","SHBG","SMOC1","APOA5"),
 
   # Fatty acid oxidation & ketogenesis
@@ -328,7 +328,16 @@ core_genes <- list(
   ins_clearance = c("CEACAM1","IDE"),
 
   # Glucagon/incretin receptors + cAMP/PKA/CREB + glucagon-driven amino-acid uptake
-  gluc_incr_signaling = c( "GCGR","GIPR","GLP1R","GLP2R","DPP4", "GNAS","PRKACA","CREB1","CRTC2", "SLC7A2","SLC38A4","SLC38A5")
+  gluc_incr_signaling = c( "GCGR","GIPR","GLP1R","GLP2R","DPP4", "GNAS","PRKACA","CREB1","CRTC2", "SLC7A2","SLC38A4","SLC38A5"),
+
+  # GH/IGF-1 axis (hepatic GH signalling and IGF-1 output/transport)
+  gh_igf_axis = c("GHR","JAK2","STAT5B","SOCS2","IGF1","IGFALS","IGFBP1","IGFBP2","IGFBP3"),
+
+  # Bile acid synthesis/FXR signalling/transport/TMAO (gut-derived metabolite handling)
+  bile_acid_tmao = c("CYP7A1","CYP8B1","CYP27A1","NR1H4","NR0B2","SLC10A1","ABCB11","FGFR4","KLB","FMO3"),
+
+  # Hepatocyte acute-phase response and endotoxin handling
+  acute_phase_endotoxin = c("CRP","SAA1","SAA2","HP","ORM1","FGB","LBP","CD14","IL6R","STAT3")
 )
 stopifnot(!anyDuplicated(unlist(core_genes))) # each gene in exactly one category
 
@@ -336,6 +345,7 @@ target_genes <- enframe(core_genes, name = "category", value = "symbol") |>
   unnest(symbol) |> 
   left_join(gene_annotations, by = "symbol") |> 
   inner_join(gene_ids, by = "ensgene")
+setdiff(unlist(core_genes), target_genes$symbol) # genes not annotated or not expressed in liver
 
 # Spearman correlations: top-15 species x targeted genes
 target_gene_mat <- liver_mb |>
@@ -564,9 +574,6 @@ liver_df <- liver_mb |>
   rename_with(~ sig_genes$symbol[match(.x, sig_genes$ensembl_gene_id)], starts_with("ENSG")) |>
   left_join(clin, by = "id")
 
-#### Liver RNA seq x %FFMI change 1y ####
-
-
 #### Metabolomics ####
 # Prep metab data
 metab_df <- as(otu_table(metab), "matrix") |> # samples x metabolites
@@ -710,3 +717,49 @@ de_cont_targeted <- as.data.frame(res_cont) |>
   mutate(padj_targeted = p.adjust(pvalue, method = "BH")) |>
   arrange(pvalue)
 c(tested = nrow(de_cont_targeted), targeted = n_distinct(target_genes$ensembl_gene_id), na_p = sum(is.na(de_cont_targeted$pvalue)))
+
+
+# DE signif gene expression vs. %FFMI change (check whether outliers/clusters drive the slope)
+de_signif <- de_cont_targeted |> 
+  filter(padj_targeted < 0.05)
+de_signif |> 
+  select(symbol, description, category, log2FC_mle, log2FC_shr, padj_targeted)
+
+normalized_cont <- counts(dds_cont, normalized = TRUE)[de_signif$ensembl_gene_id, , drop = FALSE]
+
+# Scatter plot
+de_scatter_df <- as.data.frame(t(log2(normalized_cont + 1))) |>
+  rownames_to_column("id") |>
+  mutate(id = as.numeric(id)) |>
+  pivot_longer(-id, names_to = "ensembl_gene_id", values_to = "expr") |>
+  left_join(
+    de_signif |> 
+      select(ensembl_gene_id, symbol), 
+    by = "ensembl_gene_id") |>
+  left_join(clin, by = "id")
+
+de_scatter <- de_scatter_df |> 
+  ggplot(aes(perc_change_ffmi_v4, expr)) +
+  geom_point(alpha = 0.5, size = 1.2) +
+  geom_smooth(method = "lm", formula = y ~ x, colour = renoir_15[3]) +
+  facet_wrap(~ symbol, scales = "free_y") +
+  labs(x = "%FFMI change at 1 year", y = "log2 normalised expression") +
+  theme_minimal_custom()
+ggsave("results/graphs/RNAseq/liver_de_cont_sig_genes_scatter.pdf", de_scatter, width = 9, height = 6)
+
+## Checks
+# i. Are the outliers the same people across genes? 
+de_scatter_df |>
+  group_by(symbol) |>
+  mutate(z = (expr - mean(expr)) / sd(expr)) |>
+  filter(abs(z) > 3) |>
+  ungroup() |>
+  count(id, sort = TRUE) 
+
+# ii. Does the association survive when outliers are removed?
+de_scatter_df |>
+  group_by(symbol) |>
+  summarize(
+    rho = cor(expr, perc_change_ffmi_v4, method = "spearman", use = "complete.obs"),
+    p = cor.test(expr, perc_change_ffmi_v4, method = "spearman", exact = FALSE)$p.value
+  )
