@@ -756,10 +756,26 @@ de_scatter_df |>
   ungroup() |>
   count(id, sort = TRUE) 
 
-# ii. Does the association survive when outliers are removed?
+# ii. Robust to outliers? (Spearman rank-based)
 de_scatter_df |>
   group_by(symbol) |>
   summarize(
     rho = cor(expr, perc_change_ffmi_v4, method = "spearman", use = "complete.obs"),
     p = cor.test(expr, perc_change_ffmi_v4, method = "spearman", exact = FALSE)$p.value
   )
+
+
+de_signif |> select(symbol, log2FC_shr, padj_targeted)
+
+### Check overlap: signif species ~ (targeted) liver genes x DE liver genes (%FFMI 1y)
+overlap <- de_signif |>
+  select(ensembl_gene_id, symbol, description, category, log2FC_shr, padj_targeted) |>
+  inner_join(
+    sig_targeted |> 
+      select(ensembl_gene_id, species, rho, p_fdr), 
+    by = "ensembl_gene_id"
+  ) |>
+  mutate(
+    species_label = top15_species_labels$species_label[match(species, top15_species_labels$species)]
+  )
+overlap
