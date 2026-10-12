@@ -26,8 +26,8 @@ filter <- dplyr::filter
 renoir_15 <- met.brewer("Renoir", n = 15)
 renoir_cols_20 <- met.brewer("Renoir", n = 20)
 de_cols <- c( # same high/low colors used in the alpha, beta diveristy scripts
-  "higher in high FFMI loss" = renoir_cols_20[18],
-  "lower in high FFMI loss"  = renoir_cols_20[5],
+  "higher with more FFMI loss" = renoir_cols_20[18],
+  "lower with more FFMI loss"  = renoir_cols_20[5],
   "not significant" = "grey80"
 )
 
@@ -463,7 +463,7 @@ cor_plots <- pmap(
         title = gene_label(symbol),
         subtitle = paste0(
           "Spearman rho = ", round(rho, 2),
-          " | FDR = ", signif(p_fdr, 2)
+          " | q = ", signif(p_fdr, 2)
         ),
         x = paste0(species_name, "\nlog10 relative abundance"),
         y = "Liver gene expression (VST)"
@@ -703,6 +703,27 @@ resultsNames(dds_cont)
 res_cont <- results(dds_cont, name = "ffmi_loss_u")
 res_cont_shr <- lfcShrink(dds_cont, coef = "ffmi_loss_u", type = "apeglm", res = res_cont) # apeglm shrunken results
 
+# MA plot
+ma_df <- bind_rows(
+  plotMA(res_cont, returnData = TRUE) |> mutate(type = "Before shrinkage (MLE)"),
+  plotMA(res_cont_shr, returnData = TRUE) |> mutate(type = "After shrinkage (apeglm)")
+) |>
+  mutate(type = factor(type, levels = c("Before shrinkage (MLE)", "After shrinkage (apeglm)")))
+
+ma_plot_cont <- ggplot(ma_df, aes(mean, lfc, colour = isDE)) +
+  geom_point(size = 0.6, alpha = 0.6) +
+  geom_hline(yintercept = 0, colour = "grey30") +
+  scale_x_log10() +
+  scale_colour_manual(
+    values = c(`FALSE` = "grey75", `TRUE` = renoir_15[11]),
+    labels = c("not significant", "FDR < 0.05 (all genes)"),
+    name = NULL
+  ) +
+  facet_wrap(~ type) +
+  labs(x = "Mean of normalised counts", y = "log2FC per 6% FFMI loss") +
+  theme_minimal_custom()
+ggsave("results/graphs/RNAseq/liver_de_cont_MA_before_after_shrinkage.pdf", ma_plot_cont, width = 10, height = 5)
+
 # Targeted genes: apply BH within the pre-specified target gene set
 de_cont_targeted <- as.data.frame(res_cont) |>
   rownames_to_column("ensembl_gene_id") |>
@@ -718,10 +739,10 @@ de_cont_targeted <- as.data.frame(res_cont) |>
   arrange(pvalue)
 c(tested = nrow(de_cont_targeted), targeted = n_distinct(target_genes$ensembl_gene_id), na_p = sum(is.na(de_cont_targeted$pvalue)))
 
-
 # DE signif gene expression vs. %FFMI change (check whether outliers/clusters drive the slope)
 de_signif <- de_cont_targeted |> 
   filter(padj_targeted < 0.05)
+
 de_signif |> 
   select(symbol, description, category, log2FC_mle, log2FC_shr, padj_targeted)
 
@@ -764,9 +785,33 @@ de_scatter_df |>
     p = cor.test(expr, perc_change_ffmi_v4, method = "spearman", exact = FALSE)$p.value
   )
 
+## Forest plot (continuous DE)
+# Data
+forest_de_cont_df <- de_cont_targeted |> 
+  filter(padj_targeted < 0.05) |> 
+  mutate(
+    direction = if_else(log2FC_shr > 0, "higher with more FFMI loss", "lower with more FFMI loss"),
+    lower = log2FC_shr - 1.96 * lfcSE_shr, # approx. 95% interval
+    upper = log2FC_shr + 1.96 * lfcSE_shr,
+    label = fct_reorder(gene_label(symbol), log2FC_shr)
+  )
 
-de_signif |> select(symbol, log2FC_shr, padj_targeted)
+# Plot
+forest_de_cont_plot <- forest_de_cont_df |> 
+  ggplot(aes(x = log2FC_shr, y = label, color = direction)) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey40", linewidth = 0.3) +
+  geom_errorbar(aes(xmin = lower, xmax = upper), width = 0.2) +
+  geom_point(size = 2.5) +
+  scale_colour_manual(values = de_cols, name = NULL) +
+  labs(
+    title = "Differences in gene expression",
+    x = paste0("log2FC per ", ffmi_unit, "% FFMI loss (approx. 95% CI)"),
+    y = NULL
+  ) +
+  theme_minimal_custom()
+ggsave("results/graphs/RNAseq/forest_de_cont_plot.pdf", forest_de_cont_plot, width = 9, height = 1.5 + 0.4 * nrow(forest_de_cont_df))
 
+#### Overlap Spearman cors x DE on continuous % FFMI 1y
 ### Check overlap: signif species ~ (targeted) liver genes x DE liver genes (%FFMI 1y)
 overlap <- de_signif |>
   select(ensembl_gene_id, symbol, description, category, log2FC_shr, padj_targeted) |>
@@ -779,3 +824,15 @@ overlap <- de_signif |>
     species_label = top15_species_labels$species_label[match(species, top15_species_labels$species)]
   )
 overlap
+overlap |> 
+  select(symbol, description, category, log2FC_shr, species_label, rho, p_fdr)
+nrow(overlap)
+
+
+overlap |>
+  left_join(top15_species_labels |> select(species, estimate), by = "species") |>
+  mutate(
+    gene_dir = sign(-log2FC_shr),  # +1 = gene higher with FFMI preservation
+    consistent = sign(estimate) == sign(rho) * gene_dir
+  ) |>
+  select(symbol, description, species_label, estimate, rho, log2FC_shr, consistent)
