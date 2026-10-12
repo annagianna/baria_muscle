@@ -5,6 +5,7 @@
 library(tidyverse)
 library(DESeq2)
 library(MetBrewer)
+library(annotables)
 
 source("scripts/assets/functions.R")
 
@@ -33,6 +34,21 @@ baria_muscle_rnaseq <- rnaseq |>
 # Expression filter
 min_count <- 10 # >= 10 normalised reads per gene
 min_prop <- 0.5 # in >= 50% of samples
+
+# Remove unnamed genes
+named_genes <- grch38 |> 
+  filter(!is.na(symbol), str_trim(symbol) != "") |> 
+  pull(ensgene) |> 
+  unique()
+
+ensg_cols <- baria_muscle_rnaseq |> 
+  select(starts_with("ENSG")) |> 
+  names()
+
+unnamed_genes <- ensg_cols[!str_remove(ensg_cols, "\\.\\d+") %in% named_genes]
+
+baria_muscle_rnaseq_named <- baria_muscle_rnaseq |> 
+  select(-all_of(unnamed_genes))
 
 # Helper: size factors, expression filter, VST normalization (from DESEq2)
 run_vst <- function(counts) {
@@ -133,7 +149,7 @@ plot_qc_tissue <- function(qc_tbl, label_ids = NULL) { # label_ids = ids to labe
 
 # Run QC for all tissues (computes VST + PCA once per tissue)
 tissues <- c("Liver", "Jejunum", "vFat", "subFat")
-qc_all <- map(tissues, ~ qc_rnaseq_tissue(baria_muscle_rnaseq, .x)) |>
+qc_all <- map(tissues, ~ qc_rnaseq_tissue(baria_muscle_rnaseq_named, .x)) |>
   set_names(tissues)
 
 ## Outlier exclusions (IDs in gitignored file, not in public repo)
@@ -206,4 +222,4 @@ save_rnaseq_tissue <- function(rnaseq_data, tissue_name, exclude_ids, reasons) {
   message(tissue_name, ": ", sum(!keep_samples), " excluded, ", sum(keep_samples), " retained")
 }
 
-walk(tissues, ~ save_rnaseq_tissue(baria_muscle_rnaseq, .x, qc_exclude[[.x]], qc_reasons))
+walk(tissues, ~ save_rnaseq_tissue(baria_muscle_rnaseq_named, .x, qc_exclude[[.x]], qc_reasons))
