@@ -26,7 +26,8 @@ baria_muscle_rnaseq <- rnaseq |>
   rownames_to_column("Sample") |> 
   mutate(
     id = as.numeric(str_extract(Sample, "^\\d+")),
-    tissue = str_extract(Sample, "(Liver|subFat|vFat|Jejunum)")
+    tissue = str_extract(Sample, "(Liver|subFat|vFat|Jejunum)"),
+    id = if_else(tissue == "Liver" & id == 337, 338, id) # liver sample labelled 337 belongs to 338
   ) |>
   filter(id %in% baria_muscle_wide$id) |> 
   mutate(across(starts_with("ENSG"), ~ as.numeric(str_replace(as.character(.x), ",", ".")))) # fix inconsistent decimals
@@ -152,9 +153,16 @@ tissues <- c("Liver", "Jejunum", "vFat", "subFat")
 qc_all <- map(tissues, ~ qc_rnaseq_tissue(baria_muscle_rnaseq_named, .x)) |>
   set_names(tissues)
 
-## Outlier exclusions (IDs in gitignored file, not in public repo)
+## Exclusions
 # Liver
-qc_reasons <- read_csv("data/processed_data/rnaseq_qc_exclusions.csv", col_types = "cdc") # tissue, id, qc_reason
+qc_reasons <- bind_rows(
+  tibble(
+    tissue = "Liver",
+    id = c(361, 362, 377, 382, 383, 386, 388, 390, 395, 399, 401, 402, 405, 407, 408, 409, 413, 415, 421, 424),
+    qc_reason = "low_depth"
+  ),
+  tibble(tissue = "Liver", id = c(20, 311), qc_reason = "adipose_profile")
+)
 
 # i. low depth: samples forming a distinct cluster outside the main cloud on the QC PCA, all with small library size
 liver_exclude_lowdepth <- qc_reasons |> 
