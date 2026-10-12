@@ -103,10 +103,10 @@ for (species_id in unique(sig$species)) {
     left_join(sig |> filter(species == species_id) |> select(metabolite, rho, p_fdr), by = "metabolite") |>
     mutate(facet_label = fct_reorder(str_wrap(metabolite_label(metabolite), 22), -rho))
 
-  # rho/FDR text drawn inside each panel (not the facet strip) - one label
+  # rho/q text drawn inside each panel (not the facet strip) - one label
   # per facet, positioned in the top-left corner of its own (free) scale
   ann <- df |> distinct(facet_label, rho, p_fdr) |>
-    mutate(label = sprintf("rho = %.2f\nFDR %s", rho,
+    mutate(label = sprintf("rho = %.2f\nq %s", rho,
                             if_else(p_fdr < 0.001, format_fdr(p_fdr), paste0("= ", format_fdr(p_fdr)))))
 
   p <- ggplot(df, aes(x = abundance, y = level)) +
@@ -175,7 +175,7 @@ tax <- as(tax_table(metab), "matrix")
 # Significance legend (drawn once, reused by every heatmap) - stars belong in
 # a proper legend, not spelled out in the title.
 lgd_sig <- Legend(
-  labels = c("FDR < 0.05", "FDR < 0.01", "FDR < 0.001"),
+  labels = c("q < 0.05", "q < 0.01", "q < 0.001"),
   title = "Significance",
   type = "points",
   pch = c("*", "**", "***"),

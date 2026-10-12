@@ -138,7 +138,7 @@ col_fun_species <- colorRamp2(c(-rho_max, 0, rho_max), c(renoir_15[14], "white",
 
 # Tiered significance legend (stars belong in a proper legend, not spelled out in the title)
 lgd_sig_pathway <- Legend(
-  labels = c("FDR < 0.05", "FDR < 0.01", "FDR < 0.001"),
+  labels = c("q < 0.05", "q < 0.01", "q < 0.001"),
   title = "Significance",
   type = "points",
   pch = c("*", "**", "***"),
