@@ -18,7 +18,7 @@ fill_cols_2 <- scale_fill_manual(name = "FFMI loss at 1 year", values = c("high"
 x_axis_labels_loss <- scale_x_discrete(labels = c("high" = "High","modest/low" = "Modest/low"))
 
 # Data
-baria_mb <- readRDS("data/processed_data/BARIA_mb_clean.RDS")
+baria_mb <- readRDS("data/processed_data/BARIA_mb_clean_unfiltered.RDS")
 
 # Output folder
 dir.create("results/graphs/alphadiversity", recursive = TRUE, showWarnings = FALSE)
