@@ -44,7 +44,7 @@ alpha <- tibble(
 # Add metadata
 alpha_meta <- as(sample_data(baria_mb), "data.frame") |>
   rownames_to_column(var = "Sample") |>
-  select(Sample, id, visit, perc_change_ffmi_v4_group) |>
+  select(Sample, id, visit, perc_change_ffmi_v4_group, sex, age_v0, perc_change_ffmi_v4, perc_change_weight_kg_v4) |>
   left_join(alpha, by = "Sample")
 
 #### Baseline ####
