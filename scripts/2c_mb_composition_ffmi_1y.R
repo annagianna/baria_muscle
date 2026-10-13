@@ -12,7 +12,7 @@ source("scripts/assets/functions.R")
 renoir_20 <- met.brewer("Renoir", n = 20)
 
 # Data
-baria_mb <- readRDS("data/processed_data/BARIA_mb_clean.RDS")
+baria_mb <- readRDS("data/processed_data/BARIA_mb_clean_unfiltered.RDS")
 
 # Output folder
 dir.create("results/graphs/composition", recursive = TRUE, showWarnings = FALSE)

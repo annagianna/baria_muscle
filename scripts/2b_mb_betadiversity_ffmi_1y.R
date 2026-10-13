@@ -27,7 +27,7 @@ color_cols_2 <- scale_color_manual(
 )
 
 # Data
-baria_mb <- readRDS("data/processed_data/BARIA_mb_clean.RDS")
+baria_mb <- readRDS("data/processed_data/BARIA_mb_clean_unfiltered.RDS")
 
 # Output folder
 dir.create("results/graphs/betadiversity", recursive = TRUE, showWarnings = FALSE)
