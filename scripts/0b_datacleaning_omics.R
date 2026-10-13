@@ -50,10 +50,10 @@ baria_mb_clean <- prune_samples(sample_data(run1_mb)$id %in% bia_ids, run1_mb)
 # Add relevant metadata to mb
 baria_mb_metadata <- as(sample_data(baria_mb_clean), "data.frame") |>
   rownames_to_column(var = "Sample") |>
-  select(-any_of(c("sex", "ffmi_v0", "low_ffmi_v0", "perc_change_ffmi_v4_group", "perc_change_ffmi_v5_group"))) |>
+  select(-any_of(c("sex", "ffmi_v0", "low_ffmi_v0", "perc_change_ffmi_v4_group", "perc_change_ffmi_v5_group","age_v0", "perc_change_ffmi_v4", "perc_change_weight_kg_v4"))) |>
   left_join(
     baria_muscle_wide |>
-      select(id, sex, ffmi_v0, low_ffmi_v0, perc_change_ffmi_v4_group, perc_change_ffmi_v5_group),
+      select(id, sex, ffmi_v0, low_ffmi_v0, perc_change_ffmi_v4_group, perc_change_ffmi_v5_group, age_v0, perc_change_ffmi_v4, perc_change_weight_kg_v4),
     by = "id"
   ) |>
   column_to_rownames("Sample")
