@@ -594,11 +594,6 @@ cor_genes_metab |>
   filter(p_fdr < 0.05) |> 
   slice_head(n = 30)
 
-# Correlation metabolites × outcome (%FFMI change at 1y) -> triangulation
-metab_hits <- cor_genes_metab |> filter(p_fdr < 0.05) |> distinct(y) |> pull(y)
-cor_metab_ffmi <- cor_block(liver_metab_df, metab_hits, "perc_change_ffmi_v4")
-cor_metab_ffmi |> slice_head(n = 20)
-
 ## Plots ##
 # Helper functions
 # Long cor_block output -> wide matrix (rows = x, cols = y)
@@ -873,9 +868,11 @@ overlap |>
   ) |>
   select(symbol, description, species_label, estimate, rho, log2FC_shr, consistent)
 
-nrow(coldata_cont)  # compare with the n before you added the %TWL filter
-baria_muscle_wide |>
-  mutate(id = as.numeric(as.character(id))) |>
-  filter(id %in% liver_rnaseq$id[!liver_rnaseq$qc_exclude],
-         !is.na(perc_change_ffmi_v4), !is.na(age_v0), !is.na(fmi_v0)) |>
-  summarise(n = n(), missing_twl = sum(is.na(perc_change_weight_kg_v4)))
+#### Secondary: candidate genes (overlap) × metabolites ####
+cand_genes <- overlap |> 
+  distinct(ensembl_gene_id, symbol)
+
+cor_cand_metab <- cor_block(liver_metab_df, cand_genes$symbol, metab_names)
+cor_cand_metab |> 
+  filter(p_fdr < 0.05) |> 
+  count(x) # hits per gene
