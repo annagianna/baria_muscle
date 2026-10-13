@@ -210,8 +210,7 @@ ht <- Heatmap(
   rho_mat_t,
   name = "Spearman\nrho",
   col = col_fun,
-  cluster_rows = TRUE, show_row_dend = FALSE, # hide dendrogram but keep similarity ordering!
-  cluster_row_slices = FALSE, # keep categories in core_genes order so row_title matches
+  cluster_rows = TRUE,
   cluster_columns = TRUE,
   row_dend_side = "right",
   row_names_side = "left",
@@ -528,7 +527,8 @@ ht_targeted_compact <- Heatmap(
   row_title_rot = 0,
   row_title_gp = gpar(fontsize = 8),
   row_gap = unit(1, "mm"),
-  cluster_rows = TRUE, show_row_dend = FALSE, # hide dendrogram but keep similarity ordering
+  cluster_rows = TRUE, show_row_dend = FALSE, # hide dend; keep similarity ordering
+  cluster_row_slices = FALSE, # keep categories in core_genes order so that row_title matches
   cluster_columns = TRUE, show_column_dend = FALSE,
   row_names_side = "left",
   row_labels = gene_label(rownames(rho_targeted_compact)),
