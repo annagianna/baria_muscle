@@ -210,7 +210,8 @@ ht <- Heatmap(
   rho_mat_t,
   name = "Spearman\nrho",
   col = col_fun,
-  cluster_rows = TRUE,
+  cluster_rows = TRUE, show_row_dend = FALSE, # hide dendrogram but keep similarity ordering!
+  cluster_row_slices = FALSE, # keep categories in core_genes order so row_title matches
   cluster_columns = TRUE,
   row_dend_side = "right",
   row_names_side = "left",
