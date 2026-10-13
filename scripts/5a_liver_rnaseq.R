@@ -491,59 +491,58 @@ ggsave(
   )
 
 ## Compact targeted heatmap ##
-# Display threshold for slides: genes and species with >= min_hits FDR-significant associations
-min_hits <- 1
+# Display thresholds
+min_hits_species <- 2 # species with >= 2 FDR-signifl. gene correlations
+min_hits_genes <- 1 # genes with >= 1 FDR-signif. correlation among the kept species
 sig_targeted_mat <- fdr_targeted < 0.05
-genes_keep_targeted   <- rownames(fdr_targeted)[rowSums(sig_targeted_mat) >= min_hits]
-species_keep_targeted <- colnames(fdr_targeted)[colSums(sig_targeted_mat) >= min_hits]
+species_keep_targeted <- colnames(fdr_targeted)[colSums(sig_targeted_mat) >= min_hits_species]
+genes_keep_targeted <- rownames(fdr_targeted)[rowSums(sig_targeted_mat[, species_keep_targeted, drop = FALSE]) >= min_hits_genes]
 
-c(genes = length(genes_keep_targeted), species = length(species_keep_targeted))  # check before plotting
+c(genes = length(genes_keep_targeted), species = length(species_keep_targeted)) # check before plotting
 
 rho_targeted_compact <- rho_targeted[genes_keep_targeted, species_keep_targeted, drop = FALSE]
 fdr_targeted_compact <- fdr_targeted[genes_keep_targeted, species_keep_targeted, drop = FALSE]
 
 # Category annotation for the kept genes only
 gene_categories_compact <- gene_categories[match(genes_keep_targeted, rownames(rho_targeted))]
-category_anno_compact <- rowAnnotation(Category = gene_categories_compact, col = list(Category = category_cols), show_annotation_name = FALSE
+gene_categories_compact <- factor(gene_categories_compact, levels = intersect(names(core_genes), gene_categories_compact))
+category_anno_compact <- rowAnnotation(
+  Category = gene_categories_compact,
+  col = list(Category = category_cols),
+  show_legend = FALSE,
+  show_annotation_name = FALSE
 )
 
 # Species labels
 species_labels_compact <- top15_species_labels$species_label[match(colnames(rho_targeted_compact), top15_species_labels$species)]
 
-# Heatmap
 ht_targeted_compact <- Heatmap(
   rho_targeted_compact,
   name = "Spearman\nrho",
   col = colorRamp2(c(-0.3, 0, 0.3), c(renoir_15[3], "white", renoir_15[11])),
-  left_annotation = category_anno_compact,
+  right_annotation = category_anno_compact,
   row_split = gene_categories_compact,
-  row_title = NULL,
+  row_title = str_replace_all(levels(gene_categories_compact), "_", " "),
+  row_title_side = "right",
+  row_title_rot = 0,
+  row_title_gp = gpar(fontsize = 8),
+  row_gap = unit(1, "mm"),
+  cluster_rows = TRUE, show_row_dend = FALSE, # hide dendrogram but keep similarity ordering
+  cluster_columns = TRUE, show_column_dend = FALSE,
   row_names_side = "left",
-  row_dend_side = "right",
   row_labels = gene_label(rownames(rho_targeted_compact)),
   row_names_max_width = max_text_width(gene_label(rownames(rho_targeted_compact)), gp = gpar(fontsize = 8)),
-  cluster_rows = TRUE,
-  cluster_columns = TRUE,
+  row_names_gp = gpar(fontsize = 8),
   column_labels = species_labels_compact,
   column_names_rot = 45,
-  column_names_gp = gpar(
-    fontsize = 10,
-    fontface = "italic",
-    col = species_label_colors[species_labels_compact]
-  ),
-  row_names_gp = gpar(fontsize = 8),
+  column_names_gp = gpar(fontsize = 10, fontface = "italic", col = species_label_colors[species_labels_compact]),
   cell_fun = function(j, i, x, y, width, height, fill) {
-    grid.text(
-      stars(fdr_targeted_compact[i, j]),
-      x, y,
-      gp = gpar(fontsize = 10)
-    )
+    grid.text(stars(fdr_targeted_compact[i, j]), x, y, gp = gpar(fontsize = 10))
   }
 )
 
-# Save
-# Size grows with the number of genes (rows) and species (columns)
-pdf("results/graphs/RNAseq/liver_species_targeted_genes_heatmap_compact.pdf", width = 6 + 0.45 * ncol(rho_targeted_compact), height = 2 + 0.18 * nrow(rho_targeted_compact))
+pdf("results/graphs/RNAseq/liver_species_targeted_genes_heatmap_compact.pdf",
+    width = 7 + 0.45 * ncol(rho_targeted_compact), height = 2 + 0.18 * nrow(rho_targeted_compact))
 draw(ht_targeted_compact, newpage = FALSE)
 dev.off()
 
@@ -669,7 +668,7 @@ coldata_cont <- baria_muscle_wide |>
   mutate(id = as.numeric(as.character(id))) |>
   filter(
     id %in% liver_rnaseq$id[!liver_rnaseq$qc_exclude],
-    !is.na(perc_change_ffmi_v4), !is.na(age_v0), !is.na(fmi_v0)
+    !is.na(perc_change_ffmi_v4), !is.na(age_v0), !is.na(fmi_v0), !is.na(perc_change_weight_kg_v4)
   ) |>
   mutate(ffmi_loss = -perc_change_ffmi_v4) # Positive LFC = higher baseline liver expression with greater FFMI loss at 1y
 
@@ -679,10 +678,11 @@ coldata_cont <- coldata_cont |>
   mutate(
     ffmi_loss_u = (ffmi_loss - mean(ffmi_loss)) / ffmi_unit,
     age_v0_z = as.numeric(scale(age_v0)),
-    fmi_v0_z = as.numeric(scale(fmi_v0))
+    fmi_v0_z = as.numeric(scale(fmi_v0)),
+    twl_z = as.numeric(scale(perc_change_weight_kg_v4))
   ) |>
   arrange(id) |>
-  select(id, sex, age_v0_z, fmi_v0_z, ffmi_loss_u)
+  select(id, sex, age_v0_z, fmi_v0_z, ffmi_loss_u, twl_z)
 
 count_data_cont <- liver_rnaseq |>
   filter(!qc_exclude, id %in% coldata_cont$id) |>
@@ -811,6 +811,41 @@ forest_de_cont_plot <- forest_de_cont_df |>
   theme_minimal_custom()
 ggsave("results/graphs/RNAseq/forest_de_cont_plot.pdf", forest_de_cont_plot, width = 9, height = 1.5 + 0.4 * nrow(forest_de_cont_df))
 
+# Sensitivity: DE adj. for %TWL
+dds_cont_twl <- DESeqDataSetFromMatrix(
+  count_data_cont,
+  coldata_cont, 
+  design = ~ sex + age_v0_z + fmi_v0_z + twl_z + ffmi_loss_u
+)
+dds_cont_twl <- estimateSizeFactors(dds_cont_twl)
+dds_cont_twl <- dds_cont_twl[rowMeans(counts(dds_cont_twl, normalized = TRUE) >= 10) >= 0.5, ]
+dds_cont_twl <- DESeq(dds_cont_twl)
+res_cont_twl <- results(dds_cont_twl, name = "ffmi_loss_u")
+
+de_cont_targeted_twl <- as.data.frame(res_cont_twl) |>
+  rownames_to_column("ensembl_gene_id") |>
+  select(
+    ensembl_gene_id,
+    log2FC_mle_twl = log2FoldChange,
+    pvalue_twl = pvalue
+  ) |>
+  inner_join(target_genes |> 
+    distinct(ensembl_gene_id, symbol), 
+  by = "ensembl_gene_id") |>
+  mutate(padj_targeted_twl = p.adjust(pvalue_twl, method = "BH"))
+
+# Compare unadj. vs. %TWL-adj. DE results
+de_twl_compare <- de_signif |>
+  select(ensembl_gene_id, symbol, log2FC_mle, padj_targeted) |>
+  left_join(de_cont_targeted_twl |> 
+    select(ensembl_gene_id, log2FC_mle_twl, padj_targeted_twl), 
+  by = "ensembl_gene_id") |>
+  mutate(
+    same_direction = sign(log2FC_mle) == sign(log2FC_mle_twl),
+    still_sig = padj_targeted_twl < 0.05
+  )
+de_twl_compare # all TRUE
+
 #### Overlap Spearman cors x DE on continuous % FFMI 1y
 ### Check overlap: signif species ~ (targeted) liver genes x DE liver genes (%FFMI 1y)
 overlap <- de_signif |>
@@ -836,3 +871,10 @@ overlap |>
     consistent = sign(estimate) == sign(rho) * gene_dir
   ) |>
   select(symbol, description, species_label, estimate, rho, log2FC_shr, consistent)
+
+nrow(coldata_cont)  # compare with the n before you added the %TWL filter
+baria_muscle_wide |>
+  mutate(id = as.numeric(as.character(id))) |>
+  filter(id %in% liver_rnaseq$id[!liver_rnaseq$qc_exclude],
+         !is.na(perc_change_ffmi_v4), !is.na(age_v0), !is.na(fmi_v0)) |>
+  summarise(n = n(), missing_twl = sum(is.na(perc_change_weight_kg_v4)))
