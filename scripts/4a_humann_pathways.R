@@ -8,15 +8,11 @@ library(phyloseq)
 library(MetBrewer)
 library(ComplexHeatmap)
 library(circlize)
-
+source("scripts/assets/functions.R")
 dir.create("results/graphs/HUMAnN", recursive = TRUE, showWarnings = FALSE)
 
 # Theme
-renopecies_label_colors <- setNames(
-  species_direction_colors[top15_species_labels$estimate_direction],
-  top15_species_labels$species_label
-)ir_15 <- met.brewer("Renoir", n = 15)
-source("scripts/assets/functions.R")
+renoir_15 <- met.brewer("Renoir", n = 15)
 
 # Data
 humann_long <- readRDS("data/processed_data/BARIA_humann_pathways_long.RDS")
@@ -29,7 +25,7 @@ html_entities <- c("&alpha;" = "α", "&beta;" = "β", "&gamma;" = "γ", "&delta;
 humann_long <- humann_long |>
   mutate(pathway_name = str_replace_all(pathway_name, html_entities))
 
-# Top-15 species by ML feature importance for deltaFFMI
+# Top-15 species by ML feature importance for %change FFMI at 1y
 fi <- get_feature_importance("results/mlmodels/perc_change_ffmi_v4/all", "perc_change_ffmi_v4_all", "reg")
 top15_species <- top_features(fi, n = 15)$FeatName
 top15_species_labels <- tibble(species = top15_species, species_label = species_label(top15_species)) |> 
@@ -42,6 +38,12 @@ top15_species_labels <- tibble(species = top15_species, species_label = species_
 
 # Colors for direction of species association with 1-year FFMI trajectory
 species_direction_colors <- c(positive = renoir_15[15], negative = renoir_15[9])
+
+# Species label colours by direction of association with 1-year %FFMI change
+species_label_colors <- setNames(
+  species_direction_colors[top15_species_labels$estimate_direction],
+  top15_species_labels$species_label
+)
 
 # Multi-visit abundance for the top 15 species (baria_mb spans v0/v4/v5, unlike the baseline-only object used in 4b/4c)
 top_species_long <- as(otu_table(baria_mb), "matrix") |>
@@ -90,7 +92,7 @@ humann_species_cor <- humann_top_species |>
     p = map_dbl(test, ~ .x$p.value)
   ) |>
   select(-test) |>
-  group_by(visit, species) |>
+  group_by(visit) |>
   mutate(padj = p.adjust(p, method = "BH")) |>
   ungroup()
 
