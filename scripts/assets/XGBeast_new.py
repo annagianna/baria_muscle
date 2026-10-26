@@ -565,9 +565,13 @@ def main(args):
             else:
                 print("\nNo scaling...")
 
+        # per-iteration seed: reproducible, but different draws in every iteration
+        iter_seed = rand_seed + i
+        rng = np.random.default_rng(iter_seed)
+
         # permute y if model is in permuted-mode
         if permute_mode:
-            np.random.shuffle(y)
+            rng.shuffle(y)
             print(
                 "\nThis model is running in PERMUTED Mode!\nY is shuffled at each iteration.\n"
             )
@@ -589,21 +593,20 @@ def main(args):
         if args.add_random_variables:
             # add random var1
             # random variables are randomized every iteration
-            np.random.seed(i)
-            random_column1_train = np.random.random(size=len(y_train)).reshape(
+            random_column1_train = rng.random(size=len(y_train)).reshape(
                 len(y_train), 1
             )
             X_train = np.append(X_train, random_column1_train, axis=1)
-            random_column1_test = np.random.random(size=len(y_test)).reshape(
+            random_column1_test = rng.random(size=len(y_test)).reshape(
                 len(y_test), 1
             )
             X_test = np.append(X_test, random_column1_test, axis=1)
-            # add random var2 (no re-seed, otherwise identical to var1)
-            random_column2_train = np.random.random(size=len(y_train)).reshape(
+            # add random var2
+            random_column2_train = rng.random(size=len(y_train)).reshape(
                 len(y_train), 1
             )
             X_train = np.append(X_train, random_column2_train, axis=1)
-            random_column2_test = np.random.random(size=len(y_test)).reshape(
+            random_column2_test = rng.random(size=len(y_test)).reshape(
                 len(y_test), 1
             )
             X_test = np.append(X_test, random_column2_test, axis=1)
@@ -629,7 +632,7 @@ def main(args):
                 X_train,
                 y_train,
                 test_size=0.15,
-                random_state=rand_seed + i,
+                random_state=iter_seed,
                 stratify=y_train if model_type == "XGB_class" else None,
             )
             fit_params["eval_set"] = [(X_val, y_val)]
@@ -645,6 +648,7 @@ def main(args):
                 tree_method="auto",
                 eval_metric="auc",
                 early_stopping_rounds=es_rounds,
+                random_state=iter_seed,
                 scale_pos_weight=spw,
             )
             skf = StratifiedKFold(n_splits=CV_fold)
@@ -656,6 +660,7 @@ def main(args):
                 tree_method="auto",
                 eval_metric="rmse",
                 early_stopping_rounds=es_rounds,
+                random_state=iter_seed,
             )
             skf = KFold(n_splits=CV_fold)
             scoring = "r2"
