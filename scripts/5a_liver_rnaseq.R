@@ -492,8 +492,8 @@ ggsave(
 
 ## Compact targeted heatmap ##
 # Display thresholds
-min_hits_species <- 2 # species with >= 2 FDR-signifl. gene correlations
-min_hits_genes <- 1 # genes with >= 1 FDR-signif. correlation among the kept species
+min_hits_species <- 10 # species with >= 2 FDR-signifl. gene correlations
+min_hits_genes <- 1 # genes with >= 4 FDR-signif. correlation among the kept species
 sig_targeted_mat <- fdr_targeted < 0.05
 species_keep_targeted <- colnames(fdr_targeted)[colSums(sig_targeted_mat) >= min_hits_species]
 genes_keep_targeted <- rownames(fdr_targeted)[rowSums(sig_targeted_mat[, species_keep_targeted, drop = FALSE]) >= min_hits_genes]
@@ -585,7 +585,7 @@ liver_metab_df <- liver_df |> inner_join(metab_df, by = "id")
 nrow(liver_metab_df)  # overlap n
 
 # Correlation liver genes x metabolites
-cor_genes_metab <- cor_block(liver_metab_df, sig_genes$symbol, metab_names)
+cor_genes_metab <- cor_block(liver_metab_df, genes_keep_targeted, metab_names)
 cor_genes_metab |> 
   filter(p_fdr < 0.05) |> 
   dplyr::count(x, sort = TRUE) # hits per gene
@@ -619,17 +619,23 @@ pathway_colors <- c(
 )
 metab_tax <- as(tax_table(metab), "matrix")
 
-# Figure 3: liver genes × top metabolites heatmap (shows 30 metabolites with the strongest signif associations)
+# Figure 3: liver genes × top metabolites heatmap (shows 20 metabolites with the strongest signif associations)
 top_metabs <- cor_genes_metab |>
   group_by(y) |>
-  summarize(min_fdr = min(p_fdr), max_abs_rho = max(abs(rho)), .groups = "drop") |>
-  filter(min_fdr < 0.05) |>
-  slice_max(max_abs_rho, n = 30) |>
+  summarize(n_sig = sum(p_fdr < 0.05), max_abs_rho = max(abs(rho)), .groups = "drop") |>
+  filter(n_sig > 0) |>
+  arrange(desc(n_sig), desc(max_abs_rho)) |>
+  slice_head(n = 20) |>
   pull(y)
 
 metab_sub <- cor_genes_metab |> filter(y %in% top_metabs) |> dplyr::rename(x = y, y = x)  # metabolites as rows
 rho_metab <- to_matrix(metab_sub, "rho")
 fdr_metab <- to_matrix(metab_sub, "p_fdr")[rownames(rho_metab), colnames(rho_metab)]
+
+# Drop gene columns with no hit among those 20
+genes_keep_metab <- colnames(fdr_metab)[colSums(fdr_metab < 0.05) > 0]
+rho_metab <- rho_metab[, genes_keep_metab, drop = FALSE]
+fdr_metab <- fdr_metab[, genes_keep_metab, drop = FALSE]
 metab_gene_categories <- target_genes$category[match(colnames(rho_metab), target_genes$symbol)]
 
 ht_metab <- Heatmap(
@@ -656,6 +662,56 @@ ht_metab <- Heatmap(
 
 pdf("results/graphs/RNAseq/liver_genes_metabolites_heatmap.pdf", width = 9, height = 12)
 draw(ht_metab)
+dev.off()
+
+## Compact genes × metabolites heatmap (for slides)
+n_metabs_compact <- 10 # top metabolites by number of FDR-signif. gene correlations
+min_hits_gene_metab <- 2 # genes with >= 2 FDR-signif. correlations among the shown metabolites
+
+metabs_compact <- cor_genes_metab |>
+  group_by(y) |>
+  summarize(n_sig = sum(p_fdr < 0.05), max_abs_rho = max(abs(rho)), .groups = "drop") |>
+  filter(n_sig > 0) |>
+  arrange(desc(n_sig), desc(max_abs_rho)) |>
+  slice_head(n = n_metabs_compact) |>
+  pull(y)
+
+metab_sub_compact <- cor_genes_metab |> filter(y %in% metabs_compact) |> dplyr::rename(x = y, y = x)
+rho_metab_compact <- to_matrix(metab_sub_compact, "rho")
+fdr_metab_compact <- to_matrix(metab_sub_compact, "p_fdr")[rownames(rho_metab_compact), colnames(rho_metab_compact)]
+
+n_genes_compact <- 12 # genes with the most FDR-signif. correlations among the shown metabolites
+genes_keep_metab_compact <- names(sort(colSums(fdr_metab_compact < 0.05), decreasing = TRUE))[1:min(n_genes_compact, ncol(fdr_metab_compact))]
+rho_metab_compact <- rho_metab_compact[, genes_keep_metab_compact, drop = FALSE]
+fdr_metab_compact <- fdr_metab_compact[, genes_keep_metab_compact, drop = FALSE]
+metab_gene_categories_compact <- target_genes$category[match(colnames(rho_metab_compact), target_genes$symbol)]
+
+dim(rho_metab_compact) # check before plotting
+
+ht_metab_compact <- Heatmap(
+  rho_metab_compact,
+  name = "Spearman\nrho",
+  col = colorRamp2(c(-0.4, 0, 0.4), c(renoir_15[3], "white", renoir_15[11])),
+  top_annotation = HeatmapAnnotation(Category = metab_gene_categories_compact, col = list(Category = category_cols), show_annotation_name = FALSE),
+  left_annotation = rowAnnotation(
+    `Super pathway` = metab_tax[rownames(rho_metab_compact), "SUPER_PATHWAY"],
+    col = list(`Super pathway` = pathway_colors),
+    annotation_name_gp = gpar(fontsize = 8)
+  ),
+  row_labels = str_trunc(rownames(rho_metab_compact), 40),
+  row_names_side = "left",
+  row_names_gp = gpar(fontsize = 8),
+  show_row_dend = FALSE, show_column_dend = FALSE,
+  column_labels = colnames(rho_metab_compact), # symbols only
+  column_names_rot = 45,
+  column_names_gp = gpar(fontsize = 8),
+  rect_gp = gpar(col = "white", lwd = 0.7),
+  cell_fun = function(j, i, x, y, width, height, fill) grid.text(stars(fdr_metab_compact[i, j]), x, y, gp = gpar(fontsize = 8))
+)
+
+pdf("results/graphs/RNAseq/liver_genes_metabolites_heatmap_compact.pdf",
+    width = 5 + 0.3 * ncol(rho_metab_compact), height = 2.5 + 0.3 * nrow(rho_metab_compact))
+draw(ht_metab_compact)
 dev.off()
 
 #### DE: continuous %FFMI loss (1y) ####
@@ -876,3 +932,4 @@ cor_cand_metab <- cor_block(liver_metab_df, cand_genes$symbol, metab_names)
 cor_cand_metab |> 
   filter(p_fdr < 0.05) |> 
   count(x) # hits per gene
+

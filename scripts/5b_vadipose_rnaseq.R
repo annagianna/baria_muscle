@@ -447,7 +447,7 @@ if (nrow(target_genes_heatmap) == 0) {
           title = description,
           subtitle = paste0(
             "Spearman rho = ", round(rho, 2),
-            " | FDR = ", signif(p_fdr, 2)
+            " | q = ", signif(p_fdr, 2)
           ),
           x = paste0(species_name, "\nlog10 relative abundance"),
           y = "Visceral adipose gene expression (VST)"
@@ -530,61 +530,68 @@ if (nrow(target_genes_heatmap) == 0) {
 
 }
 
-#### DE: %FFMI-change groups (1y) ####
-# All vFat samples passed QC in 0c (no qc_exclude), so no samples are dropped here
-coldata <- baria_muscle_wide |>
-  mutate(id = as.numeric(id)) |>
+#### DE: continuous %FFMI loss (1y) ####
+# Same approach as 5a_liver_rnaseq.R. All vFat samples passed QC in 0c (no qc_exclude), so no samples are dropped here
+coldata_cont <- baria_muscle_wide |>
+  mutate(id = as.numeric(as.character(id))) |>
   filter(
     id %in% vfat_rnaseq_counts$id,
-    !is.na(perc_change_ffmi_v4_group), !is.na(age_v0), !is.na(fmi_v0) # DESeq2 can't handle NAs
+    !is.na(perc_change_ffmi_v4), !is.na(age_v0), !is.na(fmi_v0) # DESeq2 can't handle NAs
   ) |>
+  mutate(ffmi_loss = -perc_change_ffmi_v4) # Positive LFC = higher baseline vFat expression with greater FFMI loss at 1y
+
+sd(coldata_cont$ffmi_loss)
+ffmi_unit <- 6 # same unit as liver (5a) for comparability across tissues; check against the SD above
+
+coldata_cont <- coldata_cont |>
   mutate(
-    ffmi_group_1y = factor(
-      if_else(perc_change_ffmi_v4_group == "high", "high_loss", "moderate_low_loss"),
-      levels = c("moderate_low_loss", "high_loss") # moderate_low_loss is the reference
-    ),
-    age_v0_z = as.numeric(scale(age_v0)),  # centre on the final sample set
+    ffmi_loss_u = (ffmi_loss - mean(ffmi_loss)) / ffmi_unit,
+    age_v0_z = as.numeric(scale(age_v0)), # centre on the final sample set
     fmi_v0_z = as.numeric(scale(fmi_v0))
   ) |>
-  arrange(id) |>  # same order as count_data
-  select(id, sex, age_v0_z, fmi_v0_z, ffmi_group_1y)
+  arrange(id) |> # same order as count_data_cont
+  select(id, sex, age_v0_z, fmi_v0_z, ffmi_loss_u)
 
-count_data <- vfat_rnaseq_counts |>
-  filter(id %in% coldata$id) |>
+count_data_cont <- vfat_rnaseq_counts |>
+  filter(id %in% coldata_cont$id) |>
   arrange(id) |>
   column_to_rownames(var = "id") |>
-  dplyr::select(starts_with("ENSG")) |> # drops qc_exclude, keeps genes only
+  select(starts_with("ENSG")) |> # drops qc_exclude, keeps genes only
   as.matrix() |>
   t() |>
   round()
-stopifnot(identical(colnames(count_data), as.character(coldata$id)))
-
-# Create DESeq2 dataset
-dds <- DESeqDataSetFromMatrix(
-  countData = count_data,
-  colData = coldata,
-  design =  ~ sex + age_v0_z + fmi_v0_z + ffmi_group_1y
-)
+stopifnot(identical(colnames(count_data_cont), as.character(coldata_cont$id)))
 
 # Pre-filter: >= 10 normalised counts in >= 50% of samples (same filter as in 0c_datacleaning_rnaseq.R)
-dds <- estimateSizeFactors(dds)
-keep <- rowMeans(counts(dds, normalized = TRUE) >= 10) >= 0.5
-dds <- dds[keep, ]
-nrow(dds)  # n of genes tested
+dds_cont <- DESeqDataSetFromMatrix(count_data_cont, coldata_cont, design = ~ sex + age_v0_z + fmi_v0_z + ffmi_loss_u)
+dds_cont <- estimateSizeFactors(dds_cont)
+dds_cont <- dds_cont[rowMeans(counts(dds_cont, normalized = TRUE) >= 10) >= 0.5, ]
+nrow(dds_cont) # n of genes tested
+dds_cont <- DESeq(dds_cont)
+resultsNames(dds_cont)
 
-# DE analysis
-dds <- DESeq(dds)
-resultsNames(dds)  # exact coefficient name for the group effect
+res_cont <- results(dds_cont, name = "ffmi_loss_u", alpha = 0.05)
+summary(res_cont) # genome-wide DE
+res_cont_shr <- lfcShrink(dds_cont, coef = "ffmi_loss_u", type = "apeglm", res = res_cont) # apeglm shrunken results; padj unchanged
 
-# Results: High vs. moderate/low % FFMI change (moderate/low group is the reference), adj. for sex, age, FMI
-res_de <- results(dds, name = "ffmi_group_1y_high_loss_vs_moderate_low_loss", alpha = 0.05)
-summary(res_de)
+# Targeted genes: apply BH within the pre-specified target gene set
+de_cont_targeted <- as.data.frame(res_cont) |>
+  rownames_to_column("ensembl_gene_id") |>
+  select(ensembl_gene_id, baseMean, log2FC_mle = log2FoldChange, pvalue) |>
+  left_join(
+    as.data.frame(res_cont_shr) |>
+      rownames_to_column("ensembl_gene_id") |>
+      select(ensembl_gene_id, log2FC_shr = log2FoldChange, lfcSE_shr = lfcSE),
+    by = "ensembl_gene_id") |>
+  inner_join(target_genes |>
+    distinct(ensembl_gene_id, symbol, category, description), by = "ensembl_gene_id") |>
+  mutate(padj_targeted = p.adjust(pvalue, method = "BH")) |>
+  arrange(pvalue)
+c(tested = nrow(de_cont_targeted), targeted = n_distinct(target_genes$ensembl_gene_id), na_p = sum(is.na(de_cont_targeted$pvalue)))
 
-# Shrink log2FC: pulls noisy/low-information estimates toward 0; padj remains unchanged
-res_de_shr <- lfcShrink(dds, coef = "ffmi_group_1y_high_loss_vs_moderate_low_loss", type = "apeglm", res = res_de)
+# DE signif targeted genes (plots to follow once checked)
+de_signif <- de_cont_targeted |>
+  filter(padj_targeted < 0.05)
 
-# MA plots (base R plotting)
-par(mfrow = c(1, 2))
-plotMA(res_de,     ylim = c(-2, 2), main = "Before (MLE)")
-plotMA(res_de_shr, ylim = c(-2, 2), main = "After shrinkage (apeglm)")
-par(mfrow = c(1, 1))
+de_signif |>
+  select(symbol, description, category, log2FC_mle, log2FC_shr, padj_targeted)
