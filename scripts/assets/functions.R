@@ -1,7 +1,8 @@
-# Shared helpers genuinely reused across pipelines: XGBeast output-folder discovery, the shared ggplot theme, 
-# and species-name/plotting helpers used
-# by both 6c_ml_process.R and 7a/7b_mb_*_correlations.R.
-# Anything used by only one script lives in that script instead.
+## Shared helpers reused across pipelines: 
+# XGBeast output-folder discovery, shared ggplot themes,
+# the top-species loader, and species-name helpers used by 3c_ml_process.R, 4a–4c and 5a/5b.
+
+# Anything used by only one script lives in that script instead
 
 # Barbara Verhaar, Anna Giannakogeorgou
 
@@ -124,6 +125,23 @@ top_features <- function(feature_importance, n = 15) {
     filter(!FeatName %in% c("random_variable1", "random_variable2")) |>
     arrange(desc(RelFeatImp)) |>
     head(n)
+}
+
+# Top-15 species of the dichotomous ML model (high vs. modest/low %FFMI loss at 1y)
+# & direction from logistic forest (OR > 1 = enriched in high loss)
+load_top_species <- function(path = "results/mlmodels/perc_change_ffmi_v4_group/all") {
+  
+  fi <- get_feature_importance(path, "perc_change_ffmi_v4_group_all", "class")
+  forest <- read.csv(file.path(path, "forest_results_top15.csv"))
+  
+  tibble(species = top_features(fi, n = 15)$FeatName) |>
+    mutate(species_label = species_label(species)) |>
+    left_join(
+      forest |> 
+      select(species, estimate, p_fdr), 
+    by = "species"
+  ) |>
+    mutate(estimate_direction = if_else(estimate > 1, "high_loss", "preservation"))
 }
 
 # Short, human-readable species label from a "Genus_species_SGB####[_group]" name, e.g. "Faecalibacterium prausnitzii". The SGB id is meaningless to
