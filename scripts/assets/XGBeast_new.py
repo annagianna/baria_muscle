@@ -12,6 +12,7 @@ from sklearn.model_selection import (
     ShuffleSplit,
     KFold,
     GridSearchCV,
+    train_test_split,
 )
 import time
 from sklearn.metrics import (
@@ -224,9 +225,17 @@ def main(args):
     parser.add_argument(
         "-stop",
         "--early_stopping_rounds",
-        help="value of early stopping rounds (default = 50)",
+        help="value of early stopping rounds (default = 0 = off). If > 0, a validation "
+        "split is held out from the TRAINING set (never the test set) and used for early stopping.",
         type=int,
-        default=50,
+        default=0,
+    )
+    parser.add_argument(
+        "-balance",
+        "--balance_classes",
+        dest="balance_classes",
+        help="Classification only: set scale_pos_weight = n_negative / n_positive (computed on each training split).",
+        action="store_true",
     )
     parser.add_argument(
         "-rand_seed",
@@ -556,9 +565,13 @@ def main(args):
             else:
                 print("\nNo scaling...")
 
+        # per-iteration seed: reproducible, but different draws in every iteration
+        iter_seed = rand_seed + i
+        rng = np.random.default_rng(iter_seed)
+
         # permute y if model is in permuted-mode
         if permute_mode:
-            np.random.shuffle(y)
+            rng.shuffle(y)
             print(
                 "\nThis model is running in PERMUTED Mode!\nY is shuffled at each iteration.\n"
             )
@@ -580,22 +593,20 @@ def main(args):
         if args.add_random_variables:
             # add random var1
             # random variables are randomized every iteration
-            np.random.seed(i)
-            random_column1_train = np.random.random(size=len(y_train)).reshape(
+            random_column1_train = rng.random(size=len(y_train)).reshape(
                 len(y_train), 1
             )
             X_train = np.append(X_train, random_column1_train, axis=1)
-            random_column1_test = np.random.random(size=len(y_test)).reshape(
+            random_column1_test = rng.random(size=len(y_test)).reshape(
                 len(y_test), 1
             )
             X_test = np.append(X_test, random_column1_test, axis=1)
             # add random var2
-            np.random.seed(i)
-            random_column2_train = np.random.random(size=len(y_train)).reshape(
+            random_column2_train = rng.random(size=len(y_train)).reshape(
                 len(y_train), 1
             )
             X_train = np.append(X_train, random_column2_train, axis=1)
-            random_column2_test = np.random.random(size=len(y_test)).reshape(
+            random_column2_test = rng.random(size=len(y_test)).reshape(
                 len(y_test), 1
             )
             X_test = np.append(X_test, random_column2_test, axis=1)
@@ -613,31 +624,43 @@ def main(args):
             print("\nTrain size = ", len(samples), "examples.\n")
             print("Test size = ", len(test), "examples\n")
 
+        # early stopping monitors a validation split carved from the training set,
+        # so the test set never influences tree count or grid selection
+        fit_params = {"verbose": False}
+        if early_stopping_rounds > 0:
+            X_train, X_val, y_train, y_val = train_test_split(
+                X_train,
+                y_train,
+                test_size=0.15,
+                random_state=iter_seed,
+                stratify=y_train if model_type == "XGB_class" else None,
+            )
+            fit_params["eval_set"] = [(X_val, y_val)]
+        es_rounds = early_stopping_rounds if early_stopping_rounds > 0 else None
+
         if model_type == "XGB_class":
-            fit_params = {
-                "verbose": False,
-                "eval_set": [(X_train, y_train), (X_test, y_test)],
-            }
+            spw = 1.0
+            if args.balance_classes:
+                spw = np.sum(y_train == 0) / max(np.sum(y_train == 1), 1)
             xgbclf = xgb.XGBClassifier(
                 n_jobs=1,
                 objective="binary:logistic",
                 tree_method="auto",
                 eval_metric="auc",
-                early_stopping_rounds=early_stopping_rounds,
+                early_stopping_rounds=es_rounds,
+                random_state=iter_seed,
+                scale_pos_weight=spw,
             )
             skf = StratifiedKFold(n_splits=CV_fold)
             scoring = "roc_auc"
         else:
-            fit_params = {
-                "verbose": False,
-                "eval_set": [(X_train, y_train), (X_test, y_test)],
-            }
             xgbclf = xgb.XGBRegressor(
                 n_jobs=1,
                 objective="reg:squarederror",
                 tree_method="auto",
                 eval_metric="rmse",
-                early_stopping_rounds=early_stopping_rounds,
+                early_stopping_rounds=es_rounds,
+                random_state=iter_seed,
             )
             skf = KFold(n_splits=CV_fold)
             scoring = "r2"
@@ -664,6 +687,9 @@ def main(args):
 
         # test model
         y_pred = best_model.predict(X_test)
+        if model_type == "XGB_class":
+            # ranking metrics (ROC-AUC, avg precision) need scores, not 0/1 labels
+            y_prob = best_model.predict_proba(X_test)[:, 1]
 
         if verbosity | tune_parameters:
             print("\nBest parameters were:\n")
@@ -679,13 +705,13 @@ def main(args):
         list_feat_importances.append(feature_importance)
 
         if model_type == "XGB_class":
-            fpr, tpr, _ = roc_curve(y_test, y_pred, pos_label=1)
+            fpr, tpr, _ = roc_curve(y_test, y_prob, pos_label=1)
             mean_fpr = np.linspace(0, 1, 100)
             auc_roc1 = auc(fpr, tpr)
             aucs.append(auc_roc1)
             tprs.append(np.interp(mean_fpr, fpr, tpr))
             tprs[-1][0] = 0.0
-            roc_auc__score = roc_auc_score(y_test, y_pred)
+            roc_auc__score = roc_auc_score(y_test, y_prob)
             print("\n ROC-AUC-score: %.3f" % roc_auc__score)
             roc_auc_scores.append(roc_auc__score)
 
@@ -707,7 +733,7 @@ def main(args):
                 print(" F1-score:       %.3f" % f1)
             f1s.append(f1)
 
-            avg_precision_score_val = average_precision_score(y_test, y_pred)
+            avg_precision_score_val = average_precision_score(y_test, y_prob)
             if verbosity:
                 print(" Avg precision:  %.3f" % avg_precision_score_val)
             avg_precision_scores.append(avg_precision_score_val)
@@ -1002,6 +1028,7 @@ def main(args):
     params = {**param_grid}
     params["random variables added"] = args.add_random_variables
     params["early_stopping_rounds"] = early_stopping_rounds
+    params["balance_classes"] = args.balance_classes
     params["N_stab"] = N_stab
     params["test_size"] = test_size
     params["CV_fold"] = CV_fold
