@@ -17,7 +17,7 @@ renoir_15 <- met.brewer("Renoir", n = 15)
 # Data
 humann_long <- readRDS("data/processed_data/BARIA_humann_pathways_long.RDS")
 baria_mb <- readRDS("data/processed_data/BARIA_mb_clean.RDS")
-forest_perc_change_ffmi_v4 <- read.csv("results/mlmodels/perc_change_ffmi_v4/all/forest_results_top15.csv")
+
 
 # MetaCyc/HUMAnN pathway names embed literal HTML entities (e.g. "&beta;")
 # instead of the Greek letters themselves - decode once so every downstream plot gets clean text
@@ -25,21 +25,14 @@ html_entities <- c("&alpha;" = "α", "&beta;" = "β", "&gamma;" = "γ", "&delta;
 humann_long <- humann_long |>
   mutate(pathway_name = str_replace_all(pathway_name, html_entities))
 
-# Top-15 species by ML feature importance for %change FFMI at 1y
-fi <- get_feature_importance("results/mlmodels/perc_change_ffmi_v4/all", "perc_change_ffmi_v4_all", "reg")
-top15_species <- top_features(fi, n = 15)$FeatName
-top15_species_labels <- tibble(species = top15_species, species_label = species_label(top15_species)) |> 
-  left_join(
-    forest_perc_change_ffmi_v4 |> 
-      select(species, estimate, p_fdr) |> 
-      mutate(estimate_direction = if_else(estimate > 0, "positive", "negative")),
-    by = "species"
-  )
+# Top-15 species of the dichotomous ML model (high vs. modest/low %FFMI loss at 1y)
+top15_species_labels <- get_top_species()
+top15_species <- top15_species_labels$species
 
-# Colors for direction of species association with 1-year FFMI trajectory
-species_direction_colors <- c(positive = renoir_15[15], negative = renoir_15[9])
+# Colours for direction of species association with high %FFMI loss at 1y (logistic OR)
+species_direction_colors <- c(`Higher in modest/low loss` = renoir_15[15], `Higher in high loss` = renoir_15[9])
 
-# Species label colours by direction of association with 1-year %FFMI change
+# Species label colours by direction of association with high %FFMI loss at 1y
 species_label_colors <- setNames(
   species_direction_colors[top15_species_labels$estimate_direction],
   top15_species_labels$species_label
