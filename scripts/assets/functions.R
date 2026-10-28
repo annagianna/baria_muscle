@@ -128,8 +128,8 @@ top_features <- function(feature_importance, n = 15) {
 }
 
 # Top-15 species of the dichotomous ML model (high vs. modest/low %FFMI loss at 1y)
-# & direction from logistic forest (OR > 1 = enriched in high loss)
-load_top_species <- function(path = "results/mlmodels/perc_change_ffmi_v4_group/all") {
+# & direction from the logistic forest: OR > 1 = higher in high loss
+get_top_species <- function(path = "results/mlmodels/perc_change_ffmi_v4_group/all") {
   
   fi <- get_feature_importance(path, "perc_change_ffmi_v4_group_all", "class")
   forest <- read.csv(file.path(path, "forest_results_top15.csv"))
@@ -138,14 +138,16 @@ load_top_species <- function(path = "results/mlmodels/perc_change_ffmi_v4_group/
     mutate(species_label = species_label(species)) |>
     left_join(
       forest |> 
-      select(species, estimate, p_fdr), 
-    by = "species"
-  ) |>
-    mutate(estimate_direction = if_else(estimate > 1, "high_loss", "preservation"))
+        select(species, estimate, p_fdr), 
+      by = "species"
+    ) |>
+    mutate(estimate_direction = if_else(estimate > 1, "Higher in high loss", "Higher in modest/low loss"))
 }
 
-# Short, human-readable species label from a "Genus_species_SGB####[_group]" name, e.g. "Faecalibacterium prausnitzii". The SGB id is meaningless to
-# most readers so it's dropped; make.unique() disambiguates the rare case where several SGBs share the same genus_species name, instead of silently collapsing distinct features onto the same plot row/facet.
+# Short, readable species label from a "Genus_species_SGB####[_group]" name, e.g. "Faecalibacterium prausnitzii". 
+# The SGB id is meaningless to most readers so it's dropped; 
+# make.unique() disambiguates the rare case where several SGBs share the same genus_species name, 
+# instead of silently collapsing distinct features onto the same plot row/facet.
 species_label <- function(x) {
   base <- str_remove(x, "_SGB\\d+(_group)?$") |> str_replace_all("_", " ")
   make.unique(base, sep = " ")
