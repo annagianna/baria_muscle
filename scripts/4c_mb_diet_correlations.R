@@ -11,8 +11,8 @@ source("scripts/assets/functions.R")
 base_out_dir <- "results/graphs/mb_diet_correlations"
 
 #### Microbes top 15 ####
-fi <- get_feature_importance("results/mlmodels/perc_change_ffmi_v4/all", "perc_change_ffmi_v4_all", "reg")
-feats <- top_features(fi, n = 15)$FeatName
+# Top-15 species of the dichotomous ML model (high vs modest/low %FFMI loss at 1y)
+feats <- get_top_species()$species
 mb <- readRDS("data/processed_data/BARIA_mb_baseline.RDS")
 mb_mat <- t(as(mb@otu_table, "matrix"))
 stopifnot(all(feats %in% colnames(mb_mat)))

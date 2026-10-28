@@ -18,7 +18,6 @@ renoir_15 <- met.brewer("Renoir", n = 15)
 humann_long <- readRDS("data/processed_data/BARIA_humann_pathways_long.RDS")
 baria_mb <- readRDS("data/processed_data/BARIA_mb_clean.RDS")
 
-
 # MetaCyc/HUMAnN pathway names embed literal HTML entities (e.g. "&beta;")
 # instead of the Greek letters themselves - decode once so every downstream plot gets clean text
 html_entities <- c("&alpha;" = "α", "&beta;" = "β", "&gamma;" = "γ", "&delta;" = "δ")
@@ -250,3 +249,5 @@ plot_species_pathway_heatmap(
 )
 
 
+top15_species_labels |> select(species_label, estimate, estimate_direction)
+species_label_colors  # 15 named colours, no NA
