@@ -15,7 +15,6 @@ select <- dplyr::select
 rename <- dplyr::rename
 count  <- dplyr::count
 filter <- dplyr::filter
-slice  <- dplyr::slice
 
 # Theme
 renoir_15 <- met.brewer("Renoir", n = 15)
@@ -42,6 +41,11 @@ rnaseq_meta <- read_excel(omics_metadata, sheet = "RNAseq") |>
   )
 stopifnot(!anyDuplicated(rnaseq_meta$label)) # one metadata row per sample
 
+## QC exclusions (own QC, in addition to the omics metadata exclusions)
+# Low-quality liver samples: distinct cluster on the QC PCA (PC1) with low library size, all within sequencing batch 2024
+# (batch 2024: n = 135; these 20 differ from the other 115 samples in the same batch, so not a batch effect)
+low_depth_ids <- c(361, 362, 377, 382, 383, 386, 388, 390, 395, 399, 401, 402, 405, 407, 408, 409, 413, 415, 421, 424)
+
 ## Cleaning ##
 baria_muscle_rnaseq <- rnaseq |> 
   select(matches("\\.(Liver|subFat|vFat|Jejunum)\\.V1$")) |> 
@@ -60,7 +64,9 @@ baria_muscle_rnaseq <- rnaseq |>
     id = if_else(!is.na(id_corrected) & !exclude, id_corrected, id),
     exclude = coalesce(exclude, FALSE),
     exclude = exclude | (tissue == "Liver" & batch %in% "RNA_Seq_2022_Fat"),
-    comment = if_else(tissue == "Liver" & batch %in% "RNA_Seq_2022_Fat", "Sequencing batch with n = 2 liver samples; batch effect not estimable", comment)
+    comment = if_else(tissue == "Liver" & batch %in% "RNA_Seq_2022_Fat", "Sequencing batch with n = 2 liver samples; batch effect not estimable", comment),
+    exclude = exclude | (tissue == "Liver" & id %in% low_depth_ids),
+    comment = if_else(tissue == "Liver" & id %in% low_depth_ids, "Low sequencing depth; distinct cluster on QC PCA (within batch 2024)", comment)
   ) |>
   filter(id %in% baria_muscle_wide$id) |>
   mutate(across(starts_with("ENSG"), ~ as.numeric(str_replace(as.character(.x), ",", ".")))) # fix inconsistent decimals
@@ -201,6 +207,13 @@ tissues <- c("Liver", "Jejunum", "vFat", "subFat")
 qc_all <- map(tissues, ~ qc_rnaseq_tissue(baria_muscle_rnaseq_named, .x)) |>
   set_names(tissues)
 
+# QC check: low-depth samples vs the rest of their batch (library size, PC1)
+qc_all$Liver |>
+  mutate(low_depth = id %in% low_depth_ids) |>
+  group_by(batch, low_depth) |>
+  summarise(n = n(), median_lib_M = median(library_size) / 1e6, median_PC1 = median(PC1), .groups = "drop")
+stopifnot(sum(qc_all$Liver$id %in% low_depth_ids) == 20)
+
 # QC plots and QC table (library size, size factor, PC coordinates, batch, exclusion flag and reason)
 walk(qc_all, plot_qc_tissue)
 
@@ -216,7 +229,7 @@ save_rnaseq_tissue <- function(rnaseq_data, tissue_name) {
   count_matrix <- make_count_matrix(rnaseq_data, tissue_name)
   meta <- sample_meta |>
     filter(tissue == tissue_name) |>
-    slice(match(as.numeric(colnames(count_matrix)), id)) # same order as the count matrix columns
+    dplyr::slice(match(as.numeric(colnames(count_matrix)), id)) # same order as the count matrix columns
   stopifnot(identical(meta$id, as.numeric(colnames(count_matrix))))
 
   # i. Raw counts (samples as rows) with batch and QC flag
