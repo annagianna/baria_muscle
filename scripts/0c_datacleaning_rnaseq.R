@@ -6,8 +6,16 @@ library(tidyverse)
 library(DESeq2)
 library(MetBrewer)
 library(annotables)
-
+library(readxl)
+library(limma)
 source("scripts/assets/functions.R")
+
+# Bioconductor packages (DESeq2/S4Vectors/matrixStats) mask some dplyr verbs; always use dplyr's
+select <- dplyr::select
+rename <- dplyr::rename
+count  <- dplyr::count
+filter <- dplyr::filter
+slice  <- dplyr::slice
 
 # Theme
 renoir_15 <- met.brewer("Renoir", n = 15)
@@ -15,7 +23,23 @@ renoir_15 <- met.brewer("Renoir", n = 15)
 # Data
 baria_muscle_wide <- readRDS("data/processed_data/BARIA_muscle_wide.RDS")
 rnaseq <- readRDS("data/raw_data/RNASeq.Counttable.kallisto.39546.1453.2025-01.29.RDS")
+omics_metadata <- "data/raw_data/BARIA_omics_metadata_V19.xlsx"
+dir.create("results/tables", recursive = TRUE, showWarnings = FALSE)
 dir.create("results/graphs/RNAseq", recursive = TRUE, showWarnings = FALSE)
+
+## Sample metadata excel table
+rnaseq_meta <- read_excel(omics_metadata, sheet = "RNAseq") |>
+  filter(Tissue == "Liver", Time_Point == "V-1", Study == "BARIA") |> # Liver (v1) only for now
+  transmute(
+    label = Sample_id |> # label = original sample name as in the kallisto count table
+      str_remove("^BARIA\\.RNAseq\\.") |> 
+      str_remove("\\.V-1\\.NA$"),
+      id_corrected = as.numeric(coalesce(na_if(as.character(`SNP check`), "Failed"), as.character(Subject_ID))), # SNP-verified ID where available; "Failed" = identity not verifiable, label ID kept
+    batch = Batch,
+    exclude = Exclude %in% "T",
+    comment = Comment
+  )
+stopifnot(!anyDuplicated(rnaseq_meta$label)) # one metadata row per sample
 
 ## Cleaning ##
 baria_muscle_rnaseq <- rnaseq |> 
@@ -25,12 +49,37 @@ baria_muscle_rnaseq <- rnaseq |>
   as.data.frame() |> 
   rownames_to_column("Sample") |> 
   mutate(
+    label = str_remove(Sample, "\\.V1$"),
     id = as.numeric(str_extract(Sample, "^\\d+")),
-    tissue = str_extract(Sample, "(Liver|subFat|vFat|Jejunum)"),
-    id = if_else(tissue == "Liver" & id == 337, 338, id) # liver sample labelled 337 belongs to 338
+    tissue = str_extract(Sample, "(Liver|subFat|vFat|Jejunum)")
   ) |>
-  filter(id %in% baria_muscle_wide$id) |> 
+  left_join(rnaseq_meta, by = "label") |>
+  mutate(
+    # identity corrections from xlsx SNP check col / subject IDs; samples flagged for exclusion keep their label id
+    id = if_else(!is.na(id_corrected) & !exclude, id_corrected, id),
+    exclude = coalesce(exclude, FALSE),
+    exclude = exclude | (tissue == "Liver" & batch %in% "RNA_Seq_2022_Fat"),
+    comment = if_else(tissue == "Liver" & batch %in% "RNA_Seq_2022_Fat", "Sequencing batch with n = 2 liver samples; batch effect not estimable", comment)
+  ) |>
+  filter(id %in% baria_muscle_wide$id) |>
   mutate(across(starts_with("ENSG"), ~ as.numeric(str_replace(as.character(.x), ",", ".")))) # fix inconsistent decimals
+
+# Checks (liver)
+liver_meta_check <- baria_muscle_rnaseq |> filter(tissue == "Liver")
+count(liver_meta_check, batch)                                   # every liver sample needs a batch
+stopifnot(!any(is.na(liver_meta_check$batch)))
+liver_meta_check |>
+  filter(id != as.numeric(str_extract(label, "^\\d+")) | exclude) |>
+  select(label, id, batch, exclude, comment)                    # corrected and excluded samples
+
+# Sample table: one row per sample with batch and exclusion flag
+sample_meta <- baria_muscle_rnaseq |>
+  transmute(
+    tissue, id,
+    batch = factor(batch),
+    qc_exclude = exclude,
+    qc_reason = if_else(exclude, comment, NA_character_)
+  )
 
 # Expression filter
 min_count <- 10 # >= 10 normalised reads per gene
@@ -101,12 +150,13 @@ qc_rnaseq_tissue <- function(rnaseq_data, tissue_name) {
     PC2 = pca$x[, 2],
     PC1_var = var_expl[1], # same value in every row; used for the axis labels
     PC2_var  = var_expl[2]
-  )
+  ) |>
+    left_join(sample_meta, by = c("tissue", "id"))
 }
 
 ## QC Plots ##
-# QC plots per tissue: 1. library size, 2. PCA;
-plot_qc_tissue <- function(qc_tbl, label_ids = NULL) { # label_ids = ids to label (NULL = label all)
+# QC plots per tissue: 1. library size, 2. PCA coloured by sequencing batch; excluded samples labelled
+plot_qc_tissue <- function(qc_tbl) {
 
   tissue_name <- unique(qc_tbl$tissue) # gets tissue name out of the table
 
@@ -123,24 +173,21 @@ plot_qc_tissue <- function(qc_tbl, label_ids = NULL) { # label_ids = ids to labe
     theme_minimal_custom() +
     theme(axis.text.x = element_blank())
 
-  # Which points get an ID label
-  label_data <- if (is.null(label_ids)) qc_tbl else filter(qc_tbl, id %in% label_ids) # label only outlier cluster IDs with ggrepel
-
-  # Plot 2: PCA, coloured by library size
-  plot_pca <- ggplot(qc_tbl, aes(x = PC1, y = PC2, colour = library_size / 1e6)) +
+  # Plot 2: PCA, coloured by sequencing batch
+  plot_pca <- ggplot(qc_tbl, aes(x = PC1, y = PC2, colour = batch)) +
     geom_point(size = 2, alpha = 0.8) +
     ggrepel::geom_label_repel(
-      data = label_data,
+      data = filter(qc_tbl, qc_exclude),
       aes(label = id),
       size = 2, colour = "grey20", fill = "white", label.size = 0.2,
       max.overlaps = Inf, segment.size = 0.2, min.segment.length = 0
     ) +
-    scale_colour_gradient(low = renoir_15[1], high = renoir_15[12]) +
+    scale_colour_manual(values = renoir_15[c(2, 6, 11, 14)], na.value = "grey60") +
     labs(
       title = paste0(tissue_name, ": PCA on VST (top 500 variable genes, all samples)"),
       x = paste0("PC1 (", unique(qc_tbl$PC1_var), "%)"),
       y = paste0("PC2 (", unique(qc_tbl$PC2_var), "%)"),
-      colour = "Library size\n(million reads)"
+      colour = "Sequencing batch"
     ) +
     theme_minimal_custom()
 
@@ -153,67 +200,37 @@ tissues <- c("Liver", "Jejunum", "vFat", "subFat")
 qc_all <- map(tissues, ~ qc_rnaseq_tissue(baria_muscle_rnaseq_named, .x)) |>
   set_names(tissues)
 
-## Exclusions
-# Liver
-qc_reasons <- bind_rows(
-  tibble(
-    tissue = "Liver",
-    id = c(361, 362, 377, 382, 383, 386, 388, 390, 395, 399, 401, 402, 405, 407, 408, 409, 413, 415, 421, 424),
-    qc_reason = "low_depth"
-  ),
-  tibble(tissue = "Liver", id = c(20, 311), qc_reason = "adipose_profile")
-)
+# QC plots and QC table (library size, size factor, PC coordinates, batch, exclusion flag and reason)
+walk(qc_all, plot_qc_tissue)
 
-# i. low depth: samples forming a distinct cluster outside the main cloud on the QC PCA, all with small library size
-liver_exclude_lowdepth <- qc_reasons |> 
-  filter(tissue == "Liver", qc_reason == "low_depth") |> 
-  pull(id)
-
-# ii. adipose tissue profile: clear adipose-tissue expression profile (ADIPOQ, LEP, PLIN1, FABP4, CIDEA; CPM from raw counts)
-liver_exclude_adipose <- qc_reasons |> 
-  filter(tissue == "Liver", qc_reason == "adipose_profile") |> 
-  pull(id)
-
-liver_exclude <- c(liver_exclude_lowdepth, liver_exclude_adipose)
-
-stopifnot(
-  length(liver_exclude_lowdepth) == 20,
-  length(liver_exclude_adipose) == 2,
-  !anyDuplicated(liver_exclude)# no sample listed under both reasons
-)
-
-qc_exclude <- map(set_names(tissues), ~ qc_reasons$id[qc_reasons$tissue == .x])
-
-# QC plots: excluded samples labelled
-walk(tissues, ~ plot_qc_tissue(qc_all[[.x]], label_ids = qc_exclude[[.x]]))
-
-# QC table: library size, size factor, PC coordinates, exclusion flag per sample and qc reason
-dir.create("results/tables", recursive = TRUE, showWarnings = FALSE)
 bind_rows(qc_all) |>
-  left_join(qc_reasons, by = c("tissue", "id")) |>   # qc_reason: NA = passed QC
-  mutate(qc_excluded = !is.na(qc_reason)) |>
   write_csv("results/tables/rnaseq_qc_samples.csv")
 
 ## Save RNA-seq data per tissue
-# i. Raw counts: all samples + qc_exclude flag (5a: excluded in main analysis, included in sensitivity analysis)
+# i. Raw counts: all samples + batch + qc_exclude flag (DESeq2 in 5a/5b: excluded samples dropped, batch in the design)
 # ii. VST: excluded samples removed; size factors, expression filter and VST recomputed on the remaining samples
-save_rnaseq_tissue <- function(rnaseq_data, tissue_name, exclude_ids, reasons) {
+# iii. Batch-corrected VST (limma::removeBatchEffect) for correlation analyses; only for tissues with > 1 known batch
+save_rnaseq_tissue <- function(rnaseq_data, tissue_name) {
 
   count_matrix <- make_count_matrix(rnaseq_data, tissue_name)
+  meta <- sample_meta |>
+    filter(tissue == tissue_name) |>
+    slice(match(as.numeric(colnames(count_matrix)), id)) # same order as the count matrix columns
+  stopifnot(identical(meta$id, as.numeric(colnames(count_matrix))))
 
-  # i. Raw counts (samples as rows) with QC flag
+  # i. Raw counts (samples as rows) with batch and QC flag
   count_matrix |>
     t() |>
     as.data.frame() |>
     rownames_to_column("id") |>
     mutate(id = as.numeric(id)) |>
-    left_join(reasons |> filter(tissue == tissue_name) |> select(id, qc_reason), by = "id") |>
-    mutate(qc_exclude = id %in% exclude_ids) |>
-    relocate(id, qc_exclude, qc_reason) |>
+    left_join(meta |> select(id, batch, qc_exclude, qc_reason), by = "id") |>
+    relocate(id, batch, qc_exclude, qc_reason) |>
     saveRDS(paste0("data/processed_data/BARIA_", tissue_name, "_RNAseq.RDS"))
 
   # ii. VST without excluded samples
-  keep_samples <- !(colnames(count_matrix) %in% as.character(exclude_ids))
+  keep_samples <- !meta$qc_exclude
+  meta_keep <- meta[keep_samples, ]
   clean <- run_vst(count_matrix[, keep_samples, drop = FALSE])
 
   clean$vst |>
@@ -222,12 +239,28 @@ save_rnaseq_tissue <- function(rnaseq_data, tissue_name, exclude_ids, reasons) {
     rownames_to_column("id") |>
     mutate(
       id = as.numeric(id),
-      size_factor = sizeFactors(clean$dds)
+      size_factor = sizeFactors(clean$dds),
+      batch = meta_keep$batch
     ) |>
-    relocate(id, size_factor) |>
+    relocate(id, size_factor, batch) |>
     saveRDS(paste0("data/processed_data/BARIA_", tissue_name, "_RNAseq_vst.RDS"))
+
+  # iii. Batch-corrected VST for correlation analyses
+  if (!anyNA(meta_keep$batch) && n_distinct(meta_keep$batch) > 1) {
+    removeBatchEffect(clean$vst, batch = meta_keep$batch) |>
+      t() |>
+      as.data.frame() |>
+      rownames_to_column("id") |>
+      mutate(
+        id = as.numeric(id),
+        size_factor = sizeFactors(clean$dds),
+        batch = meta_keep$batch
+      ) |>
+      relocate(id, size_factor, batch) |>
+      saveRDS(paste0("data/processed_data/BARIA_", tissue_name, "_RNAseq_vst_batchcorrected.RDS"))
+  }
 
   message(tissue_name, ": ", sum(!keep_samples), " excluded, ", sum(keep_samples), " retained")
 }
 
-walk(tissues, ~ save_rnaseq_tissue(baria_muscle_rnaseq_named, .x, qc_exclude[[.x]], qc_reasons))
+walk(tissues, ~ save_rnaseq_tissue(baria_muscle_rnaseq_named, .x))
