@@ -289,6 +289,158 @@ de_twl_compare <- de_sig |>
   )
 de_twl_compare
 
+## Batch diagnostics: genes differing by sequencing batch (LRT: full model vs reduced model without batch)
+dds_lrt <- DESeq(dds_grp, test = "LRT", reduced = ~ sex + age_v0_z + fmi_v0_z + ffmi_group)
+res_lrt <- results(dds_lrt, alpha = 0.05)
+c(genes_tested = nrow(res_lrt), genes_differing_by_batch = sum(res_lrt$padj < 0.05, na.rm = TRUE))
+
+## Robustness: DE within each sequencing batch (same covariates and genes as the main model)
+# If the group effect is consistent across batches, log2FCs should point the same way
+per_batch <- map_dfr(levels(coldata_grp$batch), function(b) {
+  cd <- coldata_grp |> filter(batch == b)
+  dds_b <- DESeqDataSetFromMatrix(
+    count_data_grp[rownames(dds_grp), as.character(cd$id)], cd,
+    design = ~ sex + age_v0_z + fmi_v0_z + ffmi_group
+  )
+  dds_b <- DESeq(dds_b, quiet = TRUE)
+  results(dds_b, name = "ffmi_group_high_vs_modest_low") |>
+    as.data.frame() |>
+    rownames_to_column("ensembl_gene_id") |>
+    transmute(ensembl_gene_id, batch = b, log2FC = log2FoldChange, pvalue)
+})
+
+# i. Direction agreement with the main model for its top 50 genes (by p-value)
+top50_main <- de_grp |> slice_min(pvalue, n = 50) |> select(ensembl_gene_id, log2FC_main = log2FC_mle)
+per_batch |>
+  inner_join(top50_main, by = "ensembl_gene_id") |>
+  group_by(batch) |>
+  summarise(n_genes = n(), same_sign_as_main = mean(sign(log2FC) == sign(log2FC_main), na.rm = TRUE), .groups = "drop")
+
+# ii. Genome-wide agreement of log2FCs between batches (Spearman)
+per_batch |>
+  select(ensembl_gene_id, batch, log2FC) |>
+  pivot_wider(names_from = batch, values_from = log2FC) |>
+  select(-ensembl_gene_id) |>
+  cor(method = "spearman", use = "pairwise.complete.obs")
+
+#### Targeted DE: pre-specified liver gene set (defined a priori; DESeq2 fitted on all genes, BH within the set) ####
+core_genes <- list(
+
+  hepatokines = c(
+    "FGF21","SELENOP","LECT2","ANGPTL3","ANGPTL4","ANGPTL8","AHSG","FETUB",
+    "FGL1","RBP4","INHBA","INHBE","FST","FSTL3",
+    "GDF15","LEAP2","GPLD1","ENHO","TSKU","SHBG","SMOC1","APOA5"),
+
+  # Fatty acid oxidation & ketogenesis
+  fao = c(
+    "CPT1A","CPT1B","CPT2","CRAT","CROT","SLC25A20","SLC22A5",
+    "ACADVL","ACADL","ACADM","ACADS","ACADSB","ACAD9","ACAD8","ACAD11",
+    "HADHA","HADHB","HADH","ECHS1","EHHADH","ACAA1","ACAA2","DECR1",
+    "ECI1","ECI2","ETFA","ETFB","ETFDH","MLYCD","ACOX1","ACOX2",
+    "HSD17B4","SCP2","PPARA","HMGCS2","BDH1"),
+
+  # Mitochondrial oxitative phosphorylation
+  mito_oxphos = c(
+    "PPARGC1A","PPARGC1B","PPARD","ESRRA","ESRRG","NRF1","GABPA", "TFAM","TFB2M",
+    "POLG","MFN1","MFN2","OPA1","DNM1L","SDHA","SDHB","SDHC","SDHD","CYCS"),
+
+  oxidative_stress = c(
+    "NFE2L2","KEAP1","NQO1","HMOX1","GCLC","GCLM","GSR","GSTP1","GSTA1",
+    "GSTM1","SLC7A11","TXN","TXNRD1","PRDX1","PRDX3","PRDX5","PRDX6",
+    "SOD1","SOD2","SOD3","CAT","GPX1","GPX3","GPX4","SRXN1","G6PD",
+    "SESN2","FOXO3"),
+
+  aa_bcaa_turnover = c(
+    "BCAT1","BCAT2","BCKDHA","BCKDHB","DBT","DLD","BCKDK","PPM1K", "HIBCH","HIBADH",
+    "IVD","MCCC1","MCCC2","AUH","HMGCL","PCCA","PCCB", "MMUT","ALDH6A1",
+    "CPS1","OTC","ASS1","ASL","ARG1","NAGS","SLC25A15","SLC25A13",
+    "GLUD1","GLS","GLS2","GLUL","GOT1","GOT2","GPT","GPT2"),
+
+  gluconeogenesis = c(
+    "PCK1","PCK2","G6PC1","SLC37A4","FBP1","FBP2","PC","MDH1","MDH2",
+    "PDK1","PDK2","PDK4","FOXO1","HNF4A","CREB3L3","NR3C1"),
+
+  glycogen_synthesis = c("GYS2","GYG1","GBE1","UGP2","PGM1","PPP1R3B","PPP1R3C","PPP1R3G"),
+
+  glycogenolysis = c("PYGL","AGL","PHKA2","PHKB","PHKG2"),
+
+  glycolysis = c(
+    "GCK","GCKR","HK1","HK2","GPI","PFKL","ALDOA","TPI1","GAPDH", "PGK1","PGAM1",
+    "ENO1","PKLR","PKM","PDHA1","PDHB","DLAT", "LDHA","LDHB","SLC2A2"),
+
+  fructose_metabolism = c("KHK","ALDOB","TKFC","SORD","AKR1B1","SLC2A5"),
+
+  # De-novo lipogenesis
+  dnl = c(
+    "SREBF1","MLXIPL","NR1H3","INSIG1","SCAP","THRSP","MID1IP1",
+    "ACLY","ACSS2","ACACA","ACACB","FASN","ELOVL6","SCD","ME1"),
+
+  # Triglyceride synthesis/VLDL
+  tg_vldl = c("GPAM","AGPAT2","LPIN1","DGAT1","DGAT2","MTTP","APOB","PNPLA3","TM6SF2"),
+
+  ins_signaling = c(
+    "INSR","IGF1R","IRS1","IRS2","PIK3R1","PIK3CA","PDPK1","AKT1","AKT2",
+    "GSK3B","MTOR","RPTOR","RPS6KB1","EIF4EBP1","TSC1","TSC2",
+    "PRKAA1","PRKAA2","STK11","PTEN","PTPN1","PRKCE","SOCS3","TRIB3"),
+
+  ins_clearance = c("CEACAM1","IDE"),
+
+  # Glucagon/incretin receptors + cAMP/PKA/CREB + glucagon-driven amino-acid uptake
+  gluc_incr_signaling = c( "GCGR","GIPR","GLP1R","GLP2R","DPP4", "GNAS","PRKACA","CREB1","CRTC2", "SLC7A2","SLC38A4","SLC38A5"),
+
+  # GH/IGF-1 axis (hepatic GH signalling and IGF-1 output/transport)
+  gh_igf_axis = c("GHR","JAK2","STAT5B","SOCS2","IGF1","IGFALS","IGFBP1","IGFBP2","IGFBP3"),
+
+  # Bile acid synthesis/FXR signalling/transport/TMAO (gut-derived metabolite handling)
+  bile_acid_tmao = c("CYP7A1","CYP8B1","CYP27A1","NR1H4","NR0B2","SLC10A1","ABCB11","FGFR4","KLB","FMO3"),
+
+  # Hepatocyte acute-phase response and endotoxin handling
+  acute_phase_endotoxin = c("CRP","SAA1","SAA2","HP","ORM1","FGB","LBP","CD14","IL6R","STAT3")
+)
+stopifnot(!anyDuplicated(unlist(core_genes))) # each gene in exactly one category
+
+target_genes <- enframe(core_genes, name = "category", value = "symbol") |> 
+  unnest(symbol) |> 
+  left_join(gene_annotations, by = "symbol") |> 
+  inner_join(gene_ids, by = "ensgene")
+setdiff(unlist(core_genes), target_genes$symbol) # genes not annotated or not expressed in liver
+
+de_grp_targeted <- de_grp |>
+  inner_join(target_genes |> distinct(ensembl_gene_id, category), by = "ensembl_gene_id") |>
+  mutate(padj_targeted = p.adjust(pvalue, method = "BH")) |>
+  arrange(pvalue)
+c(targeted_listed = n_distinct(target_genes$ensembl_gene_id), tested = nrow(de_grp_targeted))
+de_sig_targeted <- de_grp_targeted |> filter(padj_targeted < 0.05)
+nrow(de_sig_targeted)
+write_csv(de_grp_targeted, "results/tables/liver_de_grp_targeted_genes.csv")
+
+## Forest plot (targeted DE)
+# Data
+forest_de_grp_targeted_df <- de_sig_targeted |> 
+  mutate(
+    direction = if_else(log2FC_shr > 0, "Higher in high loss", "Higher in modest/low loss"),
+    lower = log2FC_shr - 1.96 * lfcSE_shr, # approx. 95% interval
+    upper = log2FC_shr + 1.96 * lfcSE_shr,
+    label = fct_reorder(gene_label(symbol), log2FC_shr)
+  )
+
+# Plot
+if (nrow(de_sig_targeted) > 0) {
+  forest_de_grp_targeted_plot <- forest_de_grp_targeted_df |> 
+    ggplot(aes(x = log2FC_shr, y = label, color = direction)) +
+    geom_vline(xintercept = 0, linetype = "dashed", colour = "grey40", linewidth = 0.3) +
+    geom_errorbar(aes(xmin = lower, xmax = upper), width = 0.2) +
+    geom_point(size = 2.5) +
+    scale_colour_manual(values = de_cols, name = NULL) +
+    labs(
+      title = "Differences in gene expression (pre-specified genes)",
+      x = "log2FC high vs modest/low loss (approx. 95% CI)",
+      y = NULL
+    ) +
+    theme_minimal_custom()
+  ggsave("results/graphs/RNAseq/forest_de_grp_targeted_plot.pdf", forest_de_grp_targeted_plot, width = 9, height = 1.5 + 0.4 * nrow(forest_de_grp_targeted_df))
+}
+
 #### Liver RNA-seq x top15 species ####
 # Top15 species x liver RNA seq
 liver_mb <- liver_rnaseq_vst |>
