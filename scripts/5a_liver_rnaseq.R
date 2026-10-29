@@ -470,110 +470,114 @@ sig_de_species <- cor_de_species |>
   filter(p_fdr < 0.05) |>
   arrange(p_fdr)
 
-## Heatmap: DE genes (>= 1 FDR-signif. species association) x all top-15 species
-genes_hm <- unique(sig_de_species$ensembl_gene_id)
+if (nrow(sig_de_species) > 0) {
+  ## Heatmap: DE genes (>= 1 FDR-signif. species association) x all top-15 species
+  genes_hm <- unique(sig_de_species$ensembl_gene_id)
 
-rho_de_species <- cor_de_species |>
-  filter(ensembl_gene_id %in% genes_hm) |>
-  select(ensembl_gene_id, species, rho) |>
-  pivot_wider(names_from = species, values_from = rho) |>
-  column_to_rownames("ensembl_gene_id") |>
-  as.matrix()
-rho_de_species <- rho_de_species[, top15_species, drop = FALSE]
+  rho_de_species <- cor_de_species |>
+    filter(ensembl_gene_id %in% genes_hm) |>
+    select(ensembl_gene_id, species, rho) |>
+    pivot_wider(names_from = species, values_from = rho) |>
+    column_to_rownames("ensembl_gene_id") |>
+    as.matrix()
+  rho_de_species <- rho_de_species[, top15_species, drop = FALSE]
 
-p_fdr_de_species <- cor_de_species |>
-  filter(ensembl_gene_id %in% genes_hm) |>
-  select(ensembl_gene_id, species, p_fdr) |>
-  pivot_wider(names_from = species, values_from = p_fdr) |>
-  column_to_rownames("ensembl_gene_id") |>
-  as.matrix()
-p_fdr_de_species <- p_fdr_de_species[rownames(rho_de_species), colnames(rho_de_species), drop = FALSE]
+  p_fdr_de_species <- cor_de_species |>
+    filter(ensembl_gene_id %in% genes_hm) |>
+    select(ensembl_gene_id, species, p_fdr) |>
+    pivot_wider(names_from = species, values_from = p_fdr) |>
+    column_to_rownames("ensembl_gene_id") |>
+    as.matrix()
+  p_fdr_de_species <- p_fdr_de_species[rownames(rho_de_species), colnames(rho_de_species), drop = FALSE]
 
-# Labels
-hm_symbols <- de_sig$symbol[match(rownames(rho_de_species), de_sig$ensembl_gene_id)]
-hm_species_labels <- top15_species_labels$species_label[match(colnames(rho_de_species), top15_species_labels$species)]
+  # Labels
+  hm_symbols <- de_sig$symbol[match(rownames(rho_de_species), de_sig$ensembl_gene_id)]
+  hm_species_labels <- top15_species_labels$species_label[match(colnames(rho_de_species), top15_species_labels$species)]
 
-# DE direction annotation
-hm_de_direction <- if_else(
-  de_sig$log2FC_shr[match(rownames(rho_de_species), de_sig$ensembl_gene_id)] > 0,
-  "Higher in high loss", "Higher in modest/low loss"
-)
-ha_de_direction <- rowAnnotation(
-  `DE direction` = hm_de_direction,
-  col = list(`DE direction` = de_cols),
-  show_annotation_name = FALSE
-)
-
-rho_max <- max(abs(rho_de_species))
-
-ht_de_species <- Heatmap(
-  rho_de_species,
-  name = "Spearman\nrho",
-  col = colorRamp2(c(-rho_max, 0, rho_max), c(renoir_15[3], "white", renoir_15[11])),
-  cluster_rows = TRUE,
-  cluster_columns = TRUE,
-  show_row_dend = FALSE,
-  show_column_dend = FALSE,
-  row_labels = gene_label(hm_symbols),
-  row_names_side = "left",
-  row_names_gp = gpar(fontsize = 8),
-  column_labels = hm_species_labels,
-  column_names_rot = 45,
-  column_names_gp = gpar(fontface = "italic", col = species_label_colors[hm_species_labels]),
-  right_annotation = ha_de_direction,
-  rect_gp = gpar(col = "white", lwd = 0.7),
-  cell_fun = function(j, i, x, y, width, height, fill) {
-    grid.text(stars(p_fdr_de_species[i, j]), x, y, gp = gpar(fontsize = 8))
-  }
-)
-
-pdf("results/graphs/RNAseq/liver_de_genes_species_heatmap.pdf",
-    width = 5 + 0.35 * ncol(rho_de_species),
-    height = 2.5 + 0.2 * nrow(rho_de_species))
-draw(ht_de_species)
-dev.off()
-
-# Individual correlation plots (supplementary)
-cor_plots <- pmap(sig_de_species, function(species, ensembl_gene_id, n, rho, p.value, p_fdr, symbol) {
-
-    plot_data <- liver_mb |>
-      dplyr::select(
-        abundance = all_of(species),
-        expression = all_of(ensembl_gene_id)
-      )
-
-    species_name <- top15_species_labels$species_label[match(species, top15_species_labels$species)]
-
-    ggplot(plot_data, aes(x = abundance, y = expression)) +
-      geom_point(alpha = 0.7, size = 1.8) +
-      geom_smooth(method = "lm", formula = y ~ x, se = FALSE, linewidth = 0.7, color = renoir_15[3]) +
-      labs(
-        title = gene_label(symbol),
-        subtitle = paste0("Spearman rho = ", round(rho, 2), " | q = ", signif(p_fdr, 2)),
-        x = paste0(species_name, "\nlog10 relative abundance"),
-        y = "Liver gene expression (VST)"
-      ) +
-      theme_minimal(base_size = 10) +
-      theme(
-        plot.title = element_text(face = "bold", size = 9),
-        plot.subtitle = element_text(size = 8),
-        axis.title.x = element_text(face = "italic"),
-        panel.grid.minor = element_blank()
-      )
-  }
-)
-
-# Arrange individual cor plots
-n_cols_cor_plots <- 5
-n_rows_cor_plots <- ceiling(length(cor_plots) / n_cols_cor_plots) # grid grows with the number of significant pairs
-cor_plots_arranged <- ggarrange(plotlist = cor_plots, ncol = n_cols_cor_plots, nrow = n_rows_cor_plots)
-ggsave(
-  "results/graphs/RNAseq/liver_de_genes_species_significant_correlations.pdf",
-   cor_plots_arranged,
-   width = 12,
-   height = 2.5 * n_rows_cor_plots, # keeps each individual cor plot the same size
-   limitsize = FALSE
+  # DE direction annotation
+  hm_de_direction <- if_else(
+    de_sig$log2FC_shr[match(rownames(rho_de_species), de_sig$ensembl_gene_id)] > 0,
+    "Higher in high loss", "Higher in modest/low loss"
   )
+  ha_de_direction <- rowAnnotation(
+    `DE direction` = hm_de_direction,
+    col = list(`DE direction` = de_cols),
+    show_annotation_name = FALSE
+  )
+
+  rho_max <- max(abs(rho_de_species))
+
+  ht_de_species <- Heatmap(
+    rho_de_species,
+    name = "Spearman\nrho",
+    col = colorRamp2(c(-rho_max, 0, rho_max), c(renoir_15[3], "white", renoir_15[11])),
+    cluster_rows = TRUE,
+    cluster_columns = TRUE,
+    show_row_dend = FALSE,
+    show_column_dend = FALSE,
+    row_labels = gene_label(hm_symbols),
+    row_names_side = "left",
+    row_names_gp = gpar(fontsize = 8),
+    column_labels = hm_species_labels,
+    column_names_rot = 45,
+    column_names_gp = gpar(fontface = "italic", col = species_label_colors[hm_species_labels]),
+    right_annotation = ha_de_direction,
+    rect_gp = gpar(col = "white", lwd = 0.7),
+    cell_fun = function(j, i, x, y, width, height, fill) {
+      grid.text(stars(p_fdr_de_species[i, j]), x, y, gp = gpar(fontsize = 8))
+    }
+  )
+
+  pdf("results/graphs/RNAseq/liver_de_genes_species_heatmap.pdf",
+      width = 5 + 0.35 * ncol(rho_de_species),
+      height = 2.5 + 0.2 * nrow(rho_de_species))
+  draw(ht_de_species)
+  dev.off()
+
+  # Individual correlation plots (supplementary)
+  cor_plots <- pmap(sig_de_species, function(species, ensembl_gene_id, n, rho, p.value, p_fdr, symbol) {
+
+      plot_data <- liver_mb |>
+        dplyr::select(
+          abundance = all_of(species),
+          expression = all_of(ensembl_gene_id)
+        )
+
+      species_name <- top15_species_labels$species_label[match(species, top15_species_labels$species)]
+
+      ggplot(plot_data, aes(x = abundance, y = expression)) +
+        geom_point(alpha = 0.7, size = 1.8) +
+        geom_smooth(method = "lm", formula = y ~ x, se = FALSE, linewidth = 0.7, color = renoir_15[3]) +
+        labs(
+          title = gene_label(symbol),
+          subtitle = paste0("Spearman rho = ", round(rho, 2), " | q = ", signif(p_fdr, 2)),
+          x = paste0(species_name, "\nlog10 relative abundance"),
+          y = "Liver gene expression (VST)"
+        ) +
+        theme_minimal(base_size = 10) +
+        theme(
+          plot.title = element_text(face = "bold", size = 9),
+          plot.subtitle = element_text(size = 8),
+          axis.title.x = element_text(face = "italic"),
+          panel.grid.minor = element_blank()
+        )
+    }
+  )
+
+  # Arrange individual cor plots
+  n_cols_cor_plots <- 5
+  n_rows_cor_plots <- ceiling(length(cor_plots) / n_cols_cor_plots) # grid grows with the number of significant pairs
+  cor_plots_arranged <- ggarrange(plotlist = cor_plots, ncol = n_cols_cor_plots, nrow = n_rows_cor_plots)
+  ggsave(
+    "results/graphs/RNAseq/liver_de_genes_species_significant_correlations.pdf",
+     cor_plots_arranged,
+     width = 12,
+     height = 2.5 * n_rows_cor_plots, # keeps each individual cor plot the same size
+     limitsize = FALSE
+    )
+} else {
+  message("No FDR-significant DE gene x top-15 species pairs: heatmap and individual plots skipped")
+}
 
 #### Metabolomics x DE genes ####
 # Prep metab data
@@ -583,129 +587,133 @@ metab_df <- as(otu_table(metab), "matrix") |> # samples x metabolites
   dplyr::select(-sample)
 metab_names <- setdiff(names(metab_df), "id")
 
-# DE genes with >=1 FDR-significant species association (from I)
-genes_I <- sig_de_species |> 
-  distinct(ensembl_gene_id, symbol)
+if (nrow(sig_de_species) > 0) {
+  # DE genes with >=1 FDR-significant species association (from I)
+  genes_I <- sig_de_species |> 
+    distinct(ensembl_gene_id, symbol)
 
-liver_metab_df <- liver_mb |>
-  dplyr::select(id, all_of(genes_I$ensembl_gene_id)) |>
-  rename_with(~ genes_I$symbol[match(.x, genes_I$ensembl_gene_id)], starts_with("ENSG")) |>
-  inner_join(metab_df, by = "id")
-nrow(liver_metab_df)  # overlap n
+  liver_metab_df <- liver_mb |>
+    dplyr::select(id, all_of(genes_I$ensembl_gene_id)) |>
+    rename_with(~ genes_I$symbol[match(.x, genes_I$ensembl_gene_id)], starts_with("ENSG")) |>
+    inner_join(metab_df, by = "id")
+  nrow(liver_metab_df)  # overlap n
 
-# Correlation liver genes x metabolites
-cor_genes_metab <- cor_block(liver_metab_df, genes_I$symbol, metab_names)
-cor_genes_metab |> 
-  filter(p_fdr < 0.05) |> 
-  dplyr::count(x, sort = TRUE) # hits per gene
+  # Correlation liver genes x metabolites
+  cor_genes_metab <- cor_block(liver_metab_df, genes_I$symbol, metab_names)
+  cor_genes_metab |> 
+    filter(p_fdr < 0.05) |> 
+    dplyr::count(x, sort = TRUE) # hits per gene
 
-cor_genes_metab |> 
-  filter(p_fdr < 0.05) |> 
-  slice_head(n = 30)
+  cor_genes_metab |> 
+    filter(p_fdr < 0.05) |> 
+    slice_head(n = 30)
 
-## Plots ##
-# Super-pathway strip: same as in 4b_mb_metabolome_correlations.R
-pathway_colors <- c(
-  "Amino Acid"                         = "#3C9189",
-  "Carbohydrate"                       = "#765135",
-  "Cofactors and Vitamins"             = "#385C7E",
-  "Energy"                             = "#3E6330",
-  "Lipid"                              = "#CCA38D",
-  "Nucleotide"                         = "#8EAFCF",
-  "Peptide"                            = "#96B485",
-  "Xenobiotics"                        = "#814956",
-  "Partially Characterized Molecules"  = "#6A4F7E"
-)
-metab_tax <- as(tax_table(metab), "matrix")
+  ## Plots ##
+  # Super-pathway strip: same as in 4b_mb_metabolome_correlations.R
+  pathway_colors <- c(
+    "Amino Acid"                         = "#3C9189",
+    "Carbohydrate"                       = "#765135",
+    "Cofactors and Vitamins"             = "#385C7E",
+    "Energy"                             = "#3E6330",
+    "Lipid"                              = "#CCA38D",
+    "Nucleotide"                         = "#8EAFCF",
+    "Peptide"                            = "#96B485",
+    "Xenobiotics"                        = "#814956",
+    "Partially Characterized Molecules"  = "#6A4F7E"
+  )
+  metab_tax <- as(tax_table(metab), "matrix")
 
-# Figure 3: liver genes × top metabolites heatmap (shows 20 metabolites with the strongest signif associations)
-top_metabs <- cor_genes_metab |>
-  group_by(y) |>
-  summarize(n_sig = sum(p_fdr < 0.05), max_abs_rho = max(abs(rho)), .groups = "drop") |>
-  filter(n_sig > 0) |>
-  arrange(desc(n_sig), desc(max_abs_rho)) |>
-  slice_head(n = 20) |>
-  pull(y)
+  # Figure 3: liver genes × top metabolites heatmap (shows 20 metabolites with the strongest signif associations)
+  top_metabs <- cor_genes_metab |>
+    group_by(y) |>
+    summarize(n_sig = sum(p_fdr < 0.05), max_abs_rho = max(abs(rho)), .groups = "drop") |>
+    filter(n_sig > 0) |>
+    arrange(desc(n_sig), desc(max_abs_rho)) |>
+    slice_head(n = 20) |>
+    pull(y)
 
-metab_sub <- cor_genes_metab |> 
-  filter(y %in% top_metabs) |> 
-  dplyr::rename(x = y, y = x)  # metabolites as rows
-rho_metab <- to_matrix(metab_sub, "rho")
-fdr_metab <- to_matrix(metab_sub, "p_fdr")[rownames(rho_metab), colnames(rho_metab)]
+  metab_sub <- cor_genes_metab |> 
+    filter(y %in% top_metabs) |> 
+    dplyr::rename(x = y, y = x)  # metabolites as rows
+  rho_metab <- to_matrix(metab_sub, "rho")
+  fdr_metab <- to_matrix(metab_sub, "p_fdr")[rownames(rho_metab), colnames(rho_metab)]
 
-# Drop gene columns with no hit among those 20
-genes_keep_metab <- colnames(fdr_metab)[colSums(fdr_metab < 0.05) > 0]
-rho_metab <- rho_metab[, genes_keep_metab, drop = FALSE]
-fdr_metab <- fdr_metab[, genes_keep_metab, drop = FALSE]
+  # Drop gene columns with no hit among those 20
+  genes_keep_metab <- colnames(fdr_metab)[colSums(fdr_metab < 0.05) > 0]
+  rho_metab <- rho_metab[, genes_keep_metab, drop = FALSE]
+  fdr_metab <- fdr_metab[, genes_keep_metab, drop = FALSE]
 
-ht_metab <- Heatmap(
-  rho_metab,
-  name = "Spearman\nrho",
-  col = colorRamp2(c(-0.4, 0, 0.4), c(renoir_15[3], "white", renoir_15[11])),
-  left_annotation = rowAnnotation(
-    `Super pathway` = metab_tax[rownames(rho_metab), "SUPER_PATHWAY"],
-    col = list(`Super pathway` = pathway_colors),
-    show_annotation_name = TRUE,
-    annotation_name_gp = gpar(fontsize = 8)
-  ),
-  row_labels = str_trunc(rownames(rho_metab), 45),
-  row_names_side = "left",
-  row_dend_side = "right",
-  column_labels = gene_label(colnames(rho_metab)),
-  column_names_max_height = max_text_width(gene_label(colnames(rho_metab))),
-  column_names_rot = 45,
-  row_names_gp = gpar(fontsize = 8),
-  rect_gp = gpar(col = "white", lwd = 0.7),
-  cell_fun = function(j, i, x, y, width, height, fill) grid.text(stars(fdr_metab[i, j]), x, y, gp = gpar(fontsize = 8))
-)
+  ht_metab <- Heatmap(
+    rho_metab,
+    name = "Spearman\nrho",
+    col = colorRamp2(c(-0.4, 0, 0.4), c(renoir_15[3], "white", renoir_15[11])),
+    left_annotation = rowAnnotation(
+      `Super pathway` = metab_tax[rownames(rho_metab), "SUPER_PATHWAY"],
+      col = list(`Super pathway` = pathway_colors),
+      show_annotation_name = TRUE,
+      annotation_name_gp = gpar(fontsize = 8)
+    ),
+    row_labels = str_trunc(rownames(rho_metab), 45),
+    row_names_side = "left",
+    row_dend_side = "right",
+    column_labels = gene_label(colnames(rho_metab)),
+    column_names_max_height = max_text_width(gene_label(colnames(rho_metab))),
+    column_names_rot = 45,
+    row_names_gp = gpar(fontsize = 8),
+    rect_gp = gpar(col = "white", lwd = 0.7),
+    cell_fun = function(j, i, x, y, width, height, fill) grid.text(stars(fdr_metab[i, j]), x, y, gp = gpar(fontsize = 8))
+  )
 
-pdf("results/graphs/RNAseq/liver_genes_metabolites_heatmap.pdf", width = 9, height = 12)
-draw(ht_metab)
-dev.off()
+  pdf("results/graphs/RNAseq/liver_genes_metabolites_heatmap.pdf", width = 9, height = 12)
+  draw(ht_metab)
+  dev.off()
 
-## Compact genes × metabolites heatmap (for slides)
-n_metabs_compact <- 10 # top metabolites by number of FDR-signif. gene correlations
+  ## Compact genes × metabolites heatmap (for slides)
+  n_metabs_compact <- 10 # top metabolites by number of FDR-signif. gene correlations
 
-metabs_compact <- cor_genes_metab |>
-  group_by(y) |>
-  summarize(n_sig = sum(p_fdr < 0.05), max_abs_rho = max(abs(rho)), .groups = "drop") |>
-  filter(n_sig > 0) |>
-  arrange(desc(n_sig), desc(max_abs_rho)) |>
-  slice_head(n = n_metabs_compact) |>
-  pull(y)
+  metabs_compact <- cor_genes_metab |>
+    group_by(y) |>
+    summarize(n_sig = sum(p_fdr < 0.05), max_abs_rho = max(abs(rho)), .groups = "drop") |>
+    filter(n_sig > 0) |>
+    arrange(desc(n_sig), desc(max_abs_rho)) |>
+    slice_head(n = n_metabs_compact) |>
+    pull(y)
 
-metab_sub_compact <- cor_genes_metab |> filter(y %in% metabs_compact) |> dplyr::rename(x = y, y = x)
-rho_metab_compact <- to_matrix(metab_sub_compact, "rho")
-fdr_metab_compact <- to_matrix(metab_sub_compact, "p_fdr")[rownames(rho_metab_compact), colnames(rho_metab_compact)]
+  metab_sub_compact <- cor_genes_metab |> filter(y %in% metabs_compact) |> dplyr::rename(x = y, y = x)
+  rho_metab_compact <- to_matrix(metab_sub_compact, "rho")
+  fdr_metab_compact <- to_matrix(metab_sub_compact, "p_fdr")[rownames(rho_metab_compact), colnames(rho_metab_compact)]
 
-n_genes_compact <- 12 # genes with the most FDR-signif. correlations among the shown metabolites
-genes_keep_metab_compact <- names(sort(colSums(fdr_metab_compact < 0.05), decreasing = TRUE))[1:min(n_genes_compact, ncol(fdr_metab_compact))]
-rho_metab_compact <- rho_metab_compact[, genes_keep_metab_compact, drop = FALSE]
-fdr_metab_compact <- fdr_metab_compact[, genes_keep_metab_compact, drop = FALSE]
+  n_genes_compact <- 12 # genes with the most FDR-signif. correlations among the shown metabolites
+  genes_keep_metab_compact <- names(sort(colSums(fdr_metab_compact < 0.05), decreasing = TRUE))[1:min(n_genes_compact, ncol(fdr_metab_compact))]
+  rho_metab_compact <- rho_metab_compact[, genes_keep_metab_compact, drop = FALSE]
+  fdr_metab_compact <- fdr_metab_compact[, genes_keep_metab_compact, drop = FALSE]
 
-dim(rho_metab_compact) # check before plotting
+  dim(rho_metab_compact) # check before plotting
 
-ht_metab_compact <- Heatmap(
-  rho_metab_compact,
-  name = "Spearman\nrho",
-  col = colorRamp2(c(-0.4, 0, 0.4), c(renoir_15[3], "white", renoir_15[11])),
-  left_annotation = rowAnnotation(
-    `Super pathway` = metab_tax[rownames(rho_metab_compact), "SUPER_PATHWAY"],
-    col = list(`Super pathway` = pathway_colors),
-    annotation_name_gp = gpar(fontsize = 8)
-  ),
-  row_labels = str_trunc(rownames(rho_metab_compact), 40),
-  row_names_side = "left",
-  row_names_gp = gpar(fontsize = 8),
-  show_row_dend = FALSE, show_column_dend = FALSE,
-  column_labels = colnames(rho_metab_compact), # symbols only
-  column_names_rot = 45,
-  column_names_gp = gpar(fontsize = 8),
-  rect_gp = gpar(col = "white", lwd = 0.7),
-  cell_fun = function(j, i, x, y, width, height, fill) grid.text(stars(fdr_metab_compact[i, j]), x, y, gp = gpar(fontsize = 8))
-)
+  ht_metab_compact <- Heatmap(
+    rho_metab_compact,
+    name = "Spearman\nrho",
+    col = colorRamp2(c(-0.4, 0, 0.4), c(renoir_15[3], "white", renoir_15[11])),
+    left_annotation = rowAnnotation(
+      `Super pathway` = metab_tax[rownames(rho_metab_compact), "SUPER_PATHWAY"],
+      col = list(`Super pathway` = pathway_colors),
+      annotation_name_gp = gpar(fontsize = 8)
+    ),
+    row_labels = str_trunc(rownames(rho_metab_compact), 40),
+    row_names_side = "left",
+    row_names_gp = gpar(fontsize = 8),
+    show_row_dend = FALSE, show_column_dend = FALSE,
+    column_labels = colnames(rho_metab_compact), # symbols only
+    column_names_rot = 45,
+    column_names_gp = gpar(fontsize = 8),
+    rect_gp = gpar(col = "white", lwd = 0.7),
+    cell_fun = function(j, i, x, y, width, height, fill) grid.text(stars(fdr_metab_compact[i, j]), x, y, gp = gpar(fontsize = 8))
+  )
 
-pdf("results/graphs/RNAseq/liver_genes_metabolites_heatmap_compact.pdf",
-    width = 5 + 0.3 * ncol(rho_metab_compact), height = 2.5 + 0.3 * nrow(rho_metab_compact))
-draw(ht_metab_compact)
-dev.off()
+  pdf("results/graphs/RNAseq/liver_genes_metabolites_heatmap_compact.pdf",
+      width = 5 + 0.3 * ncol(rho_metab_compact), height = 2.5 + 0.3 * nrow(rho_metab_compact))
+  draw(ht_metab_compact)
+  dev.off()
+} else {
+  message("No DE genes with species associations: genes x metabolites skipped")
+}
