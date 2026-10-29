@@ -58,8 +58,8 @@ cor_block <- function(df, x_vars, y_vars) {
 }
 
 # Data
-liver_rnaseq <- readRDS("data/processed_data/BARIA_Liver_RNAseq.RDS") # raw counts for DESeq2
-liver_rnaseq_vst <- readRDS("data/processed_data/BARIA_Liver_RNAseq_vst.RDS") # VST normalized
+liver_rnaseq <- readRDS("data/processed_data/BARIA_Liver_RNAseq.RDS") # raw counts -> for DESeq2
+liver_rnaseq_vst <- readRDS("data/processed_data/BARIA_Liver_RNAseq_vst_batchcorrected.RDS") # batch-corrected VST -> for correlations
 baria_muscle_wide <- readRDS("data/processed_data/BARIA_muscle_wide.RDS")
 baria_mb_v0 <- readRDS("data/processed_data/BARIA_mb_baseline.RDS")
 metab <- readRDS("data/processed_data/BARIA_metabolon_clean.RDS")
@@ -112,7 +112,7 @@ gene_label <- function(symbols, type = c("both", "symbol", "description"), max_c
     coalesce(symbols) # fall back to symbol if no description
 
   switch(type,
-         both = paste0(symbols, " – ", desc),
+         both = paste0(symbols, " - ", desc),
          symbol = symbols,
          description = desc)
 }
@@ -125,19 +125,18 @@ species_label_colors <- setNames(species_direction_colors[top15_species_labels$e
 # Prep data
 coldata_grp <- baria_muscle_wide |>
   mutate(id = as.numeric(as.character(id))) |>
-  filter(
-    id %in% liver_rnaseq$id[!liver_rnaseq$qc_exclude],
-    !is.na(perc_change_ffmi_v4_group), !is.na(age_v0), !is.na(fmi_v0), !is.na(perc_change_weight_kg_v4)
-  ) |>
+  inner_join(liver_rnaseq |> filter(!qc_exclude) |> select(id, batch), by = "id") |>
+  filter(!is.na(perc_change_ffmi_v4_group), !is.na(age_v0), !is.na(fmi_v0), !is.na(perc_change_weight_kg_v4)) |>
   mutate(
     ffmi_group = factor(if_else(perc_change_ffmi_v4_group == "high", "high", "modest_low"), levels = c("modest_low", "high")), # Positive LFC = higher in high loss
     age_v0_z = as.numeric(scale(age_v0)),
     fmi_v0_z = as.numeric(scale(fmi_v0)),
-    twl_z = as.numeric(scale(perc_change_weight_kg_v4))
+    twl_z = as.numeric(scale(perc_change_weight_kg_v4)),
+    batch = droplevels(batch) # drop the empty excluded batch level
   ) |>
   arrange(id) |>
-  select(id, sex, age_v0_z, fmi_v0_z, ffmi_group, twl_z)
-count(coldata_grp, ffmi_group)
+  select(id, sex, age_v0_z, fmi_v0_z, batch, ffmi_group, twl_z)
+count(coldata_grp, batch, ffmi_group)
 
 count_data_grp <- liver_rnaseq |>
   filter(!qc_exclude, id %in% coldata_grp$id) |>
@@ -149,7 +148,7 @@ count_data_grp <- liver_rnaseq |>
   round()
 stopifnot(identical(colnames(count_data_grp), as.character(coldata_grp$id)))
 
-dds_grp <- DESeqDataSetFromMatrix(count_data_grp, coldata_grp, design = ~ sex + age_v0_z + fmi_v0_z + ffmi_group)
+dds_grp <- DESeqDataSetFromMatrix(count_data_grp, coldata_grp, design = ~ sex + age_v0_z + fmi_v0_z + batch + ffmi_group)
 dds_grp <- estimateSizeFactors(dds_grp)
 dds_grp <- dds_grp[rowMeans(counts(dds_grp, normalized = TRUE) >= 10) >= 0.5, ]
 nrow(dds_grp) # n of genes tested
@@ -264,8 +263,8 @@ ggsave("results/graphs/RNAseq/liver_de_grp_volcano.pdf", volcano_plot, width = 7
 # Sensitivity: DE adj. for %TWL
 dds_grp_twl <- DESeqDataSetFromMatrix(
   count_data_grp,
-  coldata_grp, 
-  design = ~ sex + age_v0_z + fmi_v0_z + twl_z + ffmi_group
+  coldata_grp,
+  design = ~ sex + age_v0_z + fmi_v0_z + batch + twl_z + ffmi_group
 )
 dds_grp_twl <- estimateSizeFactors(dds_grp_twl)
 dds_grp_twl <- dds_grp_twl[rowMeans(counts(dds_grp_twl, normalized = TRUE) >= 10) >= 0.5, ]
