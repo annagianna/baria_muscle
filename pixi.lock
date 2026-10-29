@@ -28,6 +28,7 @@ environments:
       - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-deseq2-1.50.2-r45ha27e39d_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-genomicranges-1.62.1-r45h01b2380_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-iranges-2.44.0-r45h01b2380_1.conda
+      - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-limma-3.68.5-r45h262fe30_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-multtest-2.66.0-r45h01b2380_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-rhdf5-2.54.1-r45h882589e_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-rhdf5filters-1.22.0-r45ha27e39d_0.conda
@@ -260,6 +261,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-sp-2.2_3-r45h54b55ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-sparsem-1.84_2-r45heaba542_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-sparsevctrs-0.3.6-r45h54b55ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/r-statmod-1.5.2-r45hb1d0f04_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-stringi-1.8.9-r45h3d52c89_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-survey-4.5-r45h3697838_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-survival-3.8_9-r45h54b55ab_0.conda
@@ -501,6 +503,7 @@ environments:
       - conda: https://conda.anaconda.org/bioconda/osx-arm64/bioconductor-deseq2-1.50.2-r45h97584a2_0.conda
       - conda: https://conda.anaconda.org/bioconda/osx-arm64/bioconductor-genomicranges-1.62.1-r45hcc2f086_0.conda
       - conda: https://conda.anaconda.org/bioconda/osx-arm64/bioconductor-iranges-2.44.0-r45hcc2f086_1.conda
+      - conda: https://conda.anaconda.org/bioconda/osx-arm64/bioconductor-limma-3.68.5-r45h6cc0085_0.conda
       - conda: https://conda.anaconda.org/bioconda/osx-arm64/bioconductor-multtest-2.66.0-r45hcc2f086_0.conda
       - conda: https://conda.anaconda.org/bioconda/osx-arm64/bioconductor-rhdf5-2.54.1-r45h4778c6e_0.conda
       - conda: https://conda.anaconda.org/bioconda/osx-arm64/bioconductor-rhdf5filters-1.22.0-r45h97584a2_0.conda
@@ -904,6 +907,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/r-sp-2.2_3-r45h4b407c4_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/r-sparsem-1.84_2-r45hd097873_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/r-sparsevctrs-0.3.6-r45hbe92478_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/r-statmod-1.5.2-r45h95dfc9f_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/r-stringi-1.8.9-r45h6b882aa_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/r-survey-4.5-r45h1380947_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/r-survival-3.8_9-r45hbe92478_0.conda
@@ -1179,6 +1183,24 @@ packages:
     - bioconductor-iranges >=2.44.0,<2.45.0a0
   size: 2344215
   timestamp: 1770546527540
+- conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-limma-3.68.5-r45h262fe30_0.conda
+  sha256: 6088a9a83ad7d8e4d124c28714dffbe421012c146055de4235447b7171086552
+  md5: 7ba7d58e1fee0864cf75ae60e1b2b36f
+  depends:
+  - __glibc >=2.17,<3.0.a0
+  - libblas >=3.9.0,<4.0a0
+  - libgcc >=14
+  - liblapack >=3.9.0,<4.0a0
+  - liblzma >=5.8.3,<6.0a0
+  - libzlib >=1.3.2,<2.0a0
+  - r-base >=4.5,<4.6.0a0
+  - r-statmod
+  license: GPL (>=2)
+  run_exports:
+    weak:
+    - bioconductor-limma >=3.68.5,<3.69.0a0
+  size: 3106697
+  timestamp: 1791410206252
 - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-multtest-2.66.0-r45h01b2380_0.conda
   sha256: 31073eab1fe9d0f3038d088f321e4d26bf6f710e9c62521c03108a987d7f10ef
   md5: c139796a1930220b1cd8bddaaa79b70a
@@ -1959,6 +1981,23 @@ packages:
   license: Artistic-2.0
   size: 2329360
   timestamp: 1770608783131
+- conda: https://conda.anaconda.org/bioconda/osx-arm64/bioconductor-limma-3.68.5-r45h6cc0085_0.conda
+  sha256: df4b39f747d79fb725091dfa1094a0ce2a8926e6df3f975df683138a66a23f7f
+  md5: dcf092493f6404ed7c1ae55dea196e26
+  depends:
+  - __osx >=11.0
+  - libblas >=3.9.0,<4.0a0
+  - liblapack >=3.9.0,<4.0a0
+  - liblzma >=5.8.3,<6.0a0
+  - libzlib >=1.3.2,<2.0a0
+  - r-base >=4.5,<4.6.0a0
+  - r-statmod
+  license: GPL (>=2)
+  run_exports:
+    weak:
+    - bioconductor-limma >=3.68.5,<3.69.0a0
+  size: 3109690
+  timestamp: 1791410202910
 - conda: https://conda.anaconda.org/bioconda/osx-arm64/bioconductor-multtest-2.66.0-r45hcc2f086_0.conda
   sha256: 0edd8f7e6929e4dabee05c9aca4d595c5d984559a72991a6fe827584c5e9a485
   md5: e512c61795bb197f54849898885e02aa
@@ -5312,6 +5351,20 @@ packages:
   run_exports: {}
   size: 205353
   timestamp: 1769711009379
+- conda: https://conda.anaconda.org/conda-forge/linux-64/r-statmod-1.5.2-r45hb1d0f04_0.conda
+  sha256: 3095c4e59616a46480533f2e545136e25b1cb20d7ec6535d4a7f0938c48ff789
+  md5: 377126a1601c75ff75c2c8c277e55a81
+  depends:
+  - __glibc >=2.17,<3.0.a0
+  - libgcc >=14
+  - libgfortran
+  - libgfortran5 >=14.3.0
+  - r-base >=4.5,<4.6.0a0
+  license: GPL-2.0-or-later
+  license_family: GPL3
+  run_exports: {}
+  size: 325043
+  timestamp: 1779038241839
 - conda: https://conda.anaconda.org/conda-forge/linux-64/r-stringi-1.8.9-r45h3d52c89_0.conda
   sha256: b35e8d808f265e4ae7a5e1b282b732b7dfce52c72d1d7e7446fa07714c313469
   md5: 8b4ab64c1ea52b50aded3186643a9f9f
@@ -11129,6 +11182,19 @@ packages:
   license_family: MIT
   size: 201445
   timestamp: 1769711459607
+- conda: https://conda.anaconda.org/conda-forge/osx-arm64/r-statmod-1.5.2-r45h95dfc9f_0.conda
+  sha256: 07a62277620d640cc6cc680e4b3f91b208c684a107ad31b21e879d3c6ae8a5c7
+  md5: cf07183846ee8a510d0c550e3bda843c
+  depends:
+  - __osx >=11.0
+  - libgfortran
+  - libgfortran5 >=14.3.0
+  - r-base >=4.5,<4.6.0a0
+  license: GPL-2.0-or-later
+  license_family: GPL3
+  run_exports: {}
+  size: 323836
+  timestamp: 1779038718331
 - conda: https://conda.anaconda.org/conda-forge/osx-arm64/r-stringi-1.8.9-r45h6b882aa_0.conda
   sha256: 6cd65a323bdfcc82958da31da4af12bd4a67e2b2855c5cb99624725c14dcdabc
   md5: 62eb133376972be42ffacf7596171f4e
