@@ -30,14 +30,15 @@ dir.create("results/graphs/RNAseq", recursive = TRUE, showWarnings = FALSE)
 ## Sample metadata excel table
 rnaseq_meta <- read_excel(omics_metadata, sheet = "RNAseq") |>
   filter(Tissue == "Liver", Time_Point == "V-1", Study == "BARIA") |> # Liver (v1) only for now
-  transmute(
+  mutate(
     label = Sample_id |> # label = original sample name as in the kallisto count table
       str_remove("^BARIA\\.RNAseq\\.") |> 
       str_remove("\\.V-1\\.NA$"),
-      id_corrected = as.numeric(coalesce(na_if(as.character(`SNP check`), "Failed"), as.character(Subject_ID))), # SNP-verified ID where available; "Failed" = identity not verifiable, label ID kept
+    id_corrected = as.numeric(coalesce(na_if(as.character(`SNP check`), "Failed"), as.character(Subject_ID))), # SNP-verified ID where available; "Failed" = identity not verifiable, label ID kept
     batch = Batch,
     exclude = Exclude %in% "T",
-    comment = Comment
+    comment = Comment,
+    .keep = "none" # keep only the new columns
   )
 stopifnot(!anyDuplicated(rnaseq_meta$label)) # one metadata row per sample
 
@@ -247,7 +248,7 @@ save_rnaseq_tissue <- function(rnaseq_data, tissue_name) {
 
   # iii. Batch-corrected VST for correlation analyses
   if (!anyNA(meta_keep$batch) && n_distinct(meta_keep$batch) > 1) {
-    removeBatchEffect(clean$vst, batch = meta_keep$batch) |>
+    removeBatchEffect(clean$vst, batch = droplevels(meta_keep$batch)) |>
       t() |>
       as.data.frame() |>
       rownames_to_column("id") |>
