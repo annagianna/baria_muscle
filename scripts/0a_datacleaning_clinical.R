@@ -9,6 +9,32 @@ library(phyloseq)
 # Data
 baria_clinical_data_raw <- readRDS("./data/raw_data/BARIA.clinical.2024-12-09.723.2043.RDS")
 baria_mb <- readRDS("data/raw_data/ps.BARIA.metaphlan.706.2548.RDS")
+liver_histo <- readRDS("data/raw_data/liver_histology/BARIA_HistoIndex_histology_clean_28092026.rds")
+
+#### Liver histology ####
+liver_histo_v0 <- liver_histo |> 
+  filter(time_point_surgery_HI == "baseline") |> 
+  select(-time_point_surgery_HI, -paired_surgery_HI) |>
+  mutate(
+    id = Subject_ID,
+    across(ends_with("_HI")),
+    .keep = "none"
+  ) |> 
+  rename_with( ~ .x |> str_remove("_HI$") |> tolower() |> paste0("_histo_v0"), ends_with("_HI")) |> 
+  mutate(
+    masld_category_histo_v0 = case_when(
+      mash_status_histo_v0 == "MASH" ~ "MASH",
+      masld_status_histo_v0 == "MASLD" ~ "MASLD",
+      masld_status_histo_v0 == "no_steatosis" ~ "No steatosis"
+    ),
+    masld_category_histo_v0 = factor(masld_category_histo_v0, levels = c("No steatosis", "MASLD", "MASH"), ordered = TRUE),
+    masld_any_histo_v0 = factor(
+      if_else(masld_category_histo_v0 == "No steatosis", "No steatosis", "MASLD (incl. MASH)"),
+      levels = c("No steatosis", "MASLD (incl. MASH)")
+    )
+  ) |> 
+  relocate(id)
+stopifnot(!anyDuplicated(liver_histo_v0$id))
 
 #### Clinical Data ####
 # Longitudinal vars
@@ -544,6 +570,7 @@ baria_muscle_wide <- baria_muscle_long_all |>
     )
   )  |>
   ungroup() |>
+  left_join(liver_histo_v0, by = "id") |> # Baseline liver histology
   mutate(across(where(is.character) & !matches("^id$"), as.factor))
 
 # Long dataset cleaned up
@@ -560,7 +587,8 @@ baria_muscle_long <- baria_muscle_long_all |>
     hba1c_percent, homa_ir, homa_b, t2d_labs, prediab_labs,
     t2d_any, fib4, fib4_cat, nfs, nfs_cat, fli, hsi, tyg, hepatic_ir_index, hic_fasting, hic_mmt, matsuda_index,
     contains("ffmi"), contains("fmi"), contains("smm"), contains("bia_"), contains("perc_change_"), contains("delta_"), starts_with("low_")
-  )
+  ) |> 
+  left_join(liver_histo_v0, by = "id")
 
 # Save clinical data as both RDS and csv files
 dir.create("data/processed_data", recursive = TRUE, showWarnings = FALSE)
