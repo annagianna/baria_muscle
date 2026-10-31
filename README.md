@@ -15,8 +15,9 @@ post-surgical microbiome shifts and metabolic outcomes.
 - **Language:** R
 
 The code covers data cleaning and cohort definition, split into a clinical
-layer (`0a`), a microbiome/HUMAnN/metabolomics layer (`0b`), and an RNA-seq
-layer (`0c`); Table 1, stratified by 1-year %FFMI change (`1a`); baseline
+layer (`0a`), a microbiome/HUMAnN/metabolomics layer (`0b`), an RNA-seq
+layer (`0c`), and a liver subcohort (`0d`); Table 1 and a baseline liver
+histology table, stratified by 1-year %FFMI change (`1a`–`1b`); baseline
 microbiome descriptive analyses — alpha diversity, beta diversity and
 composition, stratified the same way (`2a`–`2c`); a gradient-boosting
 (XGBeast/XGBoost) pipeline that ranks baseline species by how well they
@@ -24,8 +25,8 @@ predict FFMI and its post-surgical change, with each model's top-15 features
 confirmed by LM/LMM forest plots (`3a`–`3c`); correlation analyses relating
 the species most predictive of 1-year FFMI change to HUMAnN pathways, the
 serum metabolome, and baseline dietary macronutrient intake (`4a`–`4c`); and
-liver and visceral adipose tissue RNA-seq (`5a`–`5b`), still under active
-development.
+liver and visceral adipose tissue RNA-seq, in the full cohort and the liver
+subcohort (`5a`–`5c`), still under active development.
 
 ---
 
@@ -37,7 +38,9 @@ baria_muscle/
 │   ├── 0a_datacleaning_clinical.R          # Clinical cleaning, derived variables, cohort definition
 │   ├── 0b_datacleaning_omics.R             # Microbiome, HUMAnN pathway & metabolomics cleaning
 │   ├── 0c_datacleaning_rnaseq.R            # Bulk RNA-seq cleaning, split by tissue
+│   ├── 0d_datacleaning_liver_subset.R      # Liver subcohort (BIA + shotgun + liver histology + liver RNA-seq)
 │   ├── 1a_tableone_ffmi_1y.R               # Table 1, stratified by 1-year %FFMI change group
+│   ├── 1b_liverhistology_table.R           # Baseline liver histology by 1-year %FFMI change group (full cohort and liver subcohort)
 │   ├── 2a_mb_alphadiversity_ffmi_1y.R      # Alpha diversity (Shannon, Simpson, observed richness)
 │   ├── 2b_mb_betadiversity_ffmi_1y.R       # Beta diversity (Bray–Curtis PCoA)
 │   ├── 2c_mb_composition_ffmi_1y.R         # Compositional bar plots (top 20 species)
@@ -47,8 +50,9 @@ baria_muscle/
 │   ├── 4a_humann_pathways.R                # Top-15 species x HUMAnN pathway correlations
 │   ├── 4b_mb_metabolome_correlations.R     # Top-15 species x serum metabolome correlations
 │   ├── 4c_mb_diet_correlations.R           # Top-15 species x dietary macronutrient correlations
-│   ├── 5a_liver_rnaseq.R                   # Liver RNA-seq vs. top-15 species / FFMI change — in progress
-│   ├── 5b_vadipose_rnaseq.R                # Visceral adipose RNA-seq vs. top-15 species / FFMI change — in progress
+│   ├── 5a_liver_rnaseq.R                   # Liver RNA-seq: DE by FFMI change group; DE genes vs. top-15 species and metabolome — in progress
+│   ├── 5b_vadipose_rnaseq.R                # Visceral adipose RNA-seq: same analysis as 5a — in progress
+│   ├── 5c_liver_rnaseq_livercohort.R       # 5a repeated in the liver subcohort — in progress
 │   └── assets/
 │       ├── functions.R                     # Shared helper functions (plotting, XGBeast I/O, forest models)
 │       ├── XGBeast_new.py                  # Repeated-CV XGBoost + feature-importance framework
@@ -77,8 +81,9 @@ microbiome, HUMAnN and metabolomics files to write the processed omics
 datasets; `0c` also reads `0a`'s output (to restrict to the analysis cohort)
 alongside the raw RNA-seq counts, runs a per-tissue sample QC (library size and
 PCA) and writes one processed dataset per tissue (see **Tissue RNA-seq**).
+`0d` reads the outputs of `0a`–`0c` and writes the liver-subcohort datasets.
 `1a` and the `2*` descriptive scripts are independent of one another and read
-the processed data written by `0a`/`0b`.
+the processed data written by `0a`/`0b`; `1b` additionally needs `0d`.
 
 `3a` (build ML input) → `3b` (fit XGBeast models, typically on a SLURM
 cluster) → `3c` (feature importance, LM/LMM confirmation of each model's
@@ -89,7 +94,8 @@ all three depend on `3b`'s output for the `perc_change_ffmi_v4`/`all` model,
 from which they take the top-15 species most predictive of 1-year FFMI
 change. `5a` and `5b` additionally depend on `0c` (liver and visceral adipose RNA-seq,
 respectively) and on `3c`'s forest-plot output for that same model, to colour
-species by the direction of their association with FFMI change.
+species by the direction of their association with FFMI change. `5c` has the
+same dependencies as `5a`, plus `0d`.
 
 ---
 
@@ -136,7 +142,8 @@ non-numeric/comma-decimal artefacts in the raw counts):
 | `BARIA_Jejunum_RNAseq.RDS` | Jejunum RNA-seq raw counts, same structure |
 | `BARIA_vFat_RNAseq.RDS` | Visceral fat RNA-seq raw counts, same structure |
 | `BARIA_subFat_RNAseq.RDS` | Subcutaneous fat RNA-seq raw counts, same structure |
-| `BARIA_Liver_RNAseq_vst.RDS` | Liver: DESeq2 size factor + VST-normalised expression for QC-retained samples only; size factors, expression filter (≥10 normalised reads in ≥50% of participants) and VST computed on the retained samples — used by `5a` |
+| `BARIA_Liver_RNAseq_vst.RDS` | Liver: DESeq2 size factor + VST-normalised expression for QC-retained samples only; size factors, expression filter (≥10 normalised reads in ≥50% of participants) and VST computed on the retained samples |
+| `BARIA_Liver_RNAseq_vst_batchcorrected.RDS` | Liver: same VST with sequencing batch removed — used for the correlations in `5a` (written only for tissues with more than one known batch) |
 | `BARIA_Jejunum_RNAseq_vst.RDS` | Jejunum: same processing |
 | `BARIA_vFat_RNAseq_vst.RDS` | Visceral fat: same processing — used by `5b` |
 | `BARIA_subFat_RNAseq_vst.RDS` | Subcutaneous fat: same processing |
@@ -144,6 +151,19 @@ non-numeric/comma-decimal artefacts in the raw counts):
 `0c` also writes its sample-QC outputs: `results/graphs/RNAseq/qc_librarysize_<tissue>.pdf`,
 `results/graphs/RNAseq/qc_pca_<tissue>.pdf` and `results/tables/rnaseq_qc_samples.csv`
 (see **Tissue RNA-seq**).
+
+**Outputs written by `0d`** to `data/processed_data/` (liver subcohort:
+participants with valid baseline BIA, baseline shotgun, baseline liver
+histology and QC-passing liver RNA-seq; sex-specific %FFMI change tertiles
+recomputed within the subcohort):
+
+| File | Description |
+|------|-------------|
+| `BARIA_muscle_{wide,long}_livercohort.RDS` | Clinical datasets restricted to the subcohort |
+| `BARIA_Liver_RNAseq{,_vst,_vst_batchcorrected}_livercohort.RDS` | `0c`'s liver RNA-seq files, restricted to the subcohort |
+| `BARIA_liver_subcohort_ids.csv` | Subcohort participant IDs |
+
+`0d` also writes a participant flow table (`results/tables/liver_subcohort_flow.csv`).
 
 Visit coding: `v0` = baseline (raw `V-1` / MetaPhlAn `Time_Point == "V-1"`),
 `v2`–`v5` = yearly follow-ups, `v6` = 5 years, `v7` = 10 years.
@@ -418,6 +438,9 @@ significance stars.
 Output as CSV (`results/tables/t1_ffmi_loss_*.csv`) and as a styled `gt` HTML
 table (`results/tables/t1_ffmi_loss_v0_v4_gt.html`).
 
+`1b_liverhistology_table.R` tabulates baseline liver histology by the same
+1-year %FFMI change group, in the full cohort and in the liver subcohort (`0d`).
+
 ---
 
 ## Microbiome analysis
@@ -520,7 +543,7 @@ forest-plot estimate for this model).
 
 ---
 
-## Tissue RNA-seq (0c, 5a–5b) — in progress
+## Tissue RNA-seq (0c, 5a–5c) — in progress
 
 `0c_datacleaning_rnaseq.R` cleans the raw kallisto count table into one
 VST-normalised dataset per tissue (DESeq2 size factors, an expression filter
@@ -549,28 +572,20 @@ transformation; see **Data**), after a per-tissue sample QC:
   normalisation of retained samples; the raw-count files keep all samples with
   a `qc_exclude` flag.
 
-`5a_liver_rnaseq.R` and `5b_vadipose_rnaseq.R`
-each start from one tissue's VST-normalised expression and the same top-15
-species (`perc_change_ffmi_v4`/`all` model) used in the correlation analyses
-above, and run the same two-part analysis: an untargeted genome-wide Spearman
-screen (species × all expressed genes, BH-FDR per species, with the top 25
-annotated genes by |rho| among FDR-significant hits taken forward to a
-`ComplexHeatmap`) and a targeted screen restricted to a curated, tissue-specific
-gene panel (grouped into biological categories, each tested the same way, with
-individual correlation scatter plots for FDR-significant pairs). The liver
-panel covers hepatokines, fatty-acid oxidation, mitochondrial OXPHOS,
-oxidative stress, BCAA turnover, gluconeogenesis/glycogen metabolism,
-glycolysis, de-novo lipogenesis/VLDL, insulin signaling and glucagon/incretin
-signaling. The visceral adipose panel covers adipokines, adipogenesis,
-lipolysis/lipid storage, lipogenesis/fatty-acid uptake, mitochondrial OXPHOS,
-insulin signaling, macrophage/inflammation, fibrosis/ECM, oxidative stress,
-BCAA turnover and glycolysis — browning/thermogenesis markers were
-deliberately left out, since omental/mesenteric visceral fat has minimal
-beiging potential in adult humans (browning localises mainly to subcutaneous
-and supraclavicular/cervical/perirenal depots). Both scripts guard against
-the case where no gene (untargeted) or no targeted gene reaches FDR < 0.05 for
-any species: rather than erroring, they skip the corresponding heatmap(s) and
-print the closest-to-significant associations by raw p-value instead.
+- **`5a_liver_rnaseq.R`** — differential expression (DESeq2, apeglm-shrunken
+  fold changes <sup>[19, 23]</sup>) between high and modest/low 1-year %FFMI
+  loss, genome-wide and for a pre-specified liver gene set, with sensitivity
+  and batch checks; then correlates the DE genes with the top-15 species
+  (`perc_change_ffmi_v4`/`all` model) and the species-linked genes with the
+  serum metabolome.
+- **`5b_vadipose_rnaseq.R`** — the same analysis in visceral adipose tissue,
+  with a visceral-adipose gene set.
+- **`5c_liver_rnaseq_livercohort.R`** — `5a` repeated in the liver subcohort
+  (`0d`), with the top-15 species kept from the full-cohort model. Outputs
+  carry a `_livercohort` suffix.
+
+Steps with no significant results are skipped with a message rather than
+stopping the script.
 
 ---
 
@@ -581,12 +596,12 @@ pixi tasks for every script plus grouped tasks (`datacleaning`, `mb`, `ml`,
 `mb-correlations`, `all`) that chain the steps within each stage — run e.g.
 `pixi run ml` or `pixi run datacleaning-clinical`; see `pixi.toml` for the
 full list. `liver-rnaseq` (`5a`) is defined but excluded from
-`all`, since that script is still in progress; `5b_vadipose_rnaseq.R` has no
-pixi task yet and is run directly (`Rscript scripts/5b_vadipose_rnaseq.R`). R
+`all`, since that script is still in progress; `0d`, `1b`, `5b` and `5c` have no
+pixi task yet and are run directly (e.g. `Rscript scripts/5b_vadipose_rnaseq.R`). R
 packages loaded across the scripts include: `tidyverse`, `phyloseq`, `vegan`,
 `tableone`, `gt`, `ggpubr`, `patchwork`, `ggthemes`, `ggsci`, `ggrepel`,
 `ape`, `grid`, `MetBrewer`, `lmerTest`, `broom` / `broom.mixed`,
-`ComplexHeatmap` / `circlize`, and (`5a`, `5b`) `annotables` and `DESeq2`
+`ComplexHeatmap` / `circlize`, and (`5a`–`5c`) `annotables`, `apeglm` and `DESeq2`
 (the latter via `0c`; `0c` also uses `matrixStats`, installed as a DESeq2
 dependency, and `ggrepel`). The ML pipeline (`3b`) additionally uses Python:
 `xgboost`, `scikit-learn`, `numpy`, `pandas`, `matplotlib`, `seaborn`, `shap`,
@@ -686,3 +701,6 @@ before writing to them, so `results/` does not need to exist beforehand.
 22. Meijnikman AS, Davids M, Herrema H, et al. Microbiome-derived ethanol in
     nonalcoholic fatty liver disease. *Nat Med.* 2022;28(10):2100–2106.
     doi:10.1038/s41591-022-02016-6.
+23. Zhu A, Ibrahim JG, Love MI. Heavy-tailed prior distributions for sequence
+    count data: removing the noise and preserving large differences.
+    *Bioinformatics.* 2019;35(12):2084–2092. doi:10.1093/bioinformatics/bty895.
