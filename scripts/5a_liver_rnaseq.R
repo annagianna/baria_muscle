@@ -410,7 +410,8 @@ de_grp_targeted <- de_grp |>
   mutate(padj_targeted = p.adjust(pvalue, method = "BH")) |>
   arrange(pvalue)
 c(targeted_listed = n_distinct(target_genes$ensembl_gene_id), tested = nrow(de_grp_targeted))
-de_sig_targeted <- de_grp_targeted |> filter(padj_targeted < 0.05)
+de_sig_targeted <- de_grp_targeted |> 
+  filter(padj_targeted < 0.05)
 nrow(de_sig_targeted)
 write_csv(de_grp_targeted, "results/tables/liver_de_grp_targeted_genes.csv")
 
@@ -444,8 +445,14 @@ if (nrow(de_sig_targeted) > 0) {
 #### Liver RNA-seq x top15 species ####
 # Top15 species x liver RNA seq
 liver_mb <- liver_rnaseq_vst |>
-  mutate(id = as.numeric(as.character(id))) |> 
-  inner_join(top15_species_log10, by = "id")
+  mutate(id = as.numeric(as.character(id))) |>
+  inner_join(top15_species_log10, by = "id") |>
+  semi_join(
+    baria_muscle_wide |>
+      filter(!is.na(perc_change_ffmi_v4_group)) |>
+      mutate(id = as.numeric(as.character(id))),
+    by = "id"
+  )
 
 # QC: sequencing depth (DESeq2 size factor) vs. species abundance (no expected association)
 size_factor_qc <- map_dfr(top15_species,
