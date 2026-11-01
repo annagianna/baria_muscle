@@ -130,3 +130,27 @@ saveRDS(baria_muscle_long_liver, "data/processed_data/BARIA_muscle_long_livercoh
 saveRDS(liver_rnaseq_sub, "data/processed_data/BARIA_Liver_RNAseq_livercohort.RDS")
 saveRDS(liver_rnaseq_vst_sub, "data/processed_data/BARIA_Liver_RNAseq_vst_livercohort.RDS")
 saveRDS(liver_rnaseq_vst_bc_sub, "data/processed_data/BARIA_Liver_RNAseq_vst_batchcorrected_livercohort.RDS")
+
+#### Liver subcohort with complete follow-up (valid BIA at baseline, 1y and 2y) ####
+# Built from the full-cohort data (0a), so tertiles are recomputed once, within these participants
+baria_muscle_wide_liver_1y2y <- baria_muscle_wide |>
+  filter(id %in% liver_subcohort_ids, !is.na(perc_change_ffmi_v4), !is.na(perc_change_ffmi_v5)) |>
+  rename_with(~ paste0(.x, "_fullcohort"), starts_with("perc_change_ffmi_v") & ends_with(c("_tertile", "_group"))) |>
+  group_by(sex) |>
+  mutate(
+    across(
+      starts_with("perc_change_ffmi_v") & !ends_with(c("_tertile", "_group", "_fullcohort")),
+      ~ quantile(.x, probs = 1/3, na.rm = TRUE),
+      .names = "{.col}_tertile"
+    ),
+    across(
+      starts_with("perc_change_ffmi_v") & !ends_with(c("_tertile", "_group", "_fullcohort")),
+      ~ if_else(.x <= quantile(.x, probs = 1/3, na.rm = TRUE), "high", "modest/low"),
+      .names = "{.col}_group"
+    )
+  ) |>
+  ungroup() |>
+  mutate(across(ends_with("_group") & !ends_with("_fullcohort"), as.factor))
+
+# Save
+saveRDS(baria_muscle_wide_liver_1y2y, "data/processed_data/BARIA_muscle_wide_livercohort_1y2y.RDS")

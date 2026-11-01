@@ -590,9 +590,8 @@ baria_muscle_long <- baria_muscle_long_all |>
   ) |> 
   left_join(liver_histo_v0, by = "id")
 
-# Save clinical data as both RDS and csv files
+# Save clean data
 dir.create("data/processed_data", recursive = TRUE, showWarnings = FALSE)
-
 # Long clinical data
 write.csv(baria_muscle_long, "data/processed_data/BARIA_muscle_long.csv")
 saveRDS(baria_muscle_long, "data/processed_data/BARIA_muscle_long.RDS")
@@ -600,3 +599,26 @@ saveRDS(baria_muscle_long, "data/processed_data/BARIA_muscle_long.RDS")
 # Wide clinical data
 write.csv(baria_muscle_wide, "data/processed_data/BARIA_muscle_wide.csv")
 saveRDS(baria_muscle_wide, "data/processed_data/BARIA_muscle_wide.RDS")
+
+#### Complete follow-up subcohort: valid BIA at baseline, 1y and 2y postoperatively ####
+baria_muscle_wide_1y2y <- baria_muscle_wide |>
+  filter(!is.na(perc_change_ffmi_v4), !is.na(perc_change_ffmi_v5)) |>
+  rename_with(~ paste0(.x, "_fullcohort"), starts_with("perc_change_ffmi_v") & ends_with(c("_tertile", "_group"))) |>
+  group_by(sex) |> # Sex-specific %FFMI change tertiles recomputed within this subcohort
+  mutate(
+    across(
+      starts_with("perc_change_ffmi_v") & !ends_with(c("_tertile", "_group", "_fullcohort")),
+      ~ quantile(.x, probs = 1/3, na.rm = TRUE),
+      .names = "{.col}_tertile"
+    ),
+    across(
+      starts_with("perc_change_ffmi_v") & !ends_with(c("_tertile", "_group", "_fullcohort")),
+      ~ if_else(.x <= quantile(.x, probs = 1/3, na.rm = TRUE), "high", "modest/low"),
+      .names = "{.col}_group"
+    )
+  ) |>
+  ungroup() |>
+  mutate(across(ends_with("_group") & !ends_with("_fullcohort"), as.factor))
+
+# Save
+saveRDS(baria_muscle_wide_1y2y, "data/processed_data/BARIA_muscle_wide_1y2y.RDS")
