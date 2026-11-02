@@ -71,7 +71,7 @@ baria_muscle_vars <- baria_clinical_data_raw |>
   ) |> 
   select(
     # Baseline & static vars
-    id = Subject_ID, date_v0 = date, sg_type = type_surgery, age_v0 = Age, sex, t2d_v0 = dm,
+    id = Subject_ID, date_v0 = date, sg_type = type_surgery, age_v0 = Age, sex, t2d_v0 = dm, t2d_inclusion_v0 = `inclusion_criteria_check#T2DM + gebruik antidiabetica`, # DIABAR only (NA in BARIA)
     bmi_v0 = bmi, weight_kg_v0 = weight, height_cm = height, wc_cm_v0 = taille, upperleg_cm_v0 = upperleg,
     fm_kg_v0 = tbf, fm_percent_v0 = tbf_percent, ffm_kg_v0 = ffm, ffm_percent_v0 = ffm_percent, bia_resistance_50khz_v0 = rawdata_50Khz_Resistance,
     medication_binary_v0 = meds, medication_list_v0 = medication_v0_freetext, sport_v0 = scre_sport,
@@ -158,10 +158,10 @@ baria_muscle_vars <- baria_clinical_data_raw |>
     across(.cols = starts_with("date"), ~ if_else(.x %in% c("01-01-2999", "01-01-2997", "01-01-2995"), NA_character_, .x)),
     sex = case_when(sex == "1" ~ "male", sex == "2" ~ "female"),
     t2d_v0 = case_when(
-      # DIABAR (IDs starting with 300xx): T2D is the inclusion criterion for DIABAR; BUT: raw dm is coded 2 (no) for all DIABAR participants!!!
-      as.numeric(as.character(id)) >= 30000 & as.numeric(as.character(id)) < 31000 ~ "yes", t2d_v0 == "1" ~ "yes",
-      t2d_v0 == "2" ~ "no"
+      # DIABAR inclusion check "T2DM + glucose-lowering drugs"; raw dm is coded 2 (no) for all DIABAR participants
+      t2d_inclusion_v0 %in% c(1, "1") ~ "yes", t2d_v0 == "1" ~ "yes", t2d_v0 == "2" ~ "no"
     ),
+    cohort = if_else(!is.na(t2d_inclusion_v0), "DIABAR", "BARIA"), # inclusion check var is only filled in for DIABAR
     aht = case_when(aht == "1" ~ "yes", aht == "2" ~ "no"),
     medication_binary_v0 = case_when(medication_binary_v0 == "1" ~ "yes", medication_binary_v0 == "2" ~ "no"),
     sport_v0 = case_when(sport_v0 == "1" ~ "yes", sport_v0 == "2" ~ "no"),
@@ -583,7 +583,7 @@ baria_muscle_long <- baria_muscle_long_all |>
     id,visit,
 
     # Static/baseline covariates intentionally retained
-    age_v0, sex, t2d_v0, height_cm, sg_type,
+    age_v0, sex, t2d_v0, height_cm, sg_type, cohort,
 
     # Longitudinal variables
     all_of(long_vars), all_of(names(medication_classes)),
