@@ -208,29 +208,33 @@ ma_plot_grp <- ggplot(ma_df, aes(mean, lfc, colour = isDE)) +
 ggsave("results/graphs/RNAseq/liver_de_grp_MA_before_after_shrinkage.pdf", ma_plot_grp, width = 10, height = 5)
 
 ## Forest plot (group DE)
-# Data
-forest_de_grp_df <- de_sig |> 
-  mutate(
-    direction = if_else(log2FC_shr > 0, "Higher in high loss", "Higher in modest/low loss"),
-    lower = log2FC_shr - 1.96 * lfcSE_shr, # approx. 95% interval
-    upper = log2FC_shr + 1.96 * lfcSE_shr,
-    label = fct_reorder(gene_label(symbol), log2FC_shr)
-  )
+if (nrow(de_sig) > 0) {
+  # Data
+  forest_de_grp_df <- de_sig |> 
+    mutate(
+      direction = if_else(log2FC_shr > 0, "Higher in high loss", "Higher in modest/low loss"),
+      lower = log2FC_shr - 1.96 * lfcSE_shr, # approx. 95% interval
+      upper = log2FC_shr + 1.96 * lfcSE_shr,
+      label = fct_reorder(gene_label(symbol), log2FC_shr)
+    )
 
-# Plot
-forest_de_grp_plot <- forest_de_grp_df |> 
-  ggplot(aes(x = log2FC_shr, y = label, color = direction)) +
-  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey40", linewidth = 0.3) +
-  geom_errorbar(aes(xmin = lower, xmax = upper), width = 0.2) +
-  geom_point(size = 2.5) +
-  scale_colour_manual(values = de_cols, name = NULL) +
-  labs(
-    title = "Differences in gene expression",
-    x = "log2FC high vs modest/low loss (approx. 95% CI)",
-    y = NULL
-  ) +
-  theme_minimal_custom()
-ggsave("results/graphs/RNAseq/forest_de_grp_plot.pdf", forest_de_grp_plot, width = 9, height = 1.5 + 0.4 * nrow(forest_de_grp_df))
+  # Plot
+  forest_de_grp_plot <- forest_de_grp_df |> 
+    ggplot(aes(x = log2FC_shr, y = label, color = direction)) +
+    geom_vline(xintercept = 0, linetype = "dashed", colour = "grey40", linewidth = 0.3) +
+    geom_errorbar(aes(xmin = lower, xmax = upper), width = 0.2) +
+    geom_point(size = 2.5) +
+    scale_colour_manual(values = de_cols, name = NULL) +
+    labs(
+      title = "Differences in gene expression",
+      x = "log2FC high vs modest/low loss (approx. 95% CI)",
+      y = NULL
+    ) +
+    theme_minimal_custom()
+  ggsave("results/graphs/RNAseq/forest_de_grp_plot.pdf", forest_de_grp_plot, width = 9, height = 1.5 + 0.4 * nrow(forest_de_grp_df))
+} else {
+  message("No significant genes in the main DE: forest plot skipped")
+}
 
 ## Volcano plot (group DE)
 # Data
@@ -332,6 +336,10 @@ c(genes_tested = nrow(res_lrt), genes_differing_by_batch = sum(res_lrt$padj < 0.
 # If the group effect is consistent across batches, log2FCs should point the same way
 per_batch <- map_dfr(levels(coldata_grp$batch), function(b) {
   cd <- coldata_grp |> filter(batch == b)
+  if (n_distinct(cd$ffmi_group) < 2 || min(table(cd$ffmi_group)) < 3 || n_distinct(cd$sex) < 2) {
+    message("Batch ", b, " skipped: too few samples per FFMI group or only one sex")
+    return(NULL)
+  }
   dds_b <- DESeqDataSetFromMatrix(
     count_data_grp[rownames(dds_grp), as.character(cd$id)], cd,
     design = ~ sex + age_v0_z + ffmi_group
@@ -450,17 +458,17 @@ nrow(de_sig_targeted)
 write_csv(de_grp_targeted, "results/tables/liver_de_grp_targeted_genes.csv")
 
 ## Forest plot (targeted DE)
-# Data
-forest_de_grp_targeted_df <- de_sig_targeted |> 
-  mutate(
-    direction = if_else(log2FC_shr > 0, "Higher in high loss", "Higher in modest/low loss"),
-    lower = log2FC_shr - 1.96 * lfcSE_shr, # approx. 95% interval
-    upper = log2FC_shr + 1.96 * lfcSE_shr,
-    label = fct_reorder(gene_label(symbol), log2FC_shr)
-  )
-
-# Plot
 if (nrow(de_sig_targeted) > 0) {
+  # Data
+  forest_de_grp_targeted_df <- de_sig_targeted |> 
+    mutate(
+      direction = if_else(log2FC_shr > 0, "Higher in high loss", "Higher in modest/low loss"),
+      lower = log2FC_shr - 1.96 * lfcSE_shr, # approx. 95% interval
+      upper = log2FC_shr + 1.96 * lfcSE_shr,
+      label = fct_reorder(gene_label(symbol), log2FC_shr)
+    )
+
+  # Plot
   forest_de_grp_targeted_plot <- forest_de_grp_targeted_df |> 
     ggplot(aes(x = log2FC_shr, y = label, color = direction)) +
     geom_vline(xintercept = 0, linetype = "dashed", colour = "grey40", linewidth = 0.3) +
@@ -474,6 +482,8 @@ if (nrow(de_sig_targeted) > 0) {
     ) +
     theme_minimal_custom()
   ggsave("results/graphs/RNAseq/forest_de_grp_targeted_plot.pdf", forest_de_grp_targeted_plot, width = 9, height = 1.5 + 0.4 * nrow(forest_de_grp_targeted_df))
+} else {
+  message("No significant genes in the targeted DE: forest plot skipped")
 }
 
 #### Liver RNA-seq x top15 species ####
@@ -898,75 +908,16 @@ if (nrow(sig_de_species) > 0) {
 
 
 
-#### CHECKS ####
+#### Histology per FFMI group (descriptive) ####
 coldata_check <- coldata_grp |>
   left_join(
     baria_muscle_wide |>
       mutate(id = as.numeric(as.character(id))) |>
-      select(id, masld_category_histo_v0, masld_any_histo_v0, fibrosis_stage_histo_v0,
-             t2d_v0, t2d_labs_v0, prediab_labs_v0),
+      select(id, masld_category_histo_v0, masld_any_histo_v0, fibrosis_stage_histo_v0),
     by = "id"
   )
 
 count(coldata_check, masld_category_histo_v0)                # No steatosis / MASLD / MASH (NA = no histology)
 count(coldata_check, ffmi_group, masld_category_histo_v0)    # per FFMI group
 count(coldata_check, ffmi_group, fibrosis_stage_histo_v0)    # which fibrosis stages exist, per group
-count(coldata_check, ffmi_group, t2d_v0, prediab_labs_v0)    # glycaemic status per group
 count(coldata_check, batch, ffmi_group, masld_any_histo_v0)  # can batch still be estimated within strata?
-
-
-coldata_check <- coldata_check |>
-  mutate(
-    glyc_status_v0 = factor(
-      case_when(
-        t2d_v0 == "yes" | t2d_labs_v0 == "yes" ~ "T2D",
-        prediab_labs_v0 == "yes" ~ "Prediabetes",
-        !is.na(prediab_labs_v0) ~ "Normoglycaemia"
-      ),
-      levels = c("Normoglycaemia", "Prediabetes", "T2D")
-    )
-  )
-count(coldata_check, ffmi_group, glyc_status_v0)
-
-
-# Other adjustment sets
-run_de <- function(coldata, design) {
-  coldata <- coldata |> mutate(batch = droplevels(batch))  # drop batches that are empty in this subset
-  dds <- DESeqDataSetFromMatrix(count_data_grp[, as.character(coldata$id)], coldata, design = design)
-  dds <- estimateSizeFactors(dds)
-  dds <- dds[rowMeans(counts(dds, normalized = TRUE) >= 10) >= 0.5, ]
-  dds <- DESeq(dds, quiet = TRUE)
-  results(dds, name = "ffmi_group_high_vs_modest_low", alpha = 0.05) |>
-    as.data.frame() |>
-    rownames_to_column("ensembl_gene_id") |>
-    select(ensembl_gene_id, log2FC = log2FoldChange, pvalue, padj)
-}
-
-base_design <- ~ sex + age_v0_z + batch + ffmi_group
-
-de_variants <- list(
-  main         = run_de(coldata_check, base_design),
-  glyc_adj     = run_de(filter(coldata_check, !is.na(glyc_status_v0)),
-                        ~ sex + age_v0_z + batch + glyc_status_v0 + ffmi_group),
-  no_steatosis = run_de(filter(coldata_check, masld_any_histo_v0 == "No steatosis"), base_design),
-  masld        = run_de(filter(coldata_check, masld_any_histo_v0 == "MASLD (incl. MASH)"), base_design)
-)
-
-# Variant comparison vs. top 50 genes of the main variant (by p-value)
-top50_variants_ref <- de_variants$main |>
-  slice_min(pvalue, n = 50) |>
-  select(ensembl_gene_id, log2FC_ref = log2FC)
-
-de_variants_summary <- imap_dfr(de_variants, function(res, variant) {
-  top50 <- res |>
-    inner_join(top50_variants_ref, by = "ensembl_gene_id")
-  tibble(
-    variant = variant,
-    n_genes_tested = nrow(res),
-    n_sig_genome = sum(res$padj < 0.05, na.rm = TRUE),
-    same_sign_top50 = mean(sign(top50$log2FC) == sign(top50$log2FC_ref), na.rm = TRUE),
-    rho_top50 = cor(top50$log2FC, top50$log2FC_ref, method = "spearman", use = "pairwise.complete.obs")
-  )
-})
-de_variants_summary
-write_csv(de_variants_summary, "results/tables/liver_de_variants_summary.csv")

@@ -1,5 +1,5 @@
 # Liver RNA-seq - liver subcohort
-# # Anna Giannakogeorgou
+# Anna Giannakogeorgou
 
 # Packages
 library(tidyverse)
@@ -141,6 +141,15 @@ coldata_grp <- coldata_grp_pre |>
   arrange(id) |>
   select(id, sex, age_v0_z, fmi_v0_z, batch, ffmi_group, twl_z)
 message("Complete-case filter drops ", nrow(coldata_grp_pre) - nrow(coldata_grp), " of ", nrow(coldata_grp_pre), " participants")
+
+# Exclude sequencing batches with < 5 samples in the analysed population (batch effect not estimable)
+small_batches <- coldata_grp |> count(batch) |> filter(n < 5) |> pull(batch)
+if (length(small_batches) > 0) {
+  message("Excluded batch(es) with < 5 samples: ", paste(small_batches, collapse = ", "), " (n = ", sum(coldata_grp$batch %in% small_batches), ")")
+}
+coldata_grp <- coldata_grp |>
+  filter(!batch %in% small_batches) |>
+  mutate(batch = droplevels(batch))
 count(coldata_grp, batch, ffmi_group)
 
 count_data_grp <- liver_rnaseq |>
@@ -901,3 +910,67 @@ if (nrow(sig_de_species) > 0) {
 } else {
   message("No DE genes with species associations: genes x metabolites skipped")
 }
+
+#### CHECKS ####
+coldata_check <- coldata_grp |>
+  left_join(
+    baria_muscle_wide |>
+      mutate(id = as.numeric(as.character(id))) |>
+      select(id, masld_category_histo_v0, masld_any_histo_v0, fibrosis_stage_histo_v0),
+    by = "id"
+  )
+
+count(coldata_check, masld_category_histo_v0)                # No steatosis / MASLD / MASH (NA = no histology)
+count(coldata_check, ffmi_group, masld_category_histo_v0)    # per FFMI group
+count(coldata_check, ffmi_group, fibrosis_stage_histo_v0)    # which fibrosis stages exist, per group
+count(coldata_check, batch, ffmi_group, masld_any_histo_v0)  # can batch still be estimated within strata?
+
+
+# Other adjustment sets
+run_de <- function(coldata, design) {
+  coldata <- coldata |> mutate(batch = droplevels(batch))  # drop batches that are empty in this subset
+  if (n_distinct(coldata$ffmi_group) < 2 || min(table(coldata$ffmi_group)) < 3 || n_distinct(coldata$sex) < 2) {
+    message("Variant skipped: too few samples per FFMI group or only one sex")
+    return(tibble(ensembl_gene_id = character(), log2FC = numeric(), pvalue = numeric(), padj = numeric()))
+  }
+  dds <- DESeqDataSetFromMatrix(count_data_grp[, as.character(coldata$id)], coldata, design = design)
+  dds <- estimateSizeFactors(dds)
+  dds <- dds[rowMeans(counts(dds, normalized = TRUE) >= 10) >= 0.5, ]
+  dds <- DESeq(dds, quiet = TRUE)
+  results(dds, name = "ffmi_group_high_vs_modest_low", alpha = 0.05) |>
+    as.data.frame() |>
+    rownames_to_column("ensembl_gene_id") |>
+    select(ensembl_gene_id, log2FC = log2FoldChange, pvalue, padj)
+}
+
+base_design <- ~ sex + age_v0_z + batch + ffmi_group
+
+de_variants <- list(
+  main          = run_de(coldata_check, base_design),
+  steatosis_adj = run_de(
+    filter(coldata_check, !is.na(masld_any_histo_v0)),
+    ~ sex + age_v0_z + batch + masld_any_histo_v0 + ffmi_group
+  )
+)
+
+# Variant comparison vs. top 50 genes of the main variant (by p-value)
+top50_variants_ref <- de_variants$main |>
+  slice_min(pvalue, n = 50) |>
+  select(ensembl_gene_id, log2FC_ref = log2FC)
+
+de_variants_summary <- imap_dfr(de_variants, function(res, variant) {
+  top50 <- res |>
+    inner_join(top50_variants_ref, by = "ensembl_gene_id")
+  tibble(
+    variant = variant,
+    n_genes_tested = nrow(res),
+    n_sig_genome = sum(res$padj < 0.05, na.rm = TRUE),
+    same_sign_top50 = mean(sign(top50$log2FC) == sign(top50$log2FC_ref), na.rm = TRUE),
+    rho_top50 = if (nrow(top50) > 1) cor(top50$log2FC, top50$log2FC_ref, method = "spearman", use = "pairwise.complete.obs") else NA_real_
+  )
+})
+de_variants_summary
+write_csv(de_variants_summary, "results/tables/liver_de_variants_summary_livercohort.csv")
+
+Sys.setenv(GROUPING = "q4")
+de_variants_summary
