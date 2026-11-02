@@ -136,7 +136,7 @@ coldata_grp <- coldata_grp_pre |>
     age_v0_z = as.numeric(scale(age_v0)),
     fmi_v0_z = as.numeric(scale(fmi_v0)),
     twl_z = as.numeric(scale(perc_change_weight_kg_v4)),
-    batch = droplevels(batch) # drop the empty excluded batch level
+    batch = droplevels(batch) # drop batch levels without samples in the analyzed population
   ) |>
   arrange(id) |>
   select(id, sex, age_v0_z, fmi_v0_z, batch, ffmi_group, twl_z)
@@ -153,7 +153,7 @@ count_data_grp <- liver_rnaseq |>
   round()
 stopifnot(identical(colnames(count_data_grp), as.character(coldata_grp$id)))
 
-dds_grp <- DESeqDataSetFromMatrix(count_data_grp, coldata_grp, design = ~ sex + age_v0_z + batch + ffmi_group)
+dds_grp <- DESeqDataSetFromMatrix(count_data_grp, coldata_grp, design = ~ sex + age_v0_z + batch + twl_z + ffmi_group)
 dds_grp <- estimateSizeFactors(dds_grp)
 dds_grp <- dds_grp[rowMeans(counts(dds_grp, normalized = TRUE) >= 10) >= 0.5, ]
 nrow(dds_grp) # n of genes tested
@@ -258,7 +258,8 @@ volcano_plot <- volcano_df |>
     aes(label = symbol),
     size = 2.5,
     max.overlaps = Inf,
-    show.legend = FALSE
+    show.legend = FALSE, 
+    seed = 13
   ) +
   scale_colour_manual(values = de_cols, name = NULL) +
   labs(
@@ -269,40 +270,11 @@ volcano_plot <- volcano_df |>
   theme_minimal_custom()
 ggsave("results/graphs/RNAseq/liver_de_grp_volcano.pdf", volcano_plot, width = 7, height = 6)
 
-# Sensitivity: DE adj. for %TWL
-dds_grp_twl <- DESeqDataSetFromMatrix(
-  count_data_grp,
-  coldata_grp,
-  design = ~ sex + age_v0_z + batch + twl_z + ffmi_group
-)
-dds_grp_twl <- estimateSizeFactors(dds_grp_twl)
-dds_grp_twl <- dds_grp_twl[rowMeans(counts(dds_grp_twl, normalized = TRUE) >= 10) >= 0.5, ]
-dds_grp_twl <- DESeq(dds_grp_twl)
-res_grp_twl <- results(dds_grp_twl, name = "ffmi_group_high_vs_modest_low", alpha = 0.05)
-
-de_grp_twl <- as.data.frame(res_grp_twl) |>
-  rownames_to_column("ensembl_gene_id") |>
-  select(
-    ensembl_gene_id,
-    log2FC_mle_twl = log2FoldChange,
-    padj_twl = padj
-  )
-
-# Compare unadj. vs. %TWL-adj. DE results
-de_twl_compare <- de_sig |>
-  select(ensembl_gene_id, symbol, log2FC_mle, padj) |>
-  left_join(de_grp_twl, by = "ensembl_gene_id") |>
-  mutate(
-    same_direction = sign(log2FC_mle) == sign(log2FC_mle_twl),
-    still_sig = padj_twl < 0.05
-  )
-de_twl_compare
-
-# Sensitivity: DE adj. for baseline FMI
+# Sensitivity model: main model additionally adj. for baseline FMI
 dds_grp_fmi <- DESeqDataSetFromMatrix(
   count_data_grp,
   coldata_grp,
-  design = ~ sex + age_v0_z + fmi_v0_z + batch + ffmi_group
+  design = ~ sex + age_v0_z + batch + twl_z + fmi_v0_z + ffmi_group
 )
 dds_grp_fmi <- estimateSizeFactors(dds_grp_fmi)
 dds_grp_fmi <- dds_grp_fmi[rowMeans(counts(dds_grp_fmi, normalized = TRUE) >= 10) >= 0.5, ]
@@ -314,6 +286,7 @@ de_grp_fmi <- as.data.frame(res_grp_fmi) |>
   select(
     ensembl_gene_id,
     log2FC_mle_fmi = log2FoldChange,
+    pvalue_fmi = pvalue,
     padj_fmi = padj
   )
 
@@ -328,42 +301,9 @@ de_fmi_compare <- de_sig |>
 de_fmi_compare
 
 ## Batch diagnostics: genes differing by sequencing batch (LRT: full model vs reduced model without batch)
-dds_lrt <- DESeq(dds_grp, test = "LRT", reduced = ~ sex + age_v0_z + ffmi_group)
+dds_lrt <- DESeq(dds_grp, test = "LRT", reduced = ~ sex + age_v0_z + twl_z + ffmi_group)
 res_lrt <- results(dds_lrt, alpha = 0.05)
 c(genes_tested = nrow(res_lrt), genes_differing_by_batch = sum(res_lrt$padj < 0.05, na.rm = TRUE))
-
-## Robustness: DE within each sequencing batch (same covariates and genes as the main model)
-# If the group effect is consistent across batches, log2FCs should point the same way
-per_batch <- map_dfr(levels(coldata_grp$batch), function(b) {
-  cd <- coldata_grp |> filter(batch == b)
-  if (n_distinct(cd$ffmi_group) < 2 || min(table(cd$ffmi_group)) < 3 || n_distinct(cd$sex) < 2) {
-    message("Batch ", b, " skipped: too few samples per FFMI group or only one sex")
-    return(NULL)
-  }
-  dds_b <- DESeqDataSetFromMatrix(
-    count_data_grp[rownames(dds_grp), as.character(cd$id)], cd,
-    design = ~ sex + age_v0_z + ffmi_group
-  )
-  dds_b <- DESeq(dds_b, quiet = TRUE)
-  results(dds_b, name = "ffmi_group_high_vs_modest_low") |>
-    as.data.frame() |>
-    rownames_to_column("ensembl_gene_id") |>
-    transmute(ensembl_gene_id, batch = b, log2FC = log2FoldChange, pvalue)
-})
-
-# i. Direction agreement with the main model for its top 50 genes (by p-value)
-top50_main <- de_grp |> slice_min(pvalue, n = 50) |> select(ensembl_gene_id, log2FC_main = log2FC_mle)
-per_batch |>
-  inner_join(top50_main, by = "ensembl_gene_id") |>
-  group_by(batch) |>
-  summarise(n_genes = n(), same_sign_as_main = mean(sign(log2FC) == sign(log2FC_main), na.rm = TRUE), .groups = "drop")
-
-# ii. Genome-wide agreement of log2FCs between batches (Spearman)
-per_batch |>
-  select(ensembl_gene_id, batch, log2FC) |>
-  pivot_wider(names_from = batch, values_from = log2FC) |>
-  select(-ensembl_gene_id) |>
-  cor(method = "spearman", use = "pairwise.complete.obs")
 
 #### Targeted DE: pre-specified liver gene set (defined a priori; DESeq2 fitted on all genes, BH within the set) ####
 core_genes <- list(
@@ -456,6 +396,20 @@ de_sig_targeted <- de_grp_targeted |>
   filter(padj_targeted < 0.05)
 nrow(de_sig_targeted)
 write_csv(de_grp_targeted, "results/tables/liver_de_grp_targeted_genes.csv")
+
+# Sensitivity: targeted DE in the FMI-adjusted model (same gene set, BH within the set)
+de_grp_fmi_targeted <- de_grp_fmi |>
+  inner_join(target_genes |> 
+    distinct(ensembl_gene_id, category), by = "ensembl_gene_id") |>
+  left_join(
+    de_grp |> 
+      select(ensembl_gene_id, symbol),
+    by = "ensembl_gene_id"
+  ) |>
+  mutate(padj_targeted_fmi = p.adjust(pvalue_fmi, method = "BH")) |>
+  arrange(pvalue_fmi)
+de_grp_fmi_targeted |> filter(padj_targeted_fmi < 0.05)
+write_csv(de_grp_fmi_targeted, "results/tables/liver_de_grp_fmi_targeted_genes.csv")
 
 ## Forest plot (targeted DE)
 if (nrow(de_sig_targeted) > 0) {
@@ -811,10 +765,10 @@ if (nrow(sig_de_species) > 0) {
   )
   metab_tax <- as(tax_table(metab), "matrix")
 
-  # Figure 3: liver genes × top metabolites heatmap (shows 20 metabolites with the strongest signif associations)
-  top_metabs <- cor_genes_metab |>
-    group_by(y) |>
-    summarize(n_sig = sum(p_fdr < 0.05), max_abs_rho = max(abs(rho)), .groups = "drop") |>
+# Figure 3: liver genes × top metabolites heatmap (shows 20 metabolites with the strongest signif associations)
+top_metabs <- cor_genes_metab |>
+  group_by(y) |>
+  summarize(n_sig = sum(p_fdr < 0.05), max_abs_rho = max(abs(rho)), .groups = "drop") |>
     filter(n_sig > 0) |>
     arrange(desc(n_sig), desc(max_abs_rho)) |>
     slice_head(n = 20) |>
@@ -905,19 +859,3 @@ if (nrow(sig_de_species) > 0) {
 } else {
   message("No DE genes with species associations: genes x metabolites skipped")
 }
-
-
-
-#### Histology per FFMI group (descriptive) ####
-coldata_check <- coldata_grp |>
-  left_join(
-    baria_muscle_wide |>
-      mutate(id = as.numeric(as.character(id))) |>
-      select(id, masld_category_histo_v0, masld_any_histo_v0, fibrosis_stage_histo_v0),
-    by = "id"
-  )
-
-count(coldata_check, masld_category_histo_v0)                # No steatosis / MASLD / MASH (NA = no histology)
-count(coldata_check, ffmi_group, masld_category_histo_v0)    # per FFMI group
-count(coldata_check, ffmi_group, fibrosis_stage_histo_v0)    # which fibrosis stages exist, per group
-count(coldata_check, batch, ffmi_group, masld_any_histo_v0)  # can batch still be estimated within strata?
