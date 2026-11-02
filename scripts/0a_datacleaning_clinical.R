@@ -157,7 +157,11 @@ baria_muscle_vars <- baria_clinical_data_raw |>
     across(everything(), ~ replace(.x, .x %in% c(-99, -98, -97), NA)), # these values are NA for different reasons in the Baria dataset
     across(.cols = starts_with("date"), ~ if_else(.x %in% c("01-01-2999", "01-01-2997", "01-01-2995"), NA_character_, .x)),
     sex = case_when(sex == "1" ~ "male", sex == "2" ~ "female"),
-    t2d_v0 = case_when(t2d_v0 == "1" ~ "yes", t2d_v0 == "2" ~ "no"),
+    t2d_v0 = case_when(
+      # DIABAR (IDs starting with 300xx): T2D is the inclusion criterion for DIABAR; BUT: raw dm is coded 2 (no) for all DIABAR participants!!!
+      as.numeric(as.character(id)) >= 30000 & as.numeric(as.character(id)) < 31000 ~ "yes", t2d_v0 == "1" ~ "yes",
+      t2d_v0 == "2" ~ "no"
+    ),
     aht = case_when(aht == "1" ~ "yes", aht == "2" ~ "no"),
     medication_binary_v0 = case_when(medication_binary_v0 == "1" ~ "yes", medication_binary_v0 == "2" ~ "no"),
     sport_v0 = case_when(sport_v0 == "1" ~ "yes", sport_v0 == "2" ~ "no"),
