@@ -1,4 +1,4 @@
-# RNA seq data cleaning
+# RNA seq data cleaning - Liver, sAdipose, vAdipose, Jejunum
 # Anna Giannakogeorgou
 
 # Packages
@@ -13,8 +13,9 @@ source("scripts/assets/functions.R")
 # Bioconductor packages (DESeq2/S4Vectors/matrixStats) mask some dplyr verbs; always use dplyr's
 select <- dplyr::select
 rename <- dplyr::rename
-count  <- dplyr::count
+count <- dplyr::count
 filter <- dplyr::filter
+slice <- dplyr::slice
 
 # Theme
 renoir_15 <- met.brewer("Renoir", n = 15)
@@ -28,12 +29,13 @@ dir.create("results/graphs/RNAseq", recursive = TRUE, showWarnings = FALSE)
 
 ## Sample metadata excel table
 rnaseq_meta <- read_excel(omics_metadata, sheet = "RNAseq") |>
-  filter(Tissue == "Liver", Time_Point == "V-1", Study == "BARIA") |> # Liver (v1) only for now
+  filter(Time_Point == "V-1", Study == "BARIA") |> # all tissues; baseline
   mutate(
     label = Sample_id |> # label = original sample name as in the kallisto count table
       str_remove("^BARIA\\.RNAseq\\.") |> 
       str_remove("\\.V-1\\.NA$"),
-    id_corrected = as.numeric(coalesce(na_if(as.character(`SNP check`), "Failed"), as.character(Subject_ID))), # SNP-verified ID where available; "Failed" = identity not verifiable, label ID kept
+    id_corrected = as.numeric(coalesce(na_if(as.character(`SNP check`), "Failed"), as.character(Subject_ID))), # "Failed" = identity not verifiable
+    snp_verified = !is.na(`SNP check`) & `SNP check` != "Failed", # identity confirmed by SNP check
     batch = Batch,
     exclude = Exclude %in% "T",
     comment = Comment,
@@ -59,25 +61,43 @@ baria_muscle_rnaseq <- rnaseq |>
     tissue = str_extract(Sample, "(Liver|subFat|vFat|Jejunum)")
   ) |>
   left_join(rnaseq_meta, by = "label") |>
-  mutate(
-    # identity corrections from xlsx SNP check col / subject IDs; samples flagged for exclusion keep their label id
-    id = if_else(!is.na(id_corrected) & !exclude, id_corrected, id),
+  mutate( # corrections from xlsc snp check col and IDs
+    label_id = id,
     exclude = coalesce(exclude, FALSE),
-    exclude = exclude | (tissue == "Liver" & batch %in% "RNA_Seq_2022_Fat"),
-    comment = if_else(tissue == "Liver" & batch %in% "RNA_Seq_2022_Fat", "Sequencing batch with n = 2 liver samples; batch effect not estimable", comment),
+    snp_verified = coalesce(snp_verified, FALSE),
+    id = if_else(!is.na(id_corrected) & !exclude, id_corrected, id)
+  ) |>
+  group_by(tissue) |>
+  mutate(
+    # unresolved identity: ID label claimed by a SNP-verified sample from the same tissue; cannot be assigned to an ID
+    unresolved = !snp_verified & id == label_id & id %in% id[snp_verified & id != label_id]
+  ) |> 
+  ungroup() |>
+  filter(unresolved == FALSE) |>
+  select(-unresolved) |>
+  mutate(
     exclude = exclude | (tissue == "Liver" & id %in% low_depth_ids),
     comment = if_else(tissue == "Liver" & id %in% low_depth_ids, "Low sequencing depth; distinct cluster on QC PCA (within batch 2024)", comment)
   ) |>
   filter(id %in% baria_muscle_wide$id) |>
-  mutate(across(starts_with("ENSG"), ~ as.numeric(str_replace(as.character(.x), ",", ".")))) # fix inconsistent decimals
+  mutate(across(starts_with("ENSG"), ~ as.numeric(str_replace(as.character(.x), ",", ".")))) # fix decimals
 
-# Checks (liver)
-liver_meta_check <- baria_muscle_rnaseq |> filter(tissue == "Liver")
-count(liver_meta_check, batch)                                   # every liver sample needs a batch
-stopifnot(!any(is.na(liver_meta_check$batch)))
-liver_meta_check |>
-  filter(id != as.numeric(str_extract(label, "^\\d+")) | exclude) |>
-  select(label, id, batch, exclude, comment)                    # corrected and excluded samples
+## Checks (all tissues) ##
+count(baria_muscle_rnaseq, tissue, batch, exclude) # samples per tissue
+stopifnot(!any(is.na(baria_muscle_rnaseq$batch))) # every sample needs a batch
+
+# Check for duplicates - should be one sample per id per tissue
+duplicated_ids <- baria_muscle_rnaseq |> 
+  count(tissue, id) |> 
+  filter(n > 1)
+stopifnot(nrow(duplicated_ids) == 0)
+
+# Corrected and excluded samples
+baria_muscle_rnaseq |>
+  filter(id != label_id | exclude) |>
+  select(tissue, label, label_id, id, batch, exclude, comment) |>
+  arrange(tissue, label_id) |>
+  print(n = Inf)
 
 # Sample table: one row per sample with batch and exclusion flag
 sample_meta <- baria_muscle_rnaseq |>
@@ -109,24 +129,28 @@ baria_muscle_rnaseq_named <- baria_muscle_rnaseq |>
 
 # Helper: size factors, expression filter, VST normalization (from DESEq2)
 run_vst <- function(counts) {
+  set.seed(13) # vst() fits the dispersion trend on a random subset of genes
+
   dds <- DESeqDataSetFromMatrix(round(counts), colData = data.frame(id = colnames(counts)), design = ~ 1)
   dds <- estimateSizeFactors(dds)
   genes_keep <- rowMeans(counts(dds, normalized = TRUE) >= min_count) >= min_prop
   dds <- dds[genes_keep, ]
+
   list(dds = dds, vst = assay(vst(dds, blind = TRUE)))
 }
 
 # Helper: count matrix (genes x samples) for each tissue separately
 make_count_matrix <- function(rnaseq_data, tissue_name) {
 
-  tissue_data <- rnaseq_data |>
-    filter(tissue == tissue_name)
-  stopifnot(anyDuplicated(tissue_data$id) == 0)   # one sample per patient
+  tissue_data <- rnaseq_data |> filter(tissue == tissue_name)
+
+  stopifnot(anyDuplicated(tissue_data$id) == 0) # one sample per patient
 
   count_matrix <- tissue_data |>
     select(starts_with("ENSG")) |>
     as.matrix() |>
     t() # transpose: genes x samples
+
   colnames(count_matrix) <- tissue_data$id
 
   count_matrix
@@ -187,7 +211,7 @@ plot_qc_tissue <- function(qc_tbl) {
       data = filter(qc_tbl, qc_exclude),
       aes(label = id),
       size = 2, colour = "grey20", fill = "white", label.size = 0.2,
-      max.overlaps = Inf, segment.size = 0.2, min.segment.length = 0
+      max.overlaps = Inf, segment.size = 0.2, min.segment.length = 0, seed = 13 # for reproducibility
     ) +
     scale_colour_manual(values = renoir_15[c(2, 6, 11, 14)], na.value = "grey60") +
     labs(
@@ -229,7 +253,7 @@ save_rnaseq_tissue <- function(rnaseq_data, tissue_name) {
   count_matrix <- make_count_matrix(rnaseq_data, tissue_name)
   meta <- sample_meta |>
     filter(tissue == tissue_name) |>
-    dplyr::slice(match(as.numeric(colnames(count_matrix)), id)) # same order as the count matrix columns
+    slice(match(as.numeric(colnames(count_matrix)), id)) # same order as the count matrix columns
   stopifnot(identical(meta$id, as.numeric(colnames(count_matrix))))
 
   # i. Raw counts (samples as rows) with batch and QC flag
