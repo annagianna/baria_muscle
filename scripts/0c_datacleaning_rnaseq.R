@@ -118,7 +118,7 @@ vfat_marker_cpm |>
 
 # Samples with markedly higher expression of multiple intestinal markers
 # (potential contamination with intestinal epithelial cells?)
-vfat_intestinal_ids <- c(154, 360, 349, 197, 124, 144, 137, 61, 281, 106)
+vfat_intestinal_ids <- c(154, 360, 197, 349, 124, 137, 281, 106, 144, 141, 61) # based on plot inspection
 stopifnot(all(vfat_intestinal_ids %in% vfat_marker_cpm$id)) # all listed IDs exist as vFat samples
 
 # Exclude potentially contaminated samples
@@ -127,20 +127,24 @@ baria_muscle_rnaseq <- baria_muscle_rnaseq |>
     exclude = exclude | (tissue == "vFat" & id %in% vfat_intestinal_ids),
     comment = if_else(tissue == "vFat" & id %in% vfat_intestinal_ids, "High expression of intestinal epithelial markers", comment))
 
-# 5. Documentation: plot and summary, excluded vs retained samples
-vfat_marker_cpm <- vfat_marker_cpm |> mutate(excluded = id %in% vfat_intestinal_ids)
+# Boxplots & exclusion summary
+vfat_marker_cpm <- vfat_marker_cpm |>
+  group_by(symbol) |>
+  mutate(above_whisker = log2cpm > quantile(log2cpm, 0.75) + 1.5 * IQR(log2cpm)) |>
+  ungroup()
 
 plot_vfat_markers <- ggplot(vfat_marker_cpm, aes(x = symbol, y = log2cpm)) +
   geom_boxplot(aes(fill = symbol), outlier.shape = NA, alpha = 0.8, width = 0.6) +  # outliers not drawn twice (shown as points)
-  geom_jitter(aes(colour = excluded), width = 0.15, size = 1.2, seed = 13) +
+  geom_point(aes(colour = excluded), size = 1.2, position = position_jitter(width = 0.15, seed = 13)) +
   ggrepel::geom_text_repel(
-    data = filter(vfat_marker_cpm, excluded),
-    aes(label = id), size = 2.3, colour = "grey20", max.overlaps = Inf, seed = 13
+    aes(label = if_else(above_whisker, as.character(id), ""), colour = excluded), # label only points above the whisker
+    size = 2.3, max.overlaps = Inf, show.legend = FALSE,
+    position = position_jitter(width = 0.15, seed = 13) # same data and seed as the points, so labels attach to the right point
   ) +
   scale_fill_manual(values = renoir_15[c(2, 4, 6, 9, 11, 14)], guide = "none") +
-  scale_colour_manual(values = c(`FALSE` = "grey60", `TRUE` = "black"), labels = c("retained", "excluded"), name = NULL) +
+  scale_colour_manual(values = c(`FALSE` = "grey40", `TRUE` = "black"), labels = c("retained", "excluded"), name = NULL) +
   labs(
-    title = "Visceral adipose tissue: intestinal epithelial markers",
+    title = "vAdipose: intestinal epithelial marker expression",
     x = NULL,
     y = "Expression (log2 CPM)"
   ) +
