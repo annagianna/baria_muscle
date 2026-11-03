@@ -67,7 +67,8 @@ baria_muscle_vars <- baria_clinical_data_raw |>
   mutate(
     across(matches("^V[45]_t?h?rombocytes$"), ~ replace(.x, .x %in% c(-99, -98, -97), NA)), # v4/v5 platelets stored under two complementary spellings (no overlap)
     V4_platelets = coalesce(V4_trombocytes, V4_thrombocytes), # merge two platelet spellings
-    V5_platelets = coalesce(V5_trombocytes, V5_thrombocytes)
+    V5_platelets = coalesce(V5_trombocytes, V5_thrombocytes),
+    Subject_ID = if_else(as.character(Subject_ID) == "300013", "30013", as.character(Subject_ID)), # mis-formatted id in Castor (confirmed with Mark)
   ) |> 
   select(
     # Baseline & static vars
@@ -158,8 +159,10 @@ baria_muscle_vars <- baria_clinical_data_raw |>
     across(.cols = starts_with("date"), ~ if_else(.x %in% c("01-01-2999", "01-01-2997", "01-01-2995"), NA_character_, .x)),
     sex = case_when(sex == "1" ~ "male", sex == "2" ~ "female"),
     t2d_v0 = case_when(
-      # DIABAR inclusion check "T2DM + glucose-lowering drugs"; raw dm is coded 2 (no) for all DIABAR participants
-      t2d_inclusion_v0 %in% c(1, "1") ~ "yes", t2d_v0 == "1" ~ "yes", t2d_v0 == "2" ~ "no"
+      # DIABAR: T2D IS the inclusion criterion; dm diagnosis is coded 2 in DIABAR, 1 in BARIA
+      !is.na(t2d_inclusion_v0) ~ "yes",
+      t2d_v0 == "1" ~ "yes",
+      t2d_v0 == "2" ~ "no"
     ),
     cohort = if_else(!is.na(t2d_inclusion_v0), "DIABAR", "BARIA"), # inclusion check var is only filled in for DIABAR
     aht = case_when(aht == "1" ~ "yes", aht == "2" ~ "no"),
