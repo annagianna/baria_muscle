@@ -92,6 +92,66 @@ duplicated_ids <- baria_muscle_rnaseq |>
   filter(n > 1)
 stopifnot(nrow(duplicated_ids) == 0)
 
+## QC check vAdipose ##
+# Check expression of enterocyte markers per vFat sample (log2CPM)
+intestinal_markers <- grch38 |>
+  filter(symbol %in% c("VIL1", "FABP2", "APOA4", "CDHR5", "LGALS4", "MGAM")) |>
+  distinct(symbol, ensgene)
+
+vfat_marker_cpm <- baria_muscle_rnaseq |>
+  filter(tissue == "vFat", !exclude) |>
+  mutate(lib_size = rowSums(pick(starts_with("ENSG")))) |>
+  select(id, lib_size, matches(str_c("^(", str_c(intestinal_markers$ensgene, collapse = "|"), ")"))) |>
+  pivot_longer(starts_with("ENSG"), names_to = "ensembl_gene_id", values_to = "count") |>
+  mutate(
+    ensgene = str_remove(ensembl_gene_id, "\\.\\d+$"),
+    log2cpm = log2(count / lib_size * 1e6 + 1)
+  ) |>
+  left_join(intestinal_markers, by = "ensgene")
+
+vfat_marker_cpm |>
+  select(id, symbol, log2cpm) |>
+  pivot_wider(names_from = symbol, values_from = log2cpm) |>
+  arrange(desc(FABP2 + APOA4)) |> # sorted by marker expression
+  mutate(across(-id, ~ round(.x, 1))) |>
+  print(n = 20)
+
+# Samples with markedly higher expression of multiple intestinal markers
+# (potential contamination with intestinal epithelial cells?)
+vfat_intestinal_ids <- c(154, 360, 349, 197, 124, 144, 137, 61, 281, 106)
+stopifnot(all(vfat_intestinal_ids %in% vfat_marker_cpm$id)) # all listed IDs exist as vFat samples
+
+# Exclude potentially contaminated samples
+baria_muscle_rnaseq <- baria_muscle_rnaseq |>
+  mutate(
+    exclude = exclude | (tissue == "vFat" & id %in% vfat_intestinal_ids),
+    comment = if_else(tissue == "vFat" & id %in% vfat_intestinal_ids, "High expression of intestinal epithelial markers", comment))
+
+# 5. Documentation: plot and summary, excluded vs retained samples
+vfat_marker_cpm <- vfat_marker_cpm |> mutate(excluded = id %in% vfat_intestinal_ids)
+
+plot_vfat_markers <- ggplot(vfat_marker_cpm, aes(x = symbol, y = log2cpm)) +
+  geom_boxplot(aes(fill = symbol), outlier.shape = NA, alpha = 0.8, width = 0.6) +  # outliers not drawn twice (shown as points)
+  geom_jitter(aes(colour = excluded), width = 0.15, size = 1.2, seed = 13) +
+  ggrepel::geom_text_repel(
+    data = filter(vfat_marker_cpm, excluded),
+    aes(label = id), size = 2.3, colour = "grey20", max.overlaps = Inf, seed = 13
+  ) +
+  scale_fill_manual(values = renoir_15[c(2, 4, 6, 9, 11, 14)], guide = "none") +
+  scale_colour_manual(values = c(`FALSE` = "grey60", `TRUE` = "black"), labels = c("retained", "excluded"), name = NULL) +
+  labs(
+    title = "Visceral adipose tissue: intestinal epithelial markers",
+    x = NULL,
+    y = "Expression (log2 CPM)"
+  ) +
+  theme_minimal_custom()
+ggsave("results/graphs/RNAseq/qc_intestinal_markers_vFat.pdf", plot_vfat_markers, width = 9, height = 5)
+
+vfat_marker_cpm |>
+  group_by(symbol, excluded) |>
+  summarise(n = n(), median_log2cpm = round(median(log2cpm), 1), .groups = "drop") |>
+  pivot_wider(names_from = excluded, values_from = c(n, median_log2cpm))
+
 # Corrected and excluded samples
 baria_muscle_rnaseq |>
   filter(id != label_id | exclude) |>
@@ -238,11 +298,6 @@ qc_all$Liver |>
   summarise(n = n(), median_lib_M = median(library_size) / 1e6, median_PC1 = median(PC1), .groups = "drop")
 stopifnot(sum(qc_all$Liver$id %in% low_depth_ids) == 20)
 
-# QC plots and QC table (library size, size factor, PC coordinates, batch, exclusion flag and reason)
-walk(qc_all, plot_qc_tissue)
-
-bind_rows(qc_all) |>
-  write_csv("results/tables/rnaseq_qc_samples.csv")
 
 ## Save RNA-seq data per tissue
 # i. Raw counts: all samples + batch + qc_exclude flag (DESeq2 in 5a/5b: excluded samples dropped, batch in the design)
@@ -302,3 +357,16 @@ save_rnaseq_tissue <- function(rnaseq_data, tissue_name) {
 }
 
 walk(tissues, ~ save_rnaseq_tissue(baria_muscle_rnaseq_named, .x))
+
+
+# further checks
+
+vfat_marker_cpm |>
+  group_by(symbol) |>
+  mutate(top = rank(-log2cpm) <= 15) |>
+  ungroup() |>
+  ggplot(aes(x = symbol, y = log2cpm)) +
+  geom_jitter(width = 0.2, size = 1.2, colour = "grey50", seed = 13) +
+  ggrepel::geom_text_repel(data = ~ filter(.x, top), aes(label = id), size = 2.5, max.overlaps = Inf, seed = 13) +
+  labs(x = NULL, y = "log2 CPM") +
+  theme_minimal_custom()
