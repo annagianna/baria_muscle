@@ -48,6 +48,10 @@ stopifnot(!anyDuplicated(rnaseq_meta$label)) # one metadata row per sample
 # (batch 2024: n = 135; these 20 differ from the other 115 samples in the same batch, so not a batch effect)
 low_depth_ids <- c(361, 362, 377, 382, 383, 386, 388, 390, 395, 399, 401, 402, 405, 407, 408, 409, 413, 415, 421, 424)
 
+# Samples marked as liver with adipose-tissue expression profile (high ADIPOQ, FABP4, LEP, CIDEA)
+# sample 20, flagged in the omics metadata xlsx
+liver_adipose_ids <- c(134)
+
 ## Cleaning ##
 baria_muscle_rnaseq <- rnaseq |> 
   select(matches("\\.(Liver|subFat|vFat|Jejunum)\\.V1$")) |> 
@@ -75,9 +79,13 @@ baria_muscle_rnaseq <- rnaseq |>
   ungroup() |>
   filter(unresolved == FALSE) |>
   select(-unresolved) |>
-  mutate(
-    exclude = exclude | (tissue == "Liver" & id %in% low_depth_ids),
-    comment = if_else(tissue == "Liver" & id %in% low_depth_ids, "Low sequencing depth; distinct cluster on QC PCA (within batch 2024)", comment)
+   mutate(
+    exclude = exclude | (tissue == "Liver" & id %in% c(low_depth_ids, liver_adipose_ids)),
+    comment = case_when(
+      tissue == "Liver" & id %in% low_depth_ids ~ "Low sequencing depth; distinct cluster on QC PCA (within batch 2024)",
+      tissue == "Liver" & id %in% liver_adipose_ids ~ "Adipose-tissue expression profile (adipocyte markers)",
+      .default = comment
+    )
   ) |>
   filter(id %in% baria_muscle_wide$id) |>
   mutate(across(starts_with("ENSG"), ~ as.numeric(str_replace(as.character(.x), ",", ".")))) # fix decimals
@@ -109,13 +117,6 @@ vfat_marker_cpm <- baria_muscle_rnaseq |>
   ) |>
   left_join(intestinal_markers, by = "ensgene")
 
-vfat_marker_cpm |>
-  select(id, symbol, log2cpm) |>
-  pivot_wider(names_from = symbol, values_from = log2cpm) |>
-  arrange(desc(FABP2 + APOA4)) |> # sorted by marker expression
-  mutate(across(-id, ~ round(.x, 1))) |>
-  print(n = 20)
-
 # Samples with markedly higher expression of multiple intestinal markers
 # (potential contamination with intestinal epithelial cells?)
 vfat_intestinal_ids <- c(154, 360, 197, 349, 124, 137, 281, 106, 144, 141, 61) # based on plot inspection
@@ -129,6 +130,7 @@ baria_muscle_rnaseq <- baria_muscle_rnaseq |>
 
 # Boxplots & exclusion summary
 vfat_marker_cpm <- vfat_marker_cpm |>
+  mutate(excluded = id %in% vfat_intestinal_ids) |>
   group_by(symbol) |>
   mutate(above_whisker = log2cpm > quantile(log2cpm, 0.75) + 1.5 * IQR(log2cpm)) |>
   ungroup()
@@ -361,16 +363,3 @@ save_rnaseq_tissue <- function(rnaseq_data, tissue_name) {
 }
 
 walk(tissues, ~ save_rnaseq_tissue(baria_muscle_rnaseq_named, .x))
-
-
-# further checks
-
-vfat_marker_cpm |>
-  group_by(symbol) |>
-  mutate(top = rank(-log2cpm) <= 15) |>
-  ungroup() |>
-  ggplot(aes(x = symbol, y = log2cpm)) +
-  geom_jitter(width = 0.2, size = 1.2, colour = "grey50", seed = 13) +
-  ggrepel::geom_text_repel(data = ~ filter(.x, top), aes(label = id), size = 2.5, max.overlaps = Inf, seed = 13) +
-  labs(x = NULL, y = "log2 CPM") +
-  theme_minimal_custom()
