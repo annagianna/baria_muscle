@@ -231,7 +231,7 @@ if (nrow(de_sig) > 0) {
       y = NULL
     ) +
     theme_minimal_custom()
-  ggsave("results/graphs/RNAseq/forest_de_grp_plot.pdf", forest_de_grp_plot, width = 9, height = 1.5 + 0.4 * nrow(forest_de_grp_df))
+  ggsave("results/graphs/RNAseq/liver_forest_de_grp_plot.pdf", forest_de_grp_plot, width = 9, height = 1.5 + 0.4 * nrow(forest_de_grp_df))
 } else {
   message("No significant genes in the main DE: forest plot skipped")
 }
@@ -435,7 +435,7 @@ if (nrow(de_sig_targeted) > 0) {
       y = NULL
     ) +
     theme_minimal_custom()
-  ggsave("results/graphs/RNAseq/forest_de_grp_targeted_plot.pdf", forest_de_grp_targeted_plot, width = 9, height = 1.5 + 0.4 * nrow(forest_de_grp_targeted_df))
+  ggsave("results/graphs/RNAseq/liver_forest_de_grp_targeted_plot.pdf", forest_de_grp_targeted_plot, width = 9, height = 1.5 + 0.4 * nrow(forest_de_grp_targeted_df))
 } else {
   message("No significant genes in the targeted DE: forest plot skipped")
 }
