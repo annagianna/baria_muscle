@@ -1,4 +1,4 @@
-# Visceral adipose tissue RNA-seq (vFat) - DE high vs. modest/low %FFMI loss at 1y
+# Visceral adipose tissue RNA-seq (vAdipose) - DE high vs. modest/low %FFMI loss at 1y
 # Anna Giannakogeorgou
 
 # Packages
@@ -22,8 +22,8 @@ rename <- dplyr::rename
 count  <- dplyr::count
 filter <- dplyr::filter
 
-tissue <- "vFat"
-prefix <- "vfat" # output file prefix
+tissue <- "vAdipose"
+prefix <- "vadipose" # for output files
 tissue_label <- "Visceral adipose"
 
 # Theme
@@ -317,7 +317,7 @@ if (has_batch) {
   message("Single sequencing batch for ", tissue, ": batch LRT skipped")
 }
 
-#### Targeted DE: pre-specified visceral adipose gene set (defined a priori; DESeq2 fitted on all genes, BH within the set) ####
+#### Targeted DE: pre-specified adipose gene set (defined a priori; DESeq2 fitted on all genes, BH within the set) ####
 core_genes <- list(
 
   adipokines = c(
@@ -752,10 +752,10 @@ if (nrow(sig_de_species) > 0) {
   )
   metab_tax <- as(tax_table(metab), "matrix")
 
-# Figure 3: tissue genes × top metabolites heatmap (shows 20 metabolites with the strongest signif associations)
-top_metabs <- cor_genes_metab |>
-  group_by(y) |>
-  summarize(n_sig = sum(p_fdr < 0.05), max_abs_rho = max(abs(rho)), .groups = "drop") |>
+  # Genes x top metabolites heatmap (20 metabolites with the most FDR-significant associations)
+  top_metabs <- cor_genes_metab |>
+    group_by(y) |>
+    summarize(n_sig = sum(p_fdr < 0.05), max_abs_rho = max(abs(rho)), .groups = "drop") |>
     filter(n_sig > 0) |>
     arrange(desc(n_sig), desc(max_abs_rho)) |>
     slice_head(n = 20) |>
