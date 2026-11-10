@@ -26,6 +26,7 @@ environments:
       - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-biostrings-2.78.0-r45h01b2380_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-delayedarray-0.36.1-r45h262fe30_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-deseq2-1.50.2-r45ha27e39d_0.conda
+      - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-edger-4.10.7-r45h262fe30_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-fgsea-1.36.2-r45ha27e39d_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-genomicranges-1.62.1-r45h01b2380_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-iranges-2.44.0-r45h01b2380_1.conda
@@ -505,6 +506,7 @@ environments:
       - conda: https://conda.anaconda.org/bioconda/osx-arm64/bioconductor-biostrings-2.78.0-r45hcc2f086_0.conda
       - conda: https://conda.anaconda.org/bioconda/osx-arm64/bioconductor-delayedarray-0.36.1-r45h6cc0085_0.conda
       - conda: https://conda.anaconda.org/bioconda/osx-arm64/bioconductor-deseq2-1.50.2-r45h97584a2_0.conda
+      - conda: https://conda.anaconda.org/bioconda/osx-arm64/bioconductor-edger-4.10.7-r45h6cc0085_0.conda
       - conda: https://conda.anaconda.org/bioconda/osx-arm64/bioconductor-fgsea-1.36.2-r45h97584a2_0.conda
       - conda: https://conda.anaconda.org/bioconda/osx-arm64/bioconductor-genomicranges-1.62.1-r45hcc2f086_0.conda
       - conda: https://conda.anaconda.org/bioconda/osx-arm64/bioconductor-iranges-2.44.0-r45hcc2f086_1.conda
@@ -1147,6 +1149,26 @@ packages:
     - bioconductor-deseq2 >=1.50.2,<1.51.0a0
   size: 3212299
   timestamp: 1772313176684
+- conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-edger-4.10.7-r45h262fe30_0.conda
+  sha256: c40c1511ee7bfd353617826c1f3141312f5c97f0b3099b8ba40eff7a9ff3b11a
+  md5: 8cd076aafd2347a73ce0b718e4740584
+  depends:
+  - __glibc >=2.17,<3.0.a0
+  - bioconductor-limma >=3.68.5,<3.69.0
+  - bioconductor-limma >=3.68.5,<3.69.0a0
+  - libblas >=3.9.0,<4.0a0
+  - libgcc >=14
+  - liblapack >=3.9.0,<4.0a0
+  - liblzma >=5.8.3,<6.0a0
+  - libzlib >=1.3.2,<2.0a0
+  - r-base >=4.5,<4.6.0a0
+  - r-locfit
+  license: GPL (>=2)
+  run_exports:
+    weak:
+    - bioconductor-edger >=4.10.7,<4.11.0a0
+  size: 2845442
+  timestamp: 1792565858024
 - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-fgsea-1.36.2-r45ha27e39d_0.conda
   sha256: 67241d03574f4a8a8750c75a6fb6ed67b4c5bf0a29f9a7cd4b53e99e64330f7d
   md5: 28894f5017c6780c72a8165b528fb3e9
@@ -1977,6 +1999,25 @@ packages:
     - bioconductor-deseq2 >=1.50.2,<1.51.0a0
   size: 3190196
   timestamp: 1770612243441
+- conda: https://conda.anaconda.org/bioconda/osx-arm64/bioconductor-edger-4.10.7-r45h6cc0085_0.conda
+  sha256: b076eeab6e4ab598bf721cd23eea6bc9f860c75488c5e3673f702dafa9ea7ab8
+  md5: 5c0b8e4c3ce579cda38090217789046d
+  depends:
+  - __osx >=11.0
+  - bioconductor-limma >=3.68.5,<3.69.0
+  - bioconductor-limma >=3.68.5,<3.69.0a0
+  - libblas >=3.9.0,<4.0a0
+  - liblapack >=3.9.0,<4.0a0
+  - liblzma >=5.8.3,<6.0a0
+  - libzlib >=1.3.2,<2.0a0
+  - r-base >=4.5,<4.6.0a0
+  - r-locfit
+  license: GPL (>=2)
+  run_exports:
+    weak:
+    - bioconductor-edger >=4.10.7,<4.11.0a0
+  size: 2844307
+  timestamp: 1792565218543
 - conda: https://conda.anaconda.org/bioconda/osx-arm64/bioconductor-fgsea-1.36.2-r45h97584a2_0.conda
   sha256: 06078661258c2a8e38e3c8527dfc7ad6feeccf68f0011d0fa2e128cd397d96c6
   md5: de6951e061e68ea703504dec1e6eeb78
