@@ -1,4 +1,4 @@
-# Liver RNA-seq
+# Liver RNA-seq DE high vs. modest/low %FFMI loss at 1y
 # Anna Giannakogeorgou
 
 # Packages
@@ -289,6 +289,7 @@ de_grp_fmi <- as.data.frame(res_grp_fmi) |>
     pvalue_fmi = pvalue,
     padj_fmi = padj
   )
+  write_csv(de_grp_fmi, "results/tables/liver_de_grp_fmi_all_genes.csv")
 
 # Compare main vs. FMI-adj. DE results
 de_fmi_compare <- de_sig |>
@@ -765,10 +766,10 @@ if (nrow(sig_de_species) > 0) {
   )
   metab_tax <- as(tax_table(metab), "matrix")
 
-# Figure 3: liver genes × top metabolites heatmap (shows 20 metabolites with the strongest signif associations)
-top_metabs <- cor_genes_metab |>
-  group_by(y) |>
-  summarize(n_sig = sum(p_fdr < 0.05), max_abs_rho = max(abs(rho)), .groups = "drop") |>
+  # Liver genes × top metabolites heatmap (shows 20 metabolites with the strongest signif associations)
+  top_metabs <- cor_genes_metab |>
+    group_by(y) |>
+    summarize(n_sig = sum(p_fdr < 0.05), max_abs_rho = max(abs(rho)), .groups = "drop") |>
     filter(n_sig > 0) |>
     arrange(desc(n_sig), desc(max_abs_rho)) |>
     slice_head(n = 20) |>
