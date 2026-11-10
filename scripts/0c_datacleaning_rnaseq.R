@@ -1,4 +1,4 @@
-# RNA seq data cleaning - Liver, sAdipose, vAdipose, Jejunum
+# RNA seq data cleaning - Liver, scAdipose, vAdipose, Jejunum
 # Anna Giannakogeorgou
 
 # Packages
@@ -62,7 +62,8 @@ baria_muscle_rnaseq <- rnaseq |>
   mutate(
     label = str_remove(Sample, "\\.V1$"),
     id = as.numeric(str_extract(Sample, "^\\d+")),
-    tissue = str_extract(Sample, "(Liver|subFat|vFat|Jejunum)")
+    tissue = str_extract(Sample, "(Liver|subFat|vFat|Jejunum)") |> 
+      str_replace_all(c("^vFat$" = "vAdipose", "^subFat$" = "scAdipose"))
   ) |>
   left_join(rnaseq_meta, by = "label") |>
   mutate( # corrections from xlsc snp check col and IDs
@@ -101,13 +102,13 @@ duplicated_ids <- baria_muscle_rnaseq |>
 stopifnot(nrow(duplicated_ids) == 0)
 
 ## QC check vAdipose ##
-# Check expression of enterocyte markers per vFat sample (log2CPM)
+# Check expression of enterocyte markers per vAdipose sample (log2CPM)
 intestinal_markers <- grch38 |>
   filter(symbol %in% c("VIL1", "FABP2", "APOA4", "CDHR5", "LGALS4", "MGAM")) |>
   distinct(symbol, ensgene)
 
-vfat_marker_cpm <- baria_muscle_rnaseq |>
-  filter(tissue == "vFat", !exclude) |>
+vadipose_marker_cpm <- baria_muscle_rnaseq |>
+  filter(tissue == "vAdipose", !exclude) |>
   mutate(lib_size = rowSums(pick(starts_with("ENSG")))) |>
   select(id, lib_size, matches(str_c("^(", str_c(intestinal_markers$ensgene, collapse = "|"), ")"))) |>
   pivot_longer(starts_with("ENSG"), names_to = "ensembl_gene_id", values_to = "count") |>
@@ -119,23 +120,23 @@ vfat_marker_cpm <- baria_muscle_rnaseq |>
 
 # Samples with markedly higher expression of multiple intestinal markers
 # (potential contamination with intestinal epithelial cells?)
-vfat_intestinal_ids <- c(154, 360, 197, 349, 124, 137, 281, 106, 144, 141, 61) # based on plot inspection
-stopifnot(all(vfat_intestinal_ids %in% vfat_marker_cpm$id)) # all listed IDs exist as vFat samples
+vadipose_intestinal_ids <- c(154, 360, 197, 349, 124, 137, 281, 106, 144, 141, 61) # based on plot inspection
+stopifnot(all(vadipose_intestinal_ids %in% vadipose_marker_cpm$id)) # all listed IDs exist as vAdipose samples
 
 # Exclude potentially contaminated samples
 baria_muscle_rnaseq <- baria_muscle_rnaseq |>
   mutate(
-    exclude = exclude | (tissue == "vFat" & id %in% vfat_intestinal_ids),
-    comment = if_else(tissue == "vFat" & id %in% vfat_intestinal_ids, "High expression of intestinal epithelial markers", comment))
+    exclude = exclude | (tissue == "vAdipose" & id %in% vadipose_intestinal_ids),
+    comment = if_else(tissue == "vAdipose" & id %in% vadipose_intestinal_ids, "High expression of intestinal epithelial markers", comment))
 
 # Boxplots & exclusion summary
-vfat_marker_cpm <- vfat_marker_cpm |>
-  mutate(excluded = id %in% vfat_intestinal_ids) |>
+vadipose_marker_cpm <- vadipose_marker_cpm |>
+  mutate(excluded = id %in% vadipose_intestinal_ids) |>
   group_by(symbol) |>
   mutate(above_whisker = log2cpm > quantile(log2cpm, 0.75) + 1.5 * IQR(log2cpm)) |>
   ungroup()
 
-plot_vfat_markers <- ggplot(vfat_marker_cpm, aes(x = symbol, y = log2cpm)) +
+plot_vadipose_markers <- ggplot(vadipose_marker_cpm, aes(x = symbol, y = log2cpm)) +
   geom_boxplot(aes(fill = symbol), outlier.shape = NA, alpha = 0.8, width = 0.6) +  # outliers not drawn twice (shown as points)
   geom_point(aes(colour = excluded), size = 1.2, position = position_jitter(width = 0.15, seed = 13)) +
   ggrepel::geom_text_repel(
@@ -151,9 +152,9 @@ plot_vfat_markers <- ggplot(vfat_marker_cpm, aes(x = symbol, y = log2cpm)) +
     y = "Expression (log2 CPM)"
   ) +
   theme_minimal_custom()
-ggsave("results/graphs/RNAseq/qc_intestinal_markers_vFat.pdf", plot_vfat_markers, width = 9, height = 5)
+ggsave("results/graphs/RNAseq/qc_intestinal_markers_vAdipose.pdf", plot_vadipose_markers, width = 9, height = 5)
 
-vfat_marker_cpm |>
+vadipose_marker_cpm |>
   group_by(symbol, excluded) |>
   summarise(n = n(), median_log2cpm = round(median(log2cpm), 1), .groups = "drop") |>
   pivot_wider(names_from = excluded, values_from = c(n, median_log2cpm))
@@ -293,7 +294,7 @@ plot_qc_tissue <- function(qc_tbl) {
 }
 
 # Run QC for all tissues (computes VST + PCA once per tissue)
-tissues <- c("Liver", "Jejunum", "vFat", "subFat")
+tissues <- c("Liver", "Jejunum", "vAdipose", "scAdipose")
 qc_all <- map(tissues, ~ qc_rnaseq_tissue(baria_muscle_rnaseq_named, .x)) |>
   set_names(tissues)
 
