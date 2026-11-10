@@ -298,6 +298,7 @@ tissues <- c("Liver", "Jejunum", "vAdipose", "scAdipose")
 qc_all <- map(tissues, ~ qc_rnaseq_tissue(baria_muscle_rnaseq_named, .x)) |>
   set_names(tissues)
 
+## Liver
 # QC check: low-depth samples vs the rest of their batch (library size, PC1)
 qc_all$Liver |>
   mutate(low_depth = id %in% low_depth_ids) |>
@@ -305,6 +306,65 @@ qc_all$Liver |>
   summarise(n = n(), median_lib_M = median(library_size) / 1e6, median_PC1 = median(PC1), .groups = "drop")
 stopifnot(sum(qc_all$Liver$id %in% low_depth_ids) == 20)
 
+## Jejunum
+# 1. Most extreme samples on PC1 (incl. the 2 flagged wrong-tissue samples for reference in the xlsx)
+qc_all$Jejunum |>
+  arrange(desc(PC1)) |>
+  select(id, PC1, PC2, batch, qc_exclude, qc_reason) |>
+  print(n = 8)
+
+# 2. Epithelial vs smooth-muscle (and liver/adipose) marker expression per sample (log2CPM)
+check_markers <- grch38 |>
+  filter(symbol %in% c(
+    "VIL1", "EPCAM", "APOA1", # epithelial
+    "DES", "MYH11", # (smooth) muscle
+    "ALB", "PLIN1", "ADIPOQ")
+  ) |>
+  distinct(symbol, ensgene)
+
+jejunum_marker_cpm <- baria_muscle_rnaseq |>
+  filter(tissue == "Jejunum") |>
+  mutate(lib_size = rowSums(pick(starts_with("ENSG")))) |>
+  select(
+    id, exclude, lib_size, 
+    matches(str_c("^(", str_c(check_markers$ensgene, collapse = "|"), ")"))
+  ) |>
+  pivot_longer(starts_with("ENSG"), names_to = "ensembl_gene_id", values_to = "count") |>
+  mutate(
+    ensgene = str_remove(ensembl_gene_id, "\\.\\d+$"),
+    log2cpm = log2(count / lib_size * 1e6 + 1)
+  ) |>
+  left_join(check_markers, by = "ensgene") |>
+  select(id, exclude, symbol, log2cpm) |>
+  pivot_wider(names_from = symbol, values_from = log2cpm)
+
+# Samples standing out on PC1 (low epithelial and high smooth-muscle marker expression (--> mucosa-poor))
+jejunum_mucosa_poor_ids <- c(276, 218, 170) # based on PCA and marker inspection
+
+# 3. Candidates vs median of the remaining samples
+bind_rows(
+  jejunum_marker_cpm |> filter(id %in% jejunum_mucosa_poor_ids) |> mutate(row = as.character(id)),
+  jejunum_marker_cpm |> filter(!exclude, !id %in% jejunum_mucosa_poor_ids) |>
+    summarise(across(-c(id, exclude), median)) |> mutate(row = "median rest")
+) |>
+  select(row, VIL1, EPCAM, APOA1, DES, MYH11, ALB, PLIN1, ADIPOQ) |>
+  mutate(across(where(is.numeric), ~ round(.x, 1)))
+
+# 4. Epithelial gradient: do the candidates separate from the rest (gap) or lie on a continuum?
+jejunum_marker_cpm |>
+  arrange(VIL1) |>
+  select(id, exclude, VIL1, EPCAM, DES, MYH11) |>
+  mutate(across(where(is.numeric) & !id, ~ round(.x, 1))) |>
+  print(n = 8)
+
+# Exclude mucosa-poor jejunum biopsies (added to sample_meta, which feeds the saved RDS files)
+stopifnot(all(jejunum_mucosa_poor_ids %in% jejunum_marker_cpm$id))
+sample_meta <- sample_meta |>
+  mutate(
+    qc_exclude = qc_exclude | (tissue == "Jejunum" & id %in% jejunum_mucosa_poor_ids),
+    qc_reason = if_else(tissue == "Jejunum" & id %in% jejunum_mucosa_poor_ids,
+                        "Mucosa-poor biopsy (low epithelial, high smooth-muscle marker expression)", qc_reason)
+  )
 
 ## Save RNA-seq data per tissue
 # i. Raw counts: all samples + batch + qc_exclude flag (DESeq2 in 5a/5b: excluded samples dropped, batch in the design)
