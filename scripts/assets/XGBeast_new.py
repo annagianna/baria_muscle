@@ -498,6 +498,8 @@ def main(args):
             precisions, recalls
         ) = ([] for _ in range(10))
         r = np.linspace(0, 1, 100)
+        # held-out predictions of every iteration, for the pooled ROC curve
+        pooled_preds = []
         # stratified shuffle split for classification
         ShufSpl = StratifiedShuffleSplit(
             N_stab, test_size=test_size, train_size=train_size, random_state=rand_seed
@@ -714,6 +716,11 @@ def main(args):
             roc_auc__score = roc_auc_score(y_test, y_prob)
             print("\n ROC-AUC-score: %.3f" % roc_auc__score)
             roc_auc_scores.append(roc_auc__score)
+            pooled_preds.append(
+                pd.DataFrame(
+                    {"iteration": i, "sample_index": test, "y_true": y_test, "y_prob": y_prob}
+                )
+            )
 
             # Additional classification metrics
             acc = accuracy_score(y_test, y_pred)
@@ -881,6 +888,46 @@ def main(args):
             plt.close()
 
         create_enhanced_auc_plot(mean_fpr, tprs, aucs, output_folder)
+
+        # Pooled ROC: one curve over the held-out predictions of all iterations.
+        # Vertical averaging (above) gives a staircase because every stratified test
+        # set has the same number of negatives, so all curves step at the same FPRs.
+        # Pooling mixes probability scales of separately fitted models; report as such.
+        def create_pooled_auc_plot(pooled_df, output_folder):
+            """ROC curve from the pooled held-out predictions of all iterations."""
+            fpr_p, tpr_p, _ = roc_curve(pooled_df["y_true"], pooled_df["y_prob"], pos_label=1)
+            pooled_auc = roc_auc_score(pooled_df["y_true"], pooled_df["y_prob"])
+
+            plt.figure(figsize=(10, 8))
+            sns.set_style("whitegrid")
+            sns.set_context("talk")
+            plt.plot([0, 1], [0, 1], linestyle='--', lw=2, color='#CC0000',
+                     label='Random chance', alpha=0.8)
+            plt.plot(fpr_p, tpr_p, color='#0066CC', lw=3,
+                     label=f'Pooled ROC (AUC = {pooled_auc:.2f}; '
+                           f'median per-iteration AUC = {np.median(roc_auc_scores):.2f})')
+            plt.xlim([-0.05, 1.05])
+            plt.ylim([-0.05, 1.05])
+            plt.xlabel('False Positive Rate', fontsize=14, labelpad=10)
+            plt.ylabel('True Positive Rate', fontsize=14, labelpad=10)
+            plt.title(f'ROC, pooled held-out predictions '
+                      f'({pooled_df["iteration"].nunique()} iterations, n = {len(pooled_df)})',
+                      fontsize=16, pad=15)
+            plt.legend(loc='lower right', fontsize=12, frameon=True, fancybox=True,
+                       framealpha=0.9, facecolor='white', edgecolor='#CCCCCC')
+            plt.grid(True, linestyle='--', alpha=0.3)
+            sns.despine(offset=10)
+            plt.tight_layout()
+            plt.savefig(os.path.join(output_folder, "ROC_curve_pooled.pdf"), bbox_inches="tight", dpi=300)
+            plt.close()
+
+        if pooled_preds:
+            pooled_df = pd.concat(pooled_preds, ignore_index=True)
+            pooled_df.to_csv(
+                os.path.join(output_folder, "test_predictions_per_iteration.txt"),
+                sep="\t", index=False,
+            )
+            create_pooled_auc_plot(pooled_df, output_folder)
 
         # classification metrics
         median_roc_auc_score = round(np.median(roc_auc_scores), 3)
