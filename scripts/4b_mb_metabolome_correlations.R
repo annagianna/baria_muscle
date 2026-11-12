@@ -66,15 +66,6 @@ cat(nrow(sig), "/", nrow(cor_results), "microbe-metabolite pairs FDR < 0.05\n")
 # FDR values below 0.001 round to "0.000" at 3 decimals - report a floor instead
 format_fdr <- function(p) if_else(p < 0.001, "<0.001", sprintf("%.3f", p))
 
-# Sphingolipid names shortening
-metabolite_label <- function(x) {
-  str_replace(
-    x,
-    "(\\(d\\d+:\\d+/\\d+:\\d+(?:\\([^()]*\\))?)(?:,\\s*d\\d+:\\d+/\\d+:\\d+(?:\\([^()]*\\))?)+(\\))",
-    "\\1, ...\\2"
-  )
-}
-
 #### Scatter plots: every FDR-significant metabolite, one panel per species ####
 species_labels <- species_label(top15_species)
 names(species_labels) <- top15_species

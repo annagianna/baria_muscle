@@ -13,6 +13,16 @@ export PATH="$HOME/.pixi/bin:$PATH"   # SLURM batch shells don't source ~/.bashr
 SCRIPT=$BASE/scripts/assets/XGBeast_new.py
 PARAM=$BASE/scripts/assets/param_grid.json
 
+# Predictor set (results tree from 3a_ml_prep.R):
+#   sbatch scripts/3b_ml_run.sh          -> species     (results/mlmodels)
+#   sbatch scripts/3b_ml_run.sh metab    -> metabolites (results/mlmodels_metab)
+DATASET=${1:-species}
+case "$DATASET" in
+    species) ROOT=$BASE/results/mlmodels ;;
+    metab)   ROOT=$BASE/results/mlmodels_metab ;;
+    *) echo "Unknown dataset '$DATASET' (use: species | metab)" >&2; exit 1 ;;
+esac
+
 # Every outcome produced by 3a_ml_prep.R, each split into all/male/female
 OUTCOMES=(
     perc_change_ffmi_v4_group
@@ -24,11 +34,11 @@ for outcome in "${OUTCOMES[@]}"; do
     for group in "${SUBGROUPS[@]}"; do
         pixi run python $SCRIPT \
             -name "${outcome}_${group}" \
-            -path "$BASE/results/mlmodels/${outcome}/${group}" \
+            -path "$ROOT/${outcome}/${group}" \
             -x class \
             -n 200 \
-            -t 8 \
+            -t 6 \
             -rand_seed 1234 \
-            -param $PARAM
+            -param $BASE/scripts/assets/param_grid.json
     done
 done

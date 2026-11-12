@@ -1,6 +1,6 @@
 ## Shared helpers reused across pipelines: 
 # XGBeast output-folder discovery, shared ggplot themes,
-# the top-species loader, and species-name helpers used by 3c_ml_process.R, 4a–4c and 5a/5b.
+# the top-species loader, and species/metabolite-name helpers used by 3c_ml_process.R, 4a–4c and 5a/5b.
 
 # Anything used by only one script lives in that script instead
 
@@ -151,4 +151,14 @@ get_top_species <- function(path = "results/mlmodels/perc_change_ffmi_v4_group/a
 species_label <- function(x) {
   base <- str_remove(x, "_SGB\\d+(_group)?$") |> str_replace_all("_", " ")
   make.unique(base, sep = " ")
+}
+
+# Shorten long sphingolipid names that list several isomers, e.g.
+# "... (d18:1/16:0, d18:2/16:1)" -> "... (d18:1/16:0, ...)"
+metabolite_label <- function(x) {
+  str_replace(
+    x,
+    "(\\(d\\d+:\\d+/\\d+:\\d+(?:\\([^()]*\\))?)(?:,\\s*d\\d+:\\d+/\\d+:\\d+(?:\\([^()]*\\))?)+(\\))",
+    "\\1, ...\\2"
+  )
 }

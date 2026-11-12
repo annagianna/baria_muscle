@@ -1,4 +1,5 @@
-# Prep XGBeast input data: microbiome species ~ 1-year %FFMI loss group
+# Prep XGBeast input data: baseline microbiome species and baseline plasma
+# metabolites ~ 1-year %FFMI loss group
 # Barbara Verhaar
 
 library(stringr)
@@ -30,13 +31,13 @@ write_data <- function(x, data_path) {
               row.names = FALSE, col.names = FALSE, sep = "\t", quote = FALSE)
 }
 
-# Build one XGBeast input_data folder: intersect a metadata subgroup with the
-# species table on sampleID_mb, write X_data/feat_ids/subject_ids + y_reg.txt
+# Build one XGBeast input_data folder: intersect a metadata subgroup with a
+# predictor table (rows = "BARIA_<id>_v0"), write X_data/feat_ids/subject_ids + y_reg.txt
 # (mode = "reg") or y_binary.txt coded 1 = pos_class, 0 = other (mode = "class").
-build_input_data <- function(meta_sub, mb2, var, out_path,
+build_input_data <- function(meta_sub, predictors, var, out_path,
                               mode = c("reg", "class"), pos_class = NULL) {
   mode <- match.arg(mode)
-  X <- mb2[rownames(mb2) %in% meta_sub$sampleid, , drop = FALSE]
+  X <- predictors[rownames(predictors) %in% meta_sub$sampleid, , drop = FALSE]
   meta_sub <- meta_sub[match(rownames(X), meta_sub$sampleid), ]
   stopifnot(all(meta_sub$sampleid == rownames(X)))
 
@@ -50,7 +51,7 @@ build_input_data <- function(meta_sub, mb2, var, out_path,
 
   write_data(X, out_path)
   write_y(y, name_y = y_name, out_path)
-  cat(sprintf("  %-55s %4d samples, %4d taxa\n", out_path, nrow(X), ncol(X)))
+  cat(sprintf("  %-70s %4d samples, %4d features\n", out_path, nrow(X), ncol(X)))
   invisible(nrow(X))
 }
 
@@ -86,20 +87,25 @@ mb2 <- as.data.frame(mb[, tk])
 dim(mb2) # 147 species left, 365 subjects
 mb2[1:5,1:5]
 
+# Baseline (v0) plasma metabolites from 0b: named metabolites <= 10% imputed,
+# log10-transformed and z-scaled; samples are rows, named "BARIA_<id>_v0"
+metab <- readRDS("data/processed_data/BARIA_metabolon_clean.RDS")
+metab2 <- as.data.frame(as(metab@otu_table, "matrix"))
+dim(metab2) # 693 metabolites, 343 subjects
+
+# Each predictor set gets its own results tree with the same outcome/subgroup layout
+predictor_sets <- list(
+  "results/mlmodels"       = mb2,    # species
+  "results/mlmodels_metab" = metab2  # metabolites
+)
+
 #### 1-year %FFMI loss group (high vs. modest/low) ####
 # Outcome: perc_change_ffmi_v4_group from 0a (lowest sex-specific tertile of
 # %FFMI change v0 -> v4 = "high" loss, cut-off from the full clinical cohort),
-# coded 1 = high loss; predictors: baseline (v0) species (mb2)
+# coded 1 = high loss; predictors: baseline (v0) species (mb2) or metabolites (metab2)
 cat("perc_change_ffmi_v4_group: ", sum(!is.na(meta[["perc_change_ffmi_v4_group"]])), "/", nrow(meta), "non-missing\n")
 
 meta_group_var <- meta |> filter(!is.na(perc_change_ffmi_v4_group))
-meta_group_var_male <- meta_group_var |> filter(sex == "male")
-meta_group_var_female <- meta_group_var |> filter(sex == "female")
-
-base_group <- file.path("results/mlmodels/perc_change_ffmi_v4_group")
-build_input_data(meta_group_var,        mb2, "perc_change_ffmi_v4_group", file.path(base_group, "all"),    mode = "class", pos_class = "high")
-build_input_data(meta_group_var_male,   mb2, "perc_change_ffmi_v4_group", file.path(base_group, "male"),   mode = "class", pos_class = "high")
-build_input_data(meta_group_var_female, mb2, "perc_change_ffmi_v4_group", file.path(base_group, "female"), mode = "class", pos_class = "high")
 
 #### 1-year %FFMI loss group, corrected for baseline FMI ####
 # %FFMI change residualized on baseline FMI within each sex, then dichotomized
@@ -111,14 +117,33 @@ meta_group_var_fmi <- meta |>
   lapply(add_residual_var, "perc_change_ffmi_v4", "fmi_v0", "perc_change_ffmi_v4_adj_fmi") |>
   bind_rows() |>
   add_tertile_group("perc_change_ffmi_v4_adj_fmi", "perc_change_ffmi_v4_group_adj_fmi")
-meta_group_var_fmi_male <- meta_group_var_fmi |> filter(sex == "male")
-meta_group_var_fmi_female <- meta_group_var_fmi |> filter(sex == "female")
 
 # agreement with the unadjusted grouping
 print(table(unadjusted = meta_group_var_fmi$perc_change_ffmi_v4_group,
             adj_fmi = meta_group_var_fmi$perc_change_ffmi_v4_group_adj_fmi))
 
-base_group_adj <- file.path("results/mlmodels/perc_change_ffmi_v4_group_adj_fmi")
-build_input_data(meta_group_var_fmi,        mb2, "perc_change_ffmi_v4_group_adj_fmi", file.path(base_group_adj, "all"),    mode = "class", pos_class = "high")
-build_input_data(meta_group_var_fmi_male,   mb2, "perc_change_ffmi_v4_group_adj_fmi", file.path(base_group_adj, "male"),   mode = "class", pos_class = "high")
-build_input_data(meta_group_var_fmi_female, mb2, "perc_change_ffmi_v4_group_adj_fmi", file.path(base_group_adj, "female"), mode = "class", pos_class = "high")
+#### Write input data: every outcome x subgroup (all/male/female) x predictor set ####
+# The subgroup is defined on the clinical cohort; build_input_data() then keeps
+# only subjects that also have the predictor data (so N differs per predictor set)
+outcome_meta <- list(
+  perc_change_ffmi_v4_group         = meta_group_var,
+  perc_change_ffmi_v4_group_adj_fmi = meta_group_var_fmi
+)
+subgroups <- list(
+  all    = c("male", "female"),
+  male   = "male",
+  female = "female"
+)
+
+for (root in names(predictor_sets)) {
+  cat("\n==", root, "==\n")
+  for (outcome in names(outcome_meta)) {
+    for (g in names(subgroups)) {
+      build_input_data(
+        outcome_meta[[outcome]] |> filter(sex %in% subgroups[[g]]),
+        predictor_sets[[root]], outcome, file.path(root, outcome, g),
+        mode = "class", pos_class = "high"
+      )
+    }
+  }
+}

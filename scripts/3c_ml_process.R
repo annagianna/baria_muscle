@@ -1,4 +1,5 @@
-# Process XGBeast models and make plots for each model
+# Process XGBeast models and make plots for each model, for every predictor set
+# (baseline species: results/mlmodels; baseline metabolites: results/mlmodels_metab)
 # Barbara Verhaar
 
 # Packages
@@ -44,27 +45,36 @@ read_input_data <- function(model_path) {
 }
 
 # Logistic regression per feature (for binary ML models): odds ratio of the
-# positive class per 1 log10 unit of species abundance
-run_glm_forest <- function(data, feats, outcome, covariates = character(0)) {
-  f <- reformulate(c("log10_abundance", covariates), response = outcome)
+# positive class per 1 unit of the (transformed) feature. transform = "log10"
+# for species (per log10 abundance, half-min pseudocount); "none" for
+# metabolites, which are already log10 + z-scaled in 0b (OR per SD).
+run_glm_forest <- function(data, feats, outcome, covariates = character(0),
+                           transform = c("log10", "none")) {
+  transform <- match.arg(transform)
+  term_name <- if (transform == "log10") "log10_abundance" else "level_z" # `term` column in the CSV
+  f <- reformulate(c(term_name, covariates), response = outcome)
   purrr::map_dfr(feats, function(feat) {
     x <- data[[feat]]
-    pseudo <- min(x[x > 0], na.rm = TRUE) / 2
-    data$log10_abundance <- log10(x + pseudo)
+    if (transform == "log10") {
+      pseudo <- min(x[x > 0], na.rm = TRUE) / 2
+      x <- log10(x + pseudo)
+    }
+    data[[term_name]] <- x
     fit <- glm(f, data = data, family = binomial)
     broom::tidy(fit, conf.int = TRUE, exponentiate = TRUE) |>
-      filter(term == "log10_abundance") |>
-      mutate(species = feat)
+      filter(term == term_name) |>
+      mutate(feature = feat)
   }) |>
     mutate(p_fdr = p.adjust(p.value, method = "BH"))
 }
 
 # Forest plot of a run_glm_forest() result: one row per feature, odds ratio
 # + 95% CI (log scale), ordered by effect size.
-plot_forest <- function(forest, title = "") {
+plot_forest <- function(forest, title = "", label_fn = species_label,
+                        x_lab = "Odds ratio per log10 abundance (95% CI)") {
   forest |>
     mutate(
-      label = species_label(species),
+      label = str_wrap(label_fn(feature), 40),
       label = forcats::fct_reorder(label, estimate, .desc = TRUE)
     ) |>
     ggplot(aes(x = estimate, y = label, color = p_fdr < 0.05)) +
@@ -73,15 +83,15 @@ plot_forest <- function(forest, title = "") {
     geom_point(size = 2) +
     scale_x_log10() +
     scale_color_manual(values = c(`TRUE` = renoir_15[6], `FALSE` = "grey40"), guide = "none") +
-    labs(title = title, x = "Odds ratio per log10 abundance (95% CI)", y = NULL) +
+    labs(title = title, x = x_lab, y = NULL) +
     theme_Publication()
 }
 
 # Tidy top-n feature importance bar plot from top_features().
-plot_feature_importance <- function(fi_top, title = "") {
+plot_feature_importance <- function(fi_top, title = "", label_fn = species_label) {
   fi_top |>
     mutate(
-      label = species_label(FeatName),
+      label = str_wrap(label_fn(FeatName), 40),
       label = forcats::fct_reorder(label, RelFeatImp)
     ) |>
     ggplot(aes(x = RelFeatImp, y = label)) +
@@ -90,21 +100,22 @@ plot_feature_importance <- function(fi_top, title = "") {
     theme_Publication()
 }
 
-# Abundance of the top features per outcome class, to check direction
-plot_feature_by_group <- function(X, y, feats, class_labels, title = "") {
-  labels <- species_label(feats)
+# Level of the top features per outcome class, to check direction
+plot_feature_by_group <- function(X, y, feats, class_labels, title = "",
+                                  label_fn = species_label, y_lab = "Relative abundance") {
+  labels <- label_fn(feats)
   names(labels) <- feats
 
   df <- as.data.frame(X[, feats, drop = FALSE])
   colnames(df) <- feats
   df$.y <- factor(y, levels = c(0, 1), labels = class_labels)
   df <- df |>
-    tidyr::pivot_longer(-.y, names_to = "species", values_to = "abundance") |>
-    group_by(species) |>
+    tidyr::pivot_longer(-.y, names_to = "feature", values_to = "abundance") |>
+    group_by(feature) |>
     mutate(diff_median = median(abundance[.y == class_labels[2]]) - median(abundance[.y == class_labels[1]])) |>
     ungroup() |>
     mutate(
-      facet_label = str_wrap(labels[species], 22),
+      facet_label = str_wrap(labels[feature], 22),
       facet_label = forcats::fct_reorder(facet_label, -diff_median)
     )
 
@@ -113,7 +124,7 @@ plot_feature_by_group <- function(X, y, feats, class_labels, title = "") {
     geom_jitter(width = 0.15, alpha = 0.4, size = 0.6, color = "grey30") +
     scale_fill_manual(values = c(renoir_15[14], renoir_15[6]), guide = "none") +
     facet_wrap(~facet_label, scales = "free_y", ncol = 5) +
-    labs(title = title, x = "", y = "Relative abundance") +
+    labs(title = title, x = "", y = y_lab) +
     theme_Publication() +
     theme(strip.text = element_text(size = 8), axis.text.x = element_text(size = 7))
 }
@@ -127,29 +138,55 @@ model_defs <- tribble(
   "perc_change_ffmi_v4_group_adj_fmi",  "High vs. modest/low %FFMI loss (1y, adj. FMI)",  TRUE,
 )
 
+# Predictor sets: results tree from 3a_ml_prep.R + how to label/model features.
+# feature_col names the feature column in forest_results_top15.csv (the species
+# CSVs keep "species": get_top_species() and 4b/4c/5x read it).
+datasets <- list(
+  species = list(
+    root = "results/mlmodels", feature_col = "species", title_suffix = "",
+    label_fn = species_label, transform = "log10",
+    y_lab = "Relative abundance", or_lab = "Odds ratio per log10 abundance (95% CI)",
+    violin_title = "species", violin_file = "ffmi_group_models_auc_violin.pdf"
+  ),
+  metab = list(
+    root = "results/mlmodels_metab", feature_col = "metabolite", title_suffix = " - metabolites",
+    label_fn = metabolite_label, transform = "none",
+    y_lab = "Metabolite level (log10, z-score)", or_lab = "Odds ratio per SD (95% CI)",
+    violin_title = "metabolites", violin_file = "ffmi_group_models_auc_violin_metab.pdf"
+  )
+)
+
 ### Data shared by the logistic models ###
 
 # Covariates per subject; the outcome itself is taken from each model's
-# y_binary.txt so the glm uses exactly the grouping XGBeast was trained on
+# y_binary.txt and the features from its X_data.txt, so the glm uses exactly
+# the subjects, grouping and feature values XGBeast was trained on
 meta_wide <- readRDS("data/processed_data/BARIA_muscle_wide.RDS") |>
   select(id, sex, age_v0, fmi_v0, perc_change_weight_kg_v4) |>
   mutate(id = as.character(id))
 
-# Baseline (v0) species abundance (same filtering as 3a_ml_prep.R), wide with `id`
-mb <- readRDS("data/processed_data/BARIA_mb_baseline.RDS")
-mb_mat <- t(as(mb@otu_table, "matrix"))
-tk <- apply(mb_mat, 2, function(x) sum(x > 0.05) > (0.2 * length(x)))
-species_wide <- as.data.frame(mb_mat[, tk]) |>
-  rownames_to_column("sampleid") |>
-  mutate(id = sampleid |> str_remove("^BARIA_") |> str_remove("_v0$")) |>
-  select(-sampleid)
+violin_out_dir <- "results/graphs/ml_auc"
+dir.create(violin_out_dir, recursive = TRUE, showWarnings = FALSE)
+
+violin_defs <- tribble(
+  ~ outcome,                            ~ violin_label,
+  "perc_change_ffmi_v4_group",          "High %FFMI loss (1y)",
+  "perc_change_ffmi_v4_group_adj_fmi",  "High %FFMI loss (1y)\nadj. FMI",
+) |>
+  left_join(model_defs |> select(outcome, is_adj), by = "outcome")
+
+violin_fill_colors <- c(`FALSE` = renoir_15[8], `TRUE` = renoir_15[9])
+
+for (ds_name in names(datasets)) {
+ds <- datasets[[ds_name]]
+cat("\n######## Predictor set:", ds_name, "(", ds$root, ") ########\n")
 
 #### Process each outcome ####
 for (i in seq_len(nrow(model_defs))) {
   outcome <- model_defs$outcome[i]
-  label   <- model_defs$label[i]
+  label   <- paste0(model_defs$label[i], ds$title_suffix)
   is_adj  <- model_defs$is_adj[i]
-  base <- file.path("results/mlmodels", outcome)
+  base <- file.path(ds$root, outcome)
   dir.create(base, recursive = TRUE, showWarnings = FALSE)
   cat("\n====", label, "====\n")
 
@@ -185,10 +222,11 @@ for (i in seq_len(nrow(model_defs))) {
     subtitle <- paste0(label, " (", g, ")")
     input <- read_input_data(model_path)
 
-    p_imp <- plot_feature_importance(fi_top, title = subtitle)
+    p_imp <- plot_feature_importance(fi_top, title = subtitle, label_fn = ds$label_fn)
     ggsave(file.path(model_path, "feature_importance_top15.pdf"), p_imp, width = 7, height = 5)
 
-    p_box <- plot_feature_by_group(input$X, input$y, feats, class_labels, title = subtitle)
+    p_box <- plot_feature_by_group(input$X, input$y, feats, class_labels, title = subtitle,
+                                   label_fn = ds$label_fn, y_lab = ds$y_lab)
     ggsave(file.path(model_path, "feature_by_group_top15.pdf"), p_box, width = 12, height = 9)
 
     # Logistic regression on the exact subjects/outcome XGBeast trained on
@@ -199,12 +237,14 @@ for (i in seq_len(nrow(model_defs))) {
       id = input$subject_ids |> str_remove("^BARIA_") |> str_remove("_v0$"),
       high_loss = input$y
     ) |>
-      inner_join(species_wide, by = "id") |>
+      bind_cols(as_tibble(input$X[, feats, drop = FALSE])) |>
       inner_join(meta_wide, by = "id")
-    forest <- run_glm_forest(model_data, feats, "high_loss", covariates)
-    write.csv(forest, file.path(model_path, "forest_results_top15.csv"), row.names = FALSE)
+    stopifnot(nrow(model_data) == length(input$y))
+    forest <- run_glm_forest(model_data, feats, "high_loss", covariates, transform = ds$transform)
+    write.csv(forest |> rename(!!ds$feature_col := feature),
+              file.path(model_path, "forest_results_top15.csv"), row.names = FALSE)
 
-    p_forest <- plot_forest(forest, title = subtitle)
+    p_forest <- plot_forest(forest, title = subtitle, label_fn = ds$label_fn, x_lab = ds$or_lab)
     ggsave(file.path(model_path, "forest_plot_top15.pdf"), p_forest, width = 7, height = 6)
 
     cat(sprintf("  %-12s %d/%d features FDR < 0.05 (logistic)\n", g,
@@ -213,21 +253,9 @@ for (i in seq_len(nrow(model_defs))) {
 }
 
 ### AUC violin ###
-violin_out_dir <- "results/graphs/ml_auc"
-dir.create(violin_out_dir, recursive = TRUE, showWarnings = FALSE)
-
-violin_defs <- tribble(
-  ~ outcome,                            ~ violin_label,
-  "perc_change_ffmi_v4_group",          "High %FFMI loss (1y)",
-  "perc_change_ffmi_v4_group_adj_fmi",  "High %FFMI loss (1y)\nadj. FMI",
-) |>
-  left_join(model_defs |> select(outcome, is_adj), by = "outcome")
-
-violin_fill_colors <- c(`FALSE` = renoir_15[8], `TRUE` = renoir_15[9])
-
 auc_df <- pmap_dfr(violin_defs, function(outcome, violin_label, is_adj) {
   map_dfr(groups, function(g) {
-    it <- get_iterations_class(file.path("results/mlmodels", outcome, g), paste0(outcome, "_", g))
+    it <- get_iterations_class(file.path(ds$root, outcome, g), paste0(outcome, "_", g))
     if (is.null(it)) {
       cat("  no XGBeast output found for", outcome, "(", g, "), skipping violin\n")
       return(NULL)
@@ -264,12 +292,13 @@ if (nrow(auc_df) == 0) {
     facet_wrap(~subgroup, ncol = 1) +
     coord_flip() +
     labs(
-      title = "ROC AUC across CV iterations - %FFMI loss group, species",
+      title = paste("ROC AUC across CV iterations - %FFMI loss group,", ds$violin_title),
       x = "", y = "ROC AUC"
     ) +
     theme_Publication() +
     theme(axis.text.y = element_text(size = 9))
 
-  ggsave(file.path(violin_out_dir, "ffmi_group_models_auc_violin.pdf"), p_violin, width = 9, height = 8)
-  cat("Saved", file.path(violin_out_dir, "ffmi_group_models_auc_violin.pdf"), "\n")
+  ggsave(file.path(violin_out_dir, ds$violin_file), p_violin, width = 9, height = 8)
+  cat("Saved", file.path(violin_out_dir, ds$violin_file), "\n")
 }
+} # end predictor-set loop
