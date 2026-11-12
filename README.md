@@ -20,9 +20,10 @@ layer (`0c`), and a liver subcohort (`0d`); Table 1 and a baseline liver
 histology table, stratified by 1-year %FFMI change (`1a`–`1b`); baseline
 microbiome descriptive analyses — alpha diversity, beta diversity and
 composition, stratified the same way (`2a`–`2c`); a gradient-boosting
-(XGBeast/XGBoost) pipeline that ranks baseline species by how well they
-predict FFMI and its post-surgical change, with each model's top-15 features
-confirmed by LM/LMM forest plots (`3a`–`3c`); correlation analyses relating
+(XGBeast/XGBoost) pipeline that ranks baseline species and, separately,
+baseline serum metabolites by how well they classify high vs. modest/low
+1-year %FFMI loss, with each model's top-15 features checked by
+logistic-regression forest plots (`3a`–`3c`); correlation analyses relating
 the species most predictive of 1-year FFMI change to HUMAnN pathways, the
 serum metabolome, and baseline dietary macronutrient intake (`4a`–`4c`); and
 liver and visceral adipose tissue RNA-seq, in the full cohort and the liver
@@ -44,9 +45,9 @@ baria_muscle/
 │   ├── 2a_mb_alphadiversity_ffmi_1y.R      # Alpha diversity (Shannon, Simpson, observed richness)
 │   ├── 2b_mb_betadiversity_ffmi_1y.R       # Beta diversity (Bray–Curtis PCoA)
 │   ├── 2c_mb_composition_ffmi_1y.R         # Compositional bar plots (top 20 species)
-│   ├── 3a_ml_prep.R                        # Build XGBeast input tables per outcome/subgroup
-│   ├── 3b_ml_run.sh                        # SLURM job: fit XGBeast models for every outcome/subgroup
-│   ├── 3c_ml_process.R                     # Feature importance, LM/LMM confirmation + forest plots, explained-variance violin plots
+│   ├── 3a_ml_prep.R                        # Build XGBeast input tables per predictor set (species, metabolites) x outcome x subgroup
+│   ├── 3b_ml_run.sh                        # SLURM job: fit XGBeast models for every outcome/subgroup of one predictor set
+│   ├── 3c_ml_process.R                     # Feature importance, logistic-regression forest plots, ROC AUC violin plots
 │   ├── 4a_humann_pathways.R                # Top-15 species x HUMAnN pathway correlations
 │   ├── 4b_mb_metabolome_correlations.R     # Top-15 species x serum metabolome correlations
 │   ├── 4c_mb_diet_correlations.R           # Top-15 species x dietary macronutrient correlations
@@ -54,7 +55,7 @@ baria_muscle/
 │   ├── 5b_vadipose_rnaseq.R                # Visceral adipose RNA-seq: same analysis as 5a — in progress
 │   ├── 5c_liver_rnaseq_livercohort.R       # 5a repeated in the liver subcohort — in progress
 │   └── assets/
-│       ├── functions.R                     # Shared helper functions (plotting, XGBeast I/O, forest models)
+│       ├── functions.R                     # Shared helper functions (plotting themes, XGBeast I/O, species/metabolite labels)
 │       ├── XGBeast_new.py                  # Repeated-CV XGBoost + feature-importance framework
 │       └── param_grid.json                 # XGBoost hyperparameter grid used by 3b
 ├── pixi.toml                               # Environment manifest
@@ -86,10 +87,10 @@ PCA) and writes one processed dataset per tissue (see **Tissue RNA-seq**).
 the processed data written by `0a`/`0b`; `1b` additionally needs `0d`.
 
 `3a` (build ML input) → `3b` (fit XGBeast models, typically on a SLURM
-cluster) → `3c` (feature importance, LM/LMM confirmation of each model's
-top-15 features, and explained-variance violin plots) must run in that
-order, since each step reads the previous step's output under
-`results/mlmodels/`. `4a`, `4b` and `4c` are independent of one another but
+cluster) → `3c` (feature importance, logistic-regression check of each
+model's top-15 features, and ROC AUC violin plots) must run in that order,
+since each step reads the previous step's output under `results/mlmodels/`
+(species) and `results/mlmodels_metab/` (metabolites). `4a`, `4b` and `4c` are independent of one another but
 all three depend on `3b`'s output for the `perc_change_ffmi_v4`/`all` model,
 from which they take the top-15 species most predictive of 1-year FFMI
 change. `5a` and `5b` additionally depend on `0c` (liver and visceral adipose RNA-seq,
@@ -459,49 +460,77 @@ The baseline-FFMI-status versions of these three scripts, and a standalone
 mixed-model screen relating baseline species abundance to FFMI trajectory
 across the whole filtered species set (LINDA/LM/LMM), have been superseded by
 the ML-first workflow below (`3a`–`3c`) and are kept only in
-`scripts/archive/`. Confirmatory LM/LMM testing of baseline-abundance effects
-on FFMI now runs on each XGBeast model's top-15 features (`3c`), rather than
-as an independent full-species screen.
+`scripts/archive/`. Classical testing of baseline-abundance effects now runs
+as a logistic regression on each XGBeast model's top-15 features (`3c`),
+rather than as an independent full-species screen.
 
 ---
 
 ## Machine-learning pipeline (3a–3c)
 
-A gradient-boosting layer that lets all baseline species compete jointly
+A gradient-boosting layer that lets all baseline features compete jointly
 (rather than one at a time) and ranks them by predictive contribution, using
 **XGBeast** (`scripts/assets/XGBeast_new.py`) — a repeated shuffle-split
-**XGBoost** regression framework with grid-search hyperparameter tuning that
-reports explained variance and permutation feature importance across CV
-iterations. Confirmatory classical modelling of each model's top-ranked
-features is folded into the same pipeline (`3c`), replacing the standalone
-mixed-model species screen described above.
+**XGBoost** framework with grid-search hyperparameter tuning that reports
+classification performance (ROC AUC) and feature importance across CV
+iterations. The same models are fitted on two **predictor sets**, each with
+its own results tree:
 
-- **`3a_ml_prep.R`** builds one input table per outcome × subgroup
-  (`all`/`male`/`female`) under `results/mlmodels/<outcome>/<subgroup>/`.
-  Predictors are baseline (`v0`) species, kept if present at >0.05% relative
-  abundance in ≥20% of samples (or the equivalent `v4` species table for the
-  two `v4` outcomes). The 11 outcomes are: baseline FFMI/FMI, baseline FFMI
-  adjusted for FMI (residualised), the same two at `v4` (cross-sectional,
-  predicted from **`v4` species**, not baseline), baseline FFMI/FMI
-  restricted to the subjects with `v4` microbiome data (`*_matched`, to
-  isolate subject-subset effects from timepoint effects), and 1-year change
-  in FFMI (`delta_ffmi_v4`, `perc_change_ffmi_v4`) with and without FMI
-  adjustment.
+| Predictor set | Features | Results tree |
+|---|---|---|
+| `species` | Baseline (`v0`) species, kept if >0.05% relative abundance in >20% of samples (147 species) | `results/mlmodels/` |
+| `metab` | Baseline serum metabolites from `BARIA_metabolon_clean.RDS`: named compounds, ≤10% imputed, log10-transformed and z-scored (693 metabolites) | `results/mlmodels_metab/` |
+
+Both sets use the same two binary outcomes, coded 1 = high loss:
+
+- **`perc_change_ffmi_v4_group`**: high vs. modest/low 1-year %FFMI loss
+  (lowest sex-specific tertile of %FFMI change `v0` → `v4`, from `0a`).
+- **`perc_change_ffmi_v4_group_adj_fmi`**: the same grouping after
+  residualising %FFMI change on baseline FMI within each sex.
+
+Each outcome is modelled in three subgroups (`all`/`male`/`female`). The
+outcome groups are defined on the full clinical cohort, and each model then
+keeps the subjects who have data for that predictor set, so N differs between
+the two sets (species: 298 all / 60 male / 238 female; metabolites: 282 / 56 / 226).
+
+- **`3a_ml_prep.R`** writes one XGBeast `input_data/` folder per predictor set ×
+  outcome × subgroup, at `<results tree>/<outcome>/<subgroup>/`.
 - **`3b_ml_run.sh`** is a SLURM batch script that calls `XGBeast_new.py` once
-  per outcome × subgroup (11 outcomes × 3 subgroups) with a grid search
-  (`param_grid.json`) and a fixed random seed.
-- **`3c_ml_process.R`** reads each model's XGBeast output and, per
-  outcome/subgroup: plots the explained-variance distribution across CV
-  iterations, extracts the top-15 features by importance, plots per-feature
-  abundance-vs-outcome correlation panels as a sanity check, and **confirms
-  them** with a classical model on the same predictors — an LM for
-  cross-sectional outcomes (age/sex-adjusted, plus FMI where applicable) or
-  an LMM (baseline-abundance × visit interaction, adjusted for age, sex,
-  %weight change, and FMI for `delta_ffmi_v4`) for change outcomes —
-  reporting a forest plot of per-feature effect estimates with BH-FDR across
-  the top-15 features. It finishes by plotting the explained-variance
-  distribution across CV iterations for the six headline FFMI/delta-FFMI
-  models (± FMI adjustment) to `results/graphs/ml_explained_variance/`.
+  per outcome × subgroup (2 × 3 models) for one predictor set, with a grid
+  search (`param_grid.json`), 200 iterations and a fixed random seed. The
+  predictor set is the first argument (default `species`):
+
+  ```bash
+  sbatch scripts/3b_ml_run.sh          # species     -> results/mlmodels/
+  sbatch scripts/3b_ml_run.sh metab    # metabolites -> results/mlmodels_metab/
+  ```
+
+  The metabolite models have about 4.7× as many features as the species models
+  and take longer; raise the time limit if needed
+  (`sbatch --time=12:00:00 scripts/3b_ml_run.sh metab`).
+- **`3c_ml_process.R`** loops over both predictor sets and, per outcome,
+  writes the AUC metrics across subgroups (`<outcome>_metrics.csv`,
+  `<outcome>_auc.pdf`). Per subgroup it plots the top-15 features by
+  importance and their levels per outcome group. It then checks each feature
+  with a logistic regression on the exact subjects, outcome and feature values
+  XGBeast was trained on: the covariates are age and 1-year %weight change,
+  plus sex for `all` and baseline FMI for the FMI-adjusted outcome. BH-FDR is
+  applied across the top 15. The results go to `forest_results_top15.csv` and
+  `forest_plot_top15.pdf`. Odds ratios are per log10 abundance for species
+  (half-minimum pseudocount) and per SD for metabolites (already log10 +
+  z-scored). The feature column is named `species` or `metabolite`. The
+  species CSVs are read downstream by `get_top_species()` and `4b`/`4c`/`5*`.
+  The script finishes with a ROC AUC violin plot per predictor set in
+  `results/graphs/ml_auc/` (`ffmi_group_models_auc_violin.pdf`,
+  `ffmi_group_models_auc_violin_metab.pdf`).
+
+> **Caveat (metabolomics batch effect):** in the cleaned metabolomics data,
+> 61 of 693 metabolites have >30% of their variance explained by measurement
+> `Batch` (Batch3/Batch4 sit ~2 SD above the other batches), and batch is
+> associated with the outcome (share of high-loss subjects ranges from 10% to
+> 47% across batches; χ² p = 0.0002). Batch-driven metabolites can therefore
+> rank highly in the metabolite models without reflecting biology; this is
+> not yet corrected for in `0b`.
 
 ---
 
@@ -619,7 +648,8 @@ data/raw_data/          # inputs (see Data)
 data/processed_data/    # created by 0a (clinical), 0b (omics) and 0c (RNA-seq)
 results/graphs/          # figures, in per-analysis subfolders
 results/tables/          # Table 1 output; RNA-seq sample-QC table (0c)
-results/mlmodels/        # ML input data + XGBeast output, per outcome/subgroup
+results/mlmodels/        # ML input data + XGBeast output, per outcome/subgroup (species)
+results/mlmodels_metab/  # same, for the metabolite models
 ```
 
 Each script creates its own output folders (via `dir.create(..., recursive = TRUE)`)
