@@ -163,6 +163,13 @@ resultsNames(dds_grp)
 res_grp <- results(dds_grp, name = "ffmi_group_high_vs_modest_low", alpha = 0.05)
 res_grp_shr <- lfcShrink(dds_grp, coef = "ffmi_group_high_vs_modest_low", type = "apeglm", res = res_grp) # apeglm shrunken results; padj unchanged
 
+# Export original Wald statistics for GSEA
+tibble(
+  ensembl_gene_id = rownames(res_grp),
+  stat = res_grp$stat
+) |>
+  write_csv("results/tables/liver_de_grp_wald_stats.csv")
+
 # DE results (BH across all tested genes)
 de_grp <- as.data.frame(res_grp) |>
   rownames_to_column("ensembl_gene_id") |>
@@ -280,6 +287,13 @@ dds_grp_fmi <- estimateSizeFactors(dds_grp_fmi)
 dds_grp_fmi <- dds_grp_fmi[rowMeans(counts(dds_grp_fmi, normalized = TRUE) >= 10) >= 0.5, ]
 dds_grp_fmi <- DESeq(dds_grp_fmi)
 res_grp_fmi <- results(dds_grp_fmi, name = "ffmi_group_high_vs_modest_low", alpha = 0.05)
+
+# Export Wald stats for GSEA
+tibble(
+  ensembl_gene_id = rownames(res_grp_fmi),
+  stat = res_grp_fmi$stat
+) |>
+  write_csv("results/tables/liver_de_grp_fmi_wald_stats.csv")
 
 de_grp_fmi <- as.data.frame(res_grp_fmi) |>
   rownames_to_column("ensembl_gene_id") |>
