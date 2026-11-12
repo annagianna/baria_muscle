@@ -53,20 +53,8 @@ stopifnot(!anyDuplicated(names(ranks_grp)))
 stopifnot(!anyNA(ranks_grp))
 
 #### MSigDB gene sets ####
-# Hallmark
-hallmark <- msigdbr(
-  db_species = "HS",
-  species = "Homo sapiens",
-  collection = "H"
-)
-
-# Reactome
-reactome <- msigdbr(
-  db_species = "HS",
-  species = "Homo sapiens",
-  collection = "C2",
-  subcollection = "CP:REACTOME"
-)
+hallmark <- msigdbr(db_species = "HS", species = "Homo sapiens", collection = "H")
+reactome <- msigdbr(db_species = "HS", species = "Homo sapiens", collection = "C2", subcollection = "CP:REACTOME")
 
 # Database version
 unique(hallmark$db_version)
@@ -183,53 +171,44 @@ save_gsea(gsea_mito, "results/tables/RNAseq/gsea/liver_gsea_mito.csv")
 write_csv(gsea_summary, "results/tables/RNAseq/gsea/liver_gsea_summary.csv")
 
 #### Plots ####
-# Top Hallmark pathways by FDR
-plot_gsea <- function(df, n = 15) {
+# FDR-significant Hallmark pathways
+hallmark_focus <- c("HALLMARK_OXIDATIVE_PHOSPHORYLATION", "HALLMARK_FATTY_ACID_METABOLISM")
 
-  plot_df <- df |>
-    slice_min(padj, n = n, with_ties = FALSE) |>
-    mutate(
-      pathway = str_remove(pathway, "^HALLMARK_") |>
-        str_replace_all("_", " ") |>
-        fct_reorder(NES)
-    )
+hallmark_plot_df <- gsea_hallmark |>
+  filter(padj < 0.05) |>
+  mutate(
+    pathway_label = str_remove(pathway, "^HALLMARK_") |>
+      str_replace_all("_", " "),
+    pathway_label = fct_reorder(pathway_label, NES)
+  )
 
-  ggplot(plot_df, aes(x = NES, y = pathway, fill = direction)) +
-    geom_col(width = 0.7) +
-    geom_vline(xintercept = 0, colour = "grey40") +
-    scale_fill_manual(
-      values = gsea_cols,
-      labels = c("Up" = "Higher in high loss", "Down" = "Higher in modest/low loss"),
-      name = NULL
-    ) +
-    labs(
-      title = "Hallmark gene-set enrichment (GSEA)",
-      x = "Normalized enrichment score (NES)",
-      y = NULL
-    ) +
-    theme_minimal_custom()
-}
-
-p_hallmark <- plot_gsea(gsea_hallmark)
-ggsave("results/graphs/RNAseq/gsea/liver_gsea_hallmark.pdf", p_hallmark, width = 9, height = 6)
-
-# Enrichment plot for OXPHOS (irrespective of significance)
-oxphos <- "HALLMARK_OXIDATIVE_PHOSPHORYLATION"
-if (oxphos %in% names(hallmark_sets)) {
-
-  p_oxphos <- fgsea::plotEnrichment(
-    hallmark_sets[[oxphos]],
-    ranks_grp
+p_hallmark <- ggplot(hallmark_plot_df, aes(x = NES, y = pathway_label, fill = direction)) +
+  geom_col(width = 0.7) +
+  geom_vline(xintercept = 0, colour = "grey50", linewidth = 0.4) +
+  scale_fill_manual(
+    values = gsea_cols,
+    labels = c("Up" = "Higher in high loss", "Down" = "Higher in modest/low loss"),
+    name = NULL
   ) +
-    labs(
-      title = "Oxidative phosphorylation",
-      x = "Ranked genes",
-      y = "Running enrichment score"
-    ) +
-    theme_minimal_custom()
-
-  ggsave("results/graphs/RNAseq/gsea/liver_gsea_oxphos.pdf", p_oxphos, width = 8, height = 5)
-}
+  scale_y_discrete(
+    labels = parse(text = ifelse(
+      levels(hallmark_plot_df$pathway_label) %in% c("OXIDATIVE PHOSPHORYLATION", "FATTY ACID METABOLISM"),
+      paste0("bold('", levels(hallmark_plot_df$pathway_label), "')"),
+      paste0("'", levels(hallmark_plot_df$pathway_label), "'")
+    ))
+  ) +
+  labs(
+    title = "Hepatic Hallmark pathway enrichment",
+    x = "Normalized enrichment score (NES)",
+    y = NULL
+  ) +
+  theme_minimal_custom() +
+  theme(
+    plot.title = element_text(face = "bold"),
+    axis.text.y = element_text(size = 10, colour = "black"),
+    legend.position = "bottom"
+  )
+ggsave("results/graphs/RNAseq/gsea/liver_gsea_hallmark_significant.pdf", p_hallmark, width = 9, height = 6)
 
 #### GSEA enrichment plots (OXPHOS & FAO) ####
 plot_gsea_enrichment <- function(pathway, title, gene_sets, ranks, results) {
@@ -314,6 +293,10 @@ plot_gsea_enrichment <- function(pathway, title, gene_sets, ranks, results) {
     )
 }
 
-# OXPHOS
+## i. OXPHOS ##
 p_oxphos <- plot_gsea_enrichment("HALLMARK_OXIDATIVE_PHOSPHORYLATION", "Hepatic OXPHOS", hallmark_sets, ranks_grp, gsea_hallmark)
 ggsave("results/graphs/RNAseq/gsea/liver_gsea_oxphos.pdf", p_oxphos, width = 8.5, height = 5)
+
+## ii. Fatty-acid metabolism ##
+p_fa <- plot_gsea_enrichment("HALLMARK_FATTY_ACID_METABOLISM", "Hepatic fatty-acid metabolism", hallmark_sets, ranks_grp, gsea_hallmark)
+ggsave("results/graphs/RNAseq/gsea/liver_gsea_fa_metabolism.pdf", p_fa, width = 8.5, height = 5)
