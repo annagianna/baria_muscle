@@ -221,6 +221,30 @@ gsea_mitocarta |>
   filter(padj < 0.05) |>
   dplyr::select(pathway, size, NES, pval, padj)
 
+#### MitoCarta: main vs FMI-adjusted ####
+mitocarta_compare <- gsea_mitocarta |>
+  dplyr::select(pathway, NES_main = NES, padj_main = padj) |>
+  inner_join(
+    gsea_mitocarta_fmi |>
+      dplyr::select(pathway, NES_fmi = NES, padj_fmi = padj),
+    by = "pathway"
+  ) |>
+  mutate(
+    sig_both = padj_main < 0.05 & padj_fmi < 0.05,
+    same_direction = sign(NES_main) == sign(NES_fmi)
+  ) |>
+  arrange(padj_main)
+
+mitocarta_compare |>
+  filter(sig_both) |>
+  print(n = Inf)
+
+mitocarta_compare |>
+  filter(str_detect(pathway,
+    "OXPHOS|Complex_|Fatty_acid_oxidation|TCA|Citric_acid")) |>
+  arrange(padj_main) |> 
+  select(pathway, sig_both, same_direction)
+
 #### Save results ####
 # Convert leading-edge gene lists into character strings for CSV export
 save_gsea <- function(df, filename) {
