@@ -6,6 +6,8 @@
 library(tidyverse)
 library(fgsea)
 library(msigdbr)
+library(annotables)
+library(phyloseq)
 library(MetBrewer)
 source("scripts/assets/functions.R")
 
@@ -17,12 +19,15 @@ dir.create("results/graphs/RNAseq/gsea", recursive = TRUE, showWarnings = FALSE)
 renoir_15 <- met.brewer("Renoir", n = 15)
 gsea_cols <- c("Up" = renoir_15[11], "Down" = renoir_15[3])
 
-#### Data: DESeq2 Wald statistics ####
-# Original Wald statistics from 5a1_liver_deseq2.R
-de_grp <- read_csv("results/tables/liver_de_grp_wald_stats.csv")
+# Data
+de_grp <- read_csv("results/tables/liver_de_grp_wald_stats.csv") # DESeq2 Wald statistics from 5a1_liver_deseq2.R
 de_grp_fmi <- read_csv("results/tables/liver_de_grp_fmi_wald_stats.csv")
-
 stopifnot(setequal(de_grp$ensembl_gene_id, de_grp_fmi$ensembl_gene_id))
+baria_muscle_wide <- readRDS("data/processed_data/BARIA_muscle_wide.RDS")
+liver_rnaseq_vst <- readRDS("data/processed_data/BARIA_Liver_RNAseq_vst_batchcorrected.RDS")
+baria_mb_v0 <- readRDS("data/processed_data/BARIA_mb_baseline.RDS")
+top15_species <- get_top_species()$species
+mito_file <- "data/raw_data/MitoCarta/Human.MitoPathways3.0.gmx"
 
 #### Ranked gene statistics ####
 # Positive = higher expression in high FFMI loss
@@ -72,6 +77,50 @@ make_gene_sets <- function(df) {
 
 hallmark_sets <- make_gene_sets(hallmark)
 reactome_sets <- make_gene_sets(reactome)
+
+#### MitoCarta3.0 gene sets ####
+dir.create("data/raw_data/MitoCarta", recursive = TRUE, showWarnings = FALSE)
+if (!file.exists(mito_file)) {
+  download.file(
+    "https://personal.broadinstitute.org/scalvo/MitoCarta_Download/Human.MitoPathways3.0.gmx",
+    mito_file, mode = "wb"
+  )
+}
+
+# GMX: pathways in columns, descriptions in row 2
+mito_gmx <- read.delim(mito_file, header = FALSE, fill = TRUE, check.names = FALSE, quote = "")
+mito_symbols <- setNames(
+  lapply(seq_len(ncol(mito_gmx)), function(i) {
+    genes <- as.character(mito_gmx[-c(1, 2), i])
+    unique(genes[!is.na(genes) & genes != ""])
+  }),
+  as.character(mito_gmx[1, ])
+)
+
+# Map symbols to Ensembl IDs
+symbol_map <- annotables::grch38 |>
+  dplyr::select(symbol, ensgene) |>
+  filter(!is.na(symbol), symbol != "") |>
+  distinct() |>
+  group_by(symbol) |>
+  filter(n() == 1) |>
+  ungroup()
+
+mito_sets <- lapply(mito_symbols, function(genes) {
+  ids <- symbol_map$ensgene[match(genes, symbol_map$symbol)]
+  unique(ids[!is.na(ids) & ids %in% names(ranks_grp)])
+})
+
+# Check imported gene sets
+tibble(
+  pathway = names(mito_sets),
+  n_genes = lengths(mito_sets)
+) |>
+  arrange(desc(n_genes))
+
+length(mito_sets)
+sum(lengths(mito_sets) >= 10 & lengths(mito_sets) <= 500)
+
 
 # Gene-set coverage
 tibble(
@@ -300,3 +349,189 @@ ggsave("results/graphs/RNAseq/gsea/liver_gsea_oxphos.pdf", p_oxphos, width = 8.5
 ## ii. Fatty-acid metabolism ##
 p_fa <- plot_gsea_enrichment("HALLMARK_FATTY_ACID_METABOLISM", "Hepatic fatty-acid metabolism", hallmark_sets, ranks_grp, gsea_hallmark)
 ggsave("results/graphs/RNAseq/gsea/liver_gsea_fa_metabolism.pdf", p_fa, width = 8.5, height = 5)
+
+#### Liver GSEA pathways x top-15 species (from dichotomous unadj. ML) ####
+# Baseline species abundance
+top15_species_log10 <- t(as(otu_table(baria_mb_v0), "matrix")) |>
+  as.data.frame() |>
+  rownames_to_column("sample") |>
+  mutate(id = sample |> 
+    str_remove("^BARIA_") |> 
+    str_remove("_v0$") |> 
+    as.numeric()
+  ) |>
+  select(id, all_of(top15_species)) |>
+  mutate(across(all_of(top15_species), ~ {
+    pseudo <- min(.x[.x > 0], na.rm = TRUE) / 2
+    log10(.x + pseudo)
+  }))
+
+# Significant Hallmark pathways
+pathways <- gsea_hallmark |>
+  filter(padj < 0.05) |>
+  pull(pathway)
+
+# Participant-level pathway scores: mean standardized VST expression
+pathway_scores <- map_dfr(pathways, function(p) {
+
+  genes <- names(liver_rnaseq_vst)[str_remove(names(liver_rnaseq_vst), "\\.\\d+$") %in% hallmark_sets[[p]]]
+
+  tibble(
+    id = as.numeric(as.character(liver_rnaseq_vst$id)),
+    pathway = p,
+    n_genes = length(genes),
+    score = rowMeans(scale(as.matrix(liver_rnaseq_vst[, genes, drop = FALSE])), na.rm = TRUE)
+  )
+})
+
+# Restrict to participants with 1-year FFMI group available
+pathway_mb <- pathway_scores |>
+  inner_join(top15_species_log10, by = "id") |>
+  semi_join(
+    baria_muscle_wide |>
+      filter(!is.na(perc_change_ffmi_v4_group)) |>
+      mutate(id = as.numeric(as.character(id))),
+    by = "id"
+  )
+
+# Sample overlap and pathway coverage
+pathway_mb |>
+  group_by(pathway) |>
+  dplyr::summarize(n = n(), n_genes = dplyr::first(n_genes), .groups = "drop")
+
+# Spearman correlations
+cor_pathway_species <- pathway_mb |>
+  group_by(pathway) |>
+  group_modify(~ map_dfr(top15_species, function(sp) {
+
+    test <- cor.test(.x[[sp]], .x$score, method = "spearman", exact = FALSE)
+
+    tibble(
+      species = sp,
+      n = sum(complete.cases(.x[[sp]], .x$score)),
+      rho = unname(test$estimate),
+      p.value = test$p.value
+    )
+  })) |>
+  ungroup() |>
+  mutate(p_fdr = p.adjust(p.value, method = "BH")) |>
+  arrange(p_fdr)
+
+# Results
+cor_pathway_species |>
+  select(pathway, species, n, rho, p.value, p_fdr)
+write_csv(cor_pathway_species, "results/tables/RNAseq/gsea/liver_gsea_pathway_species_correlations.csv")
+
+#### OXPHOS & fatty-acid metabolism x top-15 species ####
+cor_oxidative_species <- cor_pathway_species |>
+  filter(pathway %in% c("HALLMARK_OXIDATIVE_PHOSPHORYLATION", "HALLMARK_FATTY_ACID_METABOLISM")) |>
+  mutate(
+    pathway = str_remove(pathway, "^HALLMARK_") |>
+      str_replace_all("_", " ")
+  ) |>
+  arrange(pathway, p_fdr)
+
+# Correlations
+cor_oxidative_species |>
+  dplyr::select(pathway, species, n, rho, p.value, p_fdr)
+
+# Significant correlations
+cor_oxidative_species |>
+  filter(p_fdr < 0.05)
+
+write_csv(cor_oxidative_species, "results/tables/RNAseq/gsea/liver_oxidative_pathways_species_correlations.csv")
+
+
+#### Reactome pathways x top-15 species ####
+# FDR-significant Reactome pathways
+reactome_pathways <- gsea_reactome |>
+  filter(padj < 0.05) |>
+  pull(pathway)
+
+# Participant-level pathway scores
+reactome_scores <- map_dfr(reactome_pathways, function(p) {
+
+  genes <- names(liver_rnaseq_vst)[
+    str_remove(names(liver_rnaseq_vst), "\\.\\d+$") %in% reactome_sets[[p]]
+  ]
+
+  if (length(genes) < 2) return(NULL)
+
+  tibble(
+    id = as.numeric(as.character(liver_rnaseq_vst$id)),
+    pathway = p,
+    n_genes = length(genes),
+    score = rowMeans(scale(as.matrix(liver_rnaseq_vst[, genes, drop = FALSE])), na.rm = TRUE)
+  )
+})
+
+# Merge with microbiome and 1-year FFMI data
+reactome_mb <- reactome_scores |>
+  inner_join(top15_species_log10, by = "id") |>
+  semi_join(
+    baria_muscle_wide |>
+      filter(!is.na(perc_change_ffmi_v4_group)) |>
+      mutate(id = as.numeric(as.character(id))),
+    by = "id"
+  )
+
+# Sample overlap and pathway coverage
+reactome_mb |>
+  group_by(pathway) |>
+  dplyr::summarise(
+    n = n_distinct(id),
+    n_genes = dplyr::first(n_genes),
+    .groups = "drop"
+  )
+
+# Spearman correlations
+cor_reactome_species <- reactome_mb |>
+  group_by(pathway) |>
+  group_modify(~ map_dfr(top15_species, function(sp) {
+
+    test <- cor.test(.x[[sp]], .x$score, method = "spearman", exact = FALSE)
+
+    tibble(
+      species = sp,
+      n = sum(complete.cases(.x[[sp]], .x$score)),
+      rho = unname(test$estimate),
+      p.value = test$p.value
+    )
+  })) |>
+  ungroup() |>
+  mutate(p_fdr = p.adjust(p.value, method = "BH")) |>
+  arrange(p_fdr)
+
+# FDR-significant correlations
+cor_reactome_species |>
+  filter(p_fdr < 0.05) |>
+  dplyr::select(pathway, species, n, rho, p.value, p_fdr)
+
+write_csv(
+  cor_reactome_species,
+  "results/tables/RNAseq/gsea/liver_reactome_species_correlations.csv"
+)
+
+#### Reactome mitochondrial pathways x top-15 species ####
+cor_reactome_mito_species <- cor_reactome_species |>
+  filter(str_detect(pathway, mito_pattern)) |>
+  arrange(p_fdr)
+
+cor_reactome_mito_species |>
+  dplyr::select(pathway, species, n, rho, p.value, p_fdr)
+
+write_csv(
+  cor_reactome_mito_species,
+  "results/tables/RNAseq/gsea/liver_reactome_mito_species_correlations.csv"
+)
+nrow(cor_reactome_species |> filter(p_fdr < 0.05))
+nrow(cor_reactome_mito_species |> filter(p_fdr < 0.05))
+
+cor_reactome_species |>
+  filter(p_fdr < 0.05) |>
+  group_by(species) |>
+  dplyr::summarise(
+    n_pathways = n(),
+    pathways = paste(pathway, collapse = "; "),
+    .groups = "drop"
+  )
