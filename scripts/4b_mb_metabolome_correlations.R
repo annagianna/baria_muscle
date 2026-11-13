@@ -9,12 +9,12 @@ library(circlize)
 library(MetBrewer)
 
 source("scripts/assets/functions.R")
-out_dir <- "results/graphs/mb_metabolome_correlations"
+out_dir <- "results/graphs/mb_metabolome_correlations/dichotomous"
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
-# Top-15 species by ML feature importance for %FFMI change at 1y
-fi <- get_feature_importance("results/mlmodels/perc_change_ffmi_v4/all", "perc_change_ffmi_v4_all", "reg")
-top15_species <- top_features(fi, n = 15)$FeatName
+# Top-15 species from dichotomous ML model: 1-year %FFMI loss
+top15_species_labels <- get_top_species()
+top15_species <- top15_species_labels$species
 
 # Baseline (v0) abundance for the top 15
 baria_mb_baseline <- readRDS("data/processed_data/BARIA_mb_baseline.RDS")
@@ -67,8 +67,7 @@ cat(nrow(sig), "/", nrow(cor_results), "microbe-metabolite pairs FDR < 0.05\n")
 format_fdr <- function(p) if_else(p < 0.001, "<0.001", sprintf("%.3f", p))
 
 #### Scatter plots: every FDR-significant metabolite, one panel per species ####
-species_labels <- species_label(top15_species)
-names(species_labels) <- top15_species
+species_labels <- setNames(top15_species_labels$species_label, top15_species_labels$species)
 
 for (species_id in unique(sig$species)) {
   # Cap panels per page at the 30 strongest hits - a species with hundreds of
@@ -130,18 +129,9 @@ renoir_15 <- met.brewer("Renoir", n = 15)
 rho_max <- max(abs(cor_results$rho), na.rm = TRUE)
 col_fun <- colorRamp2(c(-rho_max, 0, rho_max), c(renoir_15[14], "white", renoir_15[6]))
 
-# Species label colours by direction of association with 1-year FFMI
-# trajectory (ML forest estimate) - same mapping as species_label_colors in
-# 4a_humann_pathways.R (Renoir[15] = positive, Renoir[9] = negative)
-forest_perc_change_ffmi_v4 <- read.csv("results/mlmodels/perc_change_ffmi_v4/all/forest_results_top15.csv")
-species_direction_colors <- c(positive = renoir_15[15], negative = renoir_15[9])
-species_direction <- tibble(species = top15_species, species_label = species_labels[top15_species]) |>
-  left_join(forest_perc_change_ffmi_v4 |> select(species, estimate), by = "species") |>
-  mutate(estimate_direction = if_else(estimate > 0, "positive", "negative"))
-species_label_colors <- setNames(
-  species_direction_colors[species_direction$estimate_direction],
-  species_direction$species_label
-)
+# Species label colours by association with 1-year FFMI-loss groups
+species_direction_colors <- c("Higher in modest/low loss" = renoir_15[15], "Higher in high loss" = renoir_15[9])
+species_label_colors <- setNames(species_direction_colors[top15_species_labels$estimate_direction], top15_species_labels$species_label)
 
 # Super pathway strip: a muted, earthy 9-colour set (moderate chroma ~35,
 # lightness alternating so adjacent picks aren't just hue-apart) chosen to
