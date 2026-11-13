@@ -203,6 +203,24 @@ gsea_mito <- bind_rows(gsea_hallmark, gsea_reactome) |>
 gsea_mito |>
   dplyr::select(collection, pathway, size, NES, pval, padj)
 
+# MitoCarta3.0: main and FMI-adjusted models
+gsea_mitocarta <- run_gsea(mito_sets, ranks_grp, "MitoCarta3.0", "Main")
+gsea_mitocarta_fmi <- run_gsea(mito_sets, ranks_fmi, "MitoCarta3.0", "FMI-adjusted")
+
+# Summary
+bind_rows(gsea_mitocarta, gsea_mitocarta_fmi) |>
+  group_by(model) |>
+  dplyr::summarise(
+    n_tested = n(),
+    n_significant = sum(padj < 0.05, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Significant pathways
+gsea_mitocarta |>
+  filter(padj < 0.05) |>
+  dplyr::select(pathway, size, NES, pval, padj)
+
 #### Save results ####
 # Convert leading-edge gene lists into character strings for CSV export
 save_gsea <- function(df, filename) {
