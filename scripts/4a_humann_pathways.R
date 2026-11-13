@@ -24,7 +24,7 @@ html_entities <- c("&alpha;" = "α", "&beta;" = "β", "&gamma;" = "γ", "&delta;
 humann_long <- humann_long |>
   mutate(pathway_name = str_replace_all(pathway_name, html_entities))
 
-# Top-15 species of the dichotomous ML model (high vs. modest/low %FFMI loss at 1y)
+# Top-15 species of the dichotomous ML model
 top15_species_labels <- get_top_species()
 top15_species <- top15_species_labels$species
 
@@ -247,7 +247,3 @@ plot_species_pathway_heatmap(
   "results/graphs/HUMAnN/HUMAnN_species_pathway_heatmap_top15_y.pdf",
   transpose = FALSE, width = 14, height = 6
 )
-
-
-top15_species_labels |> select(species_label, estimate, estimate_direction)
-species_label_colors  # 15 named colours, no NA
