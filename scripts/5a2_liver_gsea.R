@@ -192,18 +192,7 @@ gsea_reactome |>
   dplyr::select(pathway, size, ES, NES, pval, padj) |>
   slice_head(n = 15)
 
-#### Mitochondrial pathways ####
-# Explore mito pathways already tested in Hallmark and Reactome
-mito_pattern <- "OXIDATIVE_PHOSPHORYLATION|RESPIRAT|ELECTRON_TRANSPORT|TCA_CYCLE|MITOCHONDR|ATP_SYNTH"
-
-gsea_mito <- bind_rows(gsea_hallmark, gsea_reactome) |>
-  dplyr::filter(str_detect(pathway, mito_pattern)) |>
-  arrange(pval)
-
-gsea_mito |>
-  dplyr::select(collection, pathway, size, NES, pval, padj)
-
-# MitoCarta3.0: main and FMI-adjusted models
+### MitoCarta3.0: main and FMI-adjusted models ###
 gsea_mitocarta <- run_gsea(mito_sets, ranks_grp, "MitoCarta3.0", "Main")
 gsea_mitocarta_fmi <- run_gsea(mito_sets, ranks_fmi, "MitoCarta3.0", "FMI-adjusted")
 
@@ -244,6 +233,10 @@ mitocarta_compare |>
     "OXPHOS|Complex_|Fatty_acid_oxidation|TCA|Citric_acid")) |>
   arrange(padj_main) |> 
   select(pathway, sig_both, same_direction)
+
+mitocarta_compare |>
+  filter(sig_both) |>
+  count(same_direction)
 
 #### Save results ####
 # Convert leading-edge gene lists into character strings for CSV export
@@ -549,31 +542,4 @@ cor_reactome_species |>
   filter(p_fdr < 0.05) |>
   dplyr::select(pathway, species, n, rho, p.value, p_fdr)
 
-write_csv(
-  cor_reactome_species,
-  "results/tables/RNAseq/gsea/liver_reactome_species_correlations.csv"
-)
-
-#### Reactome mitochondrial pathways x top-15 species ####
-cor_reactome_mito_species <- cor_reactome_species |>
-  filter(str_detect(pathway, mito_pattern)) |>
-  arrange(p_fdr)
-
-cor_reactome_mito_species |>
-  dplyr::select(pathway, species, n, rho, p.value, p_fdr)
-
-write_csv(
-  cor_reactome_mito_species,
-  "results/tables/RNAseq/gsea/liver_reactome_mito_species_correlations.csv"
-)
-nrow(cor_reactome_species |> filter(p_fdr < 0.05))
-nrow(cor_reactome_mito_species |> filter(p_fdr < 0.05))
-
-cor_reactome_species |>
-  filter(p_fdr < 0.05) |>
-  group_by(species) |>
-  dplyr::summarise(
-    n_pathways = n(),
-    pathways = paste(pathway, collapse = "; "),
-    .groups = "drop"
-  )
+write_csv(cor_reactome_species, "results/tables/RNAseq/gsea/liver_reactome_species_correlations.csv")
