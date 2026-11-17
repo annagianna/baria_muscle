@@ -269,6 +269,7 @@ ht <- Heatmap(
   cluster_rows = TRUE,
   cluster_columns = TRUE,
   show_column_dend = FALSE,
+  show_row_dend = FALSE,
   column_title = "ML-selected species x metabolites"
 )
 
