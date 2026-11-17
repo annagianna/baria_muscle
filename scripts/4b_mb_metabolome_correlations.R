@@ -1,5 +1,6 @@
-# Correlations: top-15 species (%FFMI change at 1y) and metabolites
-# Barbara Verhaar
+
+# Correlations: top-15 ML species and top-15 ML metabolites (1-year %FFMI loss group)
+# Barbara Verhaar, Anna Giannakogeorgou
 
 # Packages
 library(tidyverse)
@@ -7,49 +8,75 @@ library(phyloseq)
 library(ComplexHeatmap)
 library(circlize)
 library(MetBrewer)
-
+library(grid)
 source("scripts/assets/functions.R")
-out_dir <- "results/graphs/mb_metabolome_correlations/dichotomous"
+
+# Theme
+renoir_15 <- met.brewer("Renoir", n = 15)
+
+# Data
+baria_mb_baseline <- readRDS("data/processed_data/BARIA_mb_baseline.RDS")
+metab <- readRDS("data/processed_data/BARIA_metabolon_clean.RDS") # baseline metabolomics
+
+out_dir <- "results/graphs/mb_metabolome_correlations/ml_selected"
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
-# Top-15 species from dichotomous ML model: 1-year %FFMI loss
+#### ML-selected features from dichotomous models ####
+# Top-15 species
 top15_species_labels <- get_top_species()
 top15_species <- top15_species_labels$species
 
-# Baseline (v0) abundance for the top 15
-baria_mb_baseline <- readRDS("data/processed_data/BARIA_mb_baseline.RDS")
+# Top-15 metabolites
+top15_metabolites_info <- get_top_metabolites()
+top15_metabolites <- top15_metabolites_info$metabolite
+
+#### Baseline microbiome ####
 species_mat <- t(as(baria_mb_baseline@otu_table, "matrix"))
 stopifnot(all(top15_species %in% colnames(species_mat)))
+
 species_wide <- as.data.frame(species_mat[, top15_species, drop = FALSE]) |>
   rownames_to_column("sampleid") |>
   mutate(id = sampleid |> str_remove("^BARIA_") |> str_remove("_v0$")) |>
   select(-sampleid)
 
-# log10-transform (pseudocount)
+# log10-transform (half-minimum pseudocount)
 species_log10 <- species_wide |> select(id, all_of(top15_species))
 species_log10[top15_species] <- map(species_log10[top15_species], ~ {
   pseudo <- min(.x[.x > 0]) / 2
   log10(.x + pseudo)
 })
 
-#### Metabolomics ####
-metab <- readRDS("data/processed_data/BARIA_metabolon_clean.RDS")
+#### Baseline metabolomics ####
 metab_mat <- as(otu_table(metab), "matrix")
 metab_meta <- as(sample_data(metab), "data.frame")
 rownames(metab_mat) <- metab_meta$id
 
-#### Join on id, correlate every species x metabolite pair ####
+# Check and retain ML-selected metabolites
+missing_metabs <- setdiff(top15_metabolites, colnames(metab_mat))
+if (length(missing_metabs) > 0) {
+  print(missing_metabs)
+  stop("ML metabolites missing from Metabolon data")
+}
+metab_mat <- metab_mat[, top15_metabolites, drop = FALSE]
+
+#### Match participants ####
 shared_ids <- intersect(species_log10$id, rownames(metab_mat))
-cat(length(shared_ids), "participants with both baseline microbiome and metabolome data\n")
+cat(length(shared_ids), "participants with baseline microbiome and metabolome data\n")
 
 species_log10_mat <- species_log10 |>
   filter(id %in% shared_ids) |>
   column_to_rownames("id")
 species_log10_mat <- as.matrix(species_log10_mat[shared_ids, , drop = FALSE])
 metab_mat <- metab_mat[shared_ids, , drop = FALSE]
-stopifnot(identical(rownames(species_log10_mat), rownames(metab_mat)), !anyNA(species_log10_mat), !anyNA(metab_mat))
 
-cor_results <- expand_grid(species = top15_species, metabolite = colnames(metab_mat)) |>
+stopifnot(
+  identical(rownames(species_log10_mat), rownames(metab_mat)),
+  !anyNA(species_log10_mat),
+  !anyNA(metab_mat)
+)
+
+#### Species x metabolite correlations ####
+cor_results <- expand_grid(species = top15_species, metabolite = top15_metabolites) |>
   mutate(
     test = map2(species, metabolite, ~ cor.test(species_log10_mat[, .x], metab_mat[, .y], method = "spearman", exact = FALSE)),
     rho = map_dbl(test, "estimate"),
@@ -58,27 +85,23 @@ cor_results <- expand_grid(species = top15_species, metabolite = colnames(metab_
   select(-test) |>
   mutate(p_fdr = p.adjust(p.value, method = "BH"))
 
-write.csv(cor_results, file.path(out_dir, "microbe_metabolite_correlations.csv"), row.names = FALSE)
+write.csv(cor_results, file.path(out_dir, "ml_species_metabolite_correlations.csv"), row.names = FALSE)
 
 sig <- cor_results |> filter(p_fdr < 0.05)
-cat(nrow(sig), "/", nrow(cor_results), "microbe-metabolite pairs FDR < 0.05\n")
+cat(nrow(sig), "/", nrow(cor_results), "species-metabolite correlations FDR < 0.05\n")
 
-# FDR values below 0.001 round to "0.000" at 3 decimals - report a floor instead
+# Summary of significant associations
+sig_summary <- sig |>
+  group_by(species) |>
+  summarise(n_sig = n(), n_positive = sum(rho > 0), n_negative = sum(rho < 0), .groups = "drop") |>
+  arrange(desc(n_sig))
+
+#### Scatter plots: significant associations ####
+species_labels <- setNames(top15_species_labels$species_label, top15_species_labels$species)
 format_fdr <- function(p) if_else(p < 0.001, "<0.001", sprintf("%.3f", p))
 
-#### Scatter plots: every FDR-significant metabolite, one panel per species ####
-species_labels <- setNames(top15_species_labels$species_label, top15_species_labels$species)
-
 for (species_id in unique(sig$species)) {
-  # Cap panels per page at the 30 strongest hits - a species with hundreds of
-  # FDR-significant metabolites would otherwise blow the PDF past its 200in
-  # page-size limit (nrow_used unbounded x panel_size) and fail at dev.off()
-  sig_metabs <- sig |> filter(species == species_id) |> arrange(p_fdr) |> slice_head(n = 30) |> pull(metabolite)
-  if (length(sig_metabs) == 0) next
-
-  # Layout scales with how many panels there actually are, so e.g. a single
-  # significant metabolite doesn't get stretched across a fixed-width page
-  panel_size <- 2.6
+  sig_metabs <- sig |> filter(species == species_id) |> arrange(p_fdr) |> pull(metabolite)
   ncol_used <- min(5, length(sig_metabs))
   nrow_used <- ceiling(length(sig_metabs) / ncol_used)
 
@@ -91,235 +114,173 @@ for (species_id in unique(sig$species)) {
       by = "id"
     ) |>
     left_join(sig |> filter(species == species_id) |> select(metabolite, rho, p_fdr), by = "metabolite") |>
-    mutate(facet_label = fct_reorder(str_wrap(metabolite_label(metabolite), 22), -rho))
+    mutate(facet_label = str_wrap(metabolite_label(metabolite), 22))
 
-  # rho/q text drawn inside each panel (not the facet strip) - one label
-  # per facet, positioned in the top-left corner of its own (free) scale
-  ann <- df |> distinct(facet_label, rho, p_fdr) |>
+  ann <- df |>
+    distinct(facet_label, rho, p_fdr) |>
     mutate(label = sprintf("rho = %.2f\nq %s", rho,
-                            if_else(p_fdr < 0.001, format_fdr(p_fdr), paste0("= ", format_fdr(p_fdr)))))
+                           if_else(p_fdr < 0.001, format_fdr(p_fdr), paste0("= ", format_fdr(p_fdr)))))
 
   p <- ggplot(df, aes(x = abundance, y = level)) +
-    geom_point(alpha = 0.5, size = 1, color = "#2a78d6") +
-    geom_smooth(method = "lm", se = FALSE, color = "#e34948", linewidth = 0.6) +
-    geom_text(
-      data = ann, aes(label = label), x = -Inf, y = Inf, hjust = -0.05, vjust = 1.3,
-      inherit.aes = FALSE, size = 2.5
-    ) +
+    geom_point(alpha = 0.5, size = 1, color = renoir_15[14]) +
+    geom_smooth(method = "lm", se = FALSE, color = renoir_15[6], linewidth = 0.6) +
+    geom_text(data = ann, aes(label = label), x = -Inf, y = Inf, hjust = -0.05, vjust = 1.3,
+              inherit.aes = FALSE, size = 2.5) +
     facet_wrap(~facet_label, scales = "free", ncol = ncol_used) +
-    labs(
-      title = species_labels[[species_id]],
-      x = "log10 relative abundance (baseline)", y = "Metabolite level (z-scored log10)"
-    ) +
-    theme_Publication() +
+    labs(title = species_labels[[species_id]], x = "log10 relative abundance (baseline)",
+         y = "Metabolite level (z-scored log10)") +
+    theme_minimal_custom() +
     theme(strip.text = element_text(size = 8), plot.title = element_text(size = 10))
 
   fname <- str_replace_all(species_labels[[species_id]], " ", "_")
-  ggsave(
-    file.path(out_dir, sprintf("correlation_scatter_%s.pdf", fname)),
-    p, width = panel_size * ncol_used + 0.5, height = panel_size * nrow_used + 0.6, limitsize = FALSE
-  )
+  ggsave(file.path(out_dir, sprintf("correlation_scatter_%s.pdf", fname)), p,
+         width = 2.6 * ncol_used + 0.5, height = 2.6 * nrow_used + 0.6)
 }
 
-#### ComplexHeatmap: species x metabolites ####
-# Diverging colour scale matching the species x pathway heatmap in
-# 4a_humann_pathways.R (MetBrewer Renoir[14]/[6]); negative = Renoir[14],
-# positive = Renoir[6], scale bounded by the actual max |rho|
-renoir_15 <- met.brewer("Renoir", n = 15)
+#### ComplexHeatmap: all top-15 species x top-15 metabolites ####
 rho_max <- max(abs(cor_results$rho), na.rm = TRUE)
 col_fun <- colorRamp2(c(-rho_max, 0, rho_max), c(renoir_15[14], "white", renoir_15[6]))
 
-# Species label colours by association with 1-year FFMI-loss groups
-species_direction_colors <- c("Higher in modest/low loss" = renoir_15[15], "Higher in high loss" = renoir_15[9])
-species_label_colors <- setNames(species_direction_colors[top15_species_labels$estimate_direction], top15_species_labels$species_label)
-
-# Super pathway strip: a muted, earthy 9-colour set (moderate chroma ~35,
-# lightness alternating so adjacent picks aren't just hue-apart) chosen to
-# stay clear of both diverging-scale endpoints (Lab distance >=23 from each)
-# while maximizing separation between categories themselves (min pairwise Lab
-# distance ~23) - straight Renoir subsampling put 6 of 9 categories within a
-# 60-degree hue wedge (pink/red/orange/gold/mustard) and was hard to tell
-# apart; this keeps the same muted/painterly character without that crowding
-pathway_colors <- c(
-  "Amino Acid"                         = "#3C9189",
-  "Carbohydrate"                       = "#765135",
-  "Cofactors and Vitamins"             = "#385C7E",
-  "Energy"                             = "#3E6330",
-  "Lipid"                              = "#CCA38D",
-  "Nucleotide"                         = "#8EAFCF",
-  "Peptide"                            = "#96B485",
-  "Xenobiotics"                        = "#814956",
-  "Partially Characterized Molecules"  = "#6A4F7E"
+# Species and metabolite label colours by logistic regression association with FFMI loss
+direction_colors <- c(
+  "Higher in modest/low loss" = renoir_15[15],
+  "Higher in high loss" = renoir_15[9],
+  "Not significant" = "grey50"
 )
+
+# Species directions
+species_directions <- top15_species_labels |>
+  mutate(direction = if_else(!is.na(p_fdr) & p_fdr < 0.05, estimate_direction, "Not significant"))
+
+species_label_colors <- setNames(
+  direction_colors[species_directions$direction],
+  species_directions$species_label
+)
+
+# Metabolite directions
+forest_metab <- read.csv("results/mlmodels_metab/perc_change_ffmi_v4_group/all/forest_results_top15.csv")
+
+metabolite_directions <- forest_metab |>
+  mutate(
+    direction = case_when(
+      is.na(p_fdr) | p_fdr >= 0.05 ~ "Not significant",
+      estimate > 1 ~ "Higher in high loss",
+      estimate < 1 ~ "Higher in modest/low loss",
+      TRUE ~ "Not significant"
+    ),
+    label = metabolite_label(metabolite)
+  )
+
+metabolite_label_colors <- setNames(
+  direction_colors[metabolite_directions$direction],
+  metabolite_directions$label
+)
+
+# Metabolite super-pathway colours for strip
+pathway_colors <- c(
+  "Amino Acid"                        = "#3C9189",
+  "Carbohydrate"                      = "#765135",
+  "Cofactors and Vitamins"            = "#385C7E",
+  "Energy"                            = "#3E6330",
+  "Lipid"                             = "#CCA38D",
+  "Nucleotide"                        = "#8EAFCF",
+  "Peptide"                           = "#96B485",
+  "Xenobiotics"                       = "#814956",
+  "Partially Characterized Molecules" = "#6A4F7E"
+)
+
 tax <- as(tax_table(metab), "matrix")
 
-# Significance legend (drawn once, reused by every heatmap) - stars belong in
-# a proper legend, not spelled out in the title.
+# Matrices: metabolites in rows, species in columns
+rho_mat <- cor_results |>
+  select(species, metabolite, rho) |>
+  pivot_wider(names_from = species, values_from = rho) |>
+  column_to_rownames("metabolite") |>
+  as.matrix()
+
+fdr_mat <- cor_results |>
+  select(species, metabolite, p_fdr) |>
+  pivot_wider(names_from = species, values_from = p_fdr) |>
+  column_to_rownames("metabolite") |>
+  as.matrix()
+
+rho_mat <- rho_mat[top15_metabolites, top15_species, drop = FALSE]
+fdr_mat <- fdr_mat[top15_metabolites, top15_species, drop = FALSE]
+
+# Super-pathway annotation
+pathway_anno <- as.character(tax[top15_metabolites, "SUPER_PATHWAY"])
+pathway_anno[is.na(pathway_anno)] <- "Unknown"
+if ("Unknown" %in% pathway_anno) pathway_colors <- c(pathway_colors, "Unknown" = "#BBBBBB")
+
+side_anno <- rowAnnotation(
+  `Super pathway` = pathway_anno,
+  col = list(`Super pathway` = pathway_colors),
+  show_annotation_name = TRUE,
+  annotation_name_gp = gpar(fontsize = 8),
+  annotation_name_side = "bottom",
+  annotation_name_rot = 45
+)
+
+# Readable labels
+rownames(rho_mat) <- metabolite_label(rownames(rho_mat))
+colnames(rho_mat) <- species_labels[colnames(rho_mat)]
+rownames(fdr_mat) <- rownames(rho_mat)
+colnames(fdr_mat) <- colnames(rho_mat)
+
+# Colour both species and metabolite names by FFMI-loss association
+species_gp <- gpar(fontsize = 9, fontface = "italic", col = species_label_colors[colnames(rho_mat)])
+metabolite_gp <- gpar(fontsize = 9, col = metabolite_label_colors[rownames(rho_mat)])
+
+stopifnot(
+  !anyNA(species_label_colors[colnames(rho_mat)]),
+  !anyNA(metabolite_label_colors[rownames(rho_mat)])
+)
+
 lgd_sig <- Legend(
   labels = c("q < 0.05", "q < 0.01", "q < 0.001"),
   title = "Significance",
   type = "points",
   pch = c("*", "**", "***"),
-  legend_gp = gpar(col = "black"),
-  background = "white"
+  legend_gp = gpar(col = "black")
 )
 
-# Build & save one species x `metabs` correlation heatmap
-plot_corr_heatmap <- function(metabs, file, column_title, col_width, pdf_width_min,
-                               column_fontsize = 8, cell_fontsize = 10,
-                               transpose = FALSE, row_height = 0.35,
-                               species_subset = top15_species) {
-  rho_mat <- cor_results |>
-    filter(metabolite %in% metabs) |>
-    select(species, metabolite, rho) |>
-    pivot_wider(names_from = metabolite, values_from = rho) |>
-    column_to_rownames("species") |>
-    as.matrix()
-  rho_mat <- rho_mat[species_subset, metabs, drop = FALSE]
+lgd_direction <- Legend(
+  labels = names(direction_colors),
+  title = "Association with 1-year FFMI loss",
+  legend_gp = gpar(fill = direction_colors)
+)
 
-  fdr_mat <- cor_results |>
-    filter(metabolite %in% metabs) |>
-    select(species, metabolite, p_fdr) |>
-    pivot_wider(names_from = metabolite, values_from = p_fdr) |>
-    column_to_rownames("species") |>
-    as.matrix()
-  fdr_mat <- fdr_mat[species_subset, metabs, drop = FALSE]
+ht <- Heatmap(
+  rho_mat,
+  name = "Spearman rho",
+  col = col_fun,
+  left_annotation = side_anno,
+  rect_gp = gpar(col = "white", lwd = 0.7),
+  cell_fun = function(j, i, x, y, width, height, fill) {
+    p <- fdr_mat[i, j]
+    stars <- if (p < 0.001) "***" else if (p < 0.01) "**" else if (p < 0.05) "*" else ""
+    if (stars != "") grid.text(stars, x, y, gp = gpar(fontsize = 10, col = "black"))
+  },
+  column_names_gp = species_gp,
+  column_names_rot = 45,
+  row_names_gp = metabolite_gp,
+  row_names_side = "left",
+  row_names_max_width = unit(14, "cm"),
+  cluster_rows = TRUE,
+  cluster_columns = TRUE,
+  show_column_dend = FALSE,
+  column_title = "ML-selected species x metabolites"
+)
 
-  species_active <- rownames(fdr_mat)[apply(fdr_mat < 0.05, 1, any)]
-  cat(file, ":", length(species_active), "/", length(species_subset), "species have >=1 FDR-significant correlation\n")
-  rho_mat <- rho_mat[species_active, , drop = FALSE]
-  fdr_mat <- fdr_mat[species_active, , drop = FALSE]
+pdf(file.path(out_dir, "ml_species_metabolite_heatmap.pdf"), width = 14, height = 10)
 
-  rownames(rho_mat) <- species_labels[rownames(rho_mat)]
-  colnames(rho_mat) <- metabolite_label(colnames(rho_mat))
-  rownames(fdr_mat) <- rownames(rho_mat)
-  colnames(fdr_mat) <- colnames(rho_mat)
+draw(
+  ht,
+  heatmap_legend_side = "right",
+  annotation_legend_side = "right",
+  annotation_legend_list = list(lgd_sig, lgd_direction),
+  padding = unit(c(20, 10, 4, 4), "mm")
+)
 
-  # Super pathway strip
-  pathway_anno <- tax[metabs, "SUPER_PATHWAY"]
-
-  if (transpose) {
-    rho_mat <- t(rho_mat)
-    fdr_mat <- t(fdr_mat)
-    side_anno <- rowAnnotation(
-      `Super pathway` = pathway_anno,
-      col = list(`Super pathway` = pathway_colors),
-      show_annotation_name = TRUE,
-      annotation_name_gp = grid::gpar(fontsize = 8),
-      annotation_name_side = "bottom",
-      annotation_name_rot = 45
-    )
-  } else {
-    side_anno <- HeatmapAnnotation(
-      `Super pathway` = pathway_anno,
-      col = list(`Super pathway` = pathway_colors),
-      show_annotation_name = TRUE,
-      annotation_name_gp = grid::gpar(fontsize = 8)
-    )
-  }
-
-  # Species names always italic and coloured by direction of association
-  # with 1-year FFMI (positive/negative ML estimate); metabolite names plain
-  species_names <- if (transpose) colnames(rho_mat) else rownames(rho_mat)
-  species_gp <- gpar(fontsize = column_fontsize, fontface = "italic", col = species_label_colors[species_names])
-  metab_gp <- gpar(fontsize = 10)
-
-  ht <- Heatmap(
-    rho_mat,
-    name = "Spearman rho",
-    col = col_fun,
-    top_annotation = if (!transpose) side_anno else NULL,
-    left_annotation = if (transpose) side_anno else NULL,
-    rect_gp = gpar(col = "white", lwd = 0.7),
-    cell_fun = function(j, i, x, y, width, height, fill) {
-      p <- fdr_mat[i, j]
-      stars <- if (p < 0.001) "***" else if (p < 0.01) "**" else if (p < 0.05) "*" else ""
-      if (stars != "") grid::grid.text(stars, x, y, gp = grid::gpar(fontsize = cell_fontsize, col = "black"))
-    },
-    column_names_gp = if (transpose) species_gp else metab_gp,
-    column_names_rot = 45,
-    row_names_gp = if (transpose) metab_gp else species_gp,
-    row_names_side = "left",
-    row_names_max_width = unit(14, "cm"),
-    row_dend_side = "right",
-    column_title = column_title,
-    cluster_rows = TRUE,
-    cluster_columns = TRUE,
-    show_column_dend = FALSE
-  )
-
-  # Transposed heatmaps need extra width for the (now much longer) metabolite
-  # row names plus the super-pathway strip alongside them.
-  width <- max(pdf_width_min, 3 + ncol(rho_mat) * col_width) + if (transpose) 4.5 else 0
-  height <- if (transpose) max(6, 3 + nrow(rho_mat) * row_height) else 9
-  left_padding <- if (transpose) 10 else 8
-
-  # PDF page dimensions are capped at 200in (14400pt) by the format itself -
-  # a heatmap with many rows/columns can otherwise silently blow past that
-  # and fail at dev.off() with a generic "write failed"
-  cat(file, ": requested pdf size", round(width, 1), "x", round(height, 1), "in (", nrow(rho_mat), "rows x", ncol(rho_mat), "cols )\n")
-  if (width > 200 || height > 200) {
-    warning(file, ": requested size exceeds the 200in PDF page limit (", round(width, 1), "x", round(height, 1), "in) - clamping")
-  }
-  width <- min(width, 200)
-  height <- min(height, 200)
-
-  quartz(type = "pdf", file = file, width = width, height = height)
-  draw(ht, heatmap_legend_side = "right", annotation_legend_side = "right",
-       annotation_legend_list = list(lgd_sig),
-       padding = unit(c(20, left_padding, 4, 4), "mm"))
-  dev.off()
-}
-
-sig_metabs_all <- unique(sig$metabolite)
-cat(length(sig_metabs_all), "distinct metabolites significant for >=1 species\n")
-
-if (length(sig_metabs_all) > 0) { # if anything is sig
-
-  # Full heatmap: every metabolite significant for >=1 species
-  plot_corr_heatmap(
-    sig_metabs_all, file.path(out_dir, "microbe_metabolite_heatmap_vertical.pdf"),
-    column_title = "All significant metabolites",
-    col_width = 0.45, pdf_width_min = 3, column_fontsize = 10,
-    transpose = TRUE, row_height = 0.18
-  )
-
-  # Compact version: the 20 metabolites correlated with the most species
-  metab_rank <- sig |>
-    group_by(metabolite) |>
-    summarise(n_sig = n(), max_abs_rho = max(abs(rho)), .groups = "drop") |>
-    arrange(desc(n_sig), desc(max_abs_rho))
-  sig_metabs_small <- metab_rank |> slice_head(n = 20) |> pull(metabolite)
-
-  plot_corr_heatmap(
-    sig_metabs_small, file.path(out_dir, "microbe_metabolite_heatmap_top20_vertical.pdf"),
-    column_title = sprintf("Top %d metabolites", length(sig_metabs_small)),
-    col_width = 0.45, pdf_width_min = 3, column_fontsize = 10,
-    transpose = TRUE, row_height = 0.35
-  )
-
-  # Compact slide version: top-20 metabolites (as above) further restricted
-  # to species with at least 10 significant correlations AMONG THOSE SAME 20
-  # metabolites (not the whole panel), so sparsely-hit species don't clutter
-  # a presentation-sized heatmap
-  min_species_hits <- 10
-  species_rank <- sig |>
-    filter(metabolite %in% sig_metabs_small) |>
-    group_by(species) |>
-    summarise(n_sig = n(), max_abs_rho = max(abs(rho)), .groups = "drop") |>
-    arrange(desc(n_sig), desc(max_abs_rho))
-  species_keep <- species_rank |> filter(n_sig >= min_species_hits) |> pull(species)
-  cat(length(species_keep), "/", length(top15_species), "species have >=", min_species_hits, "significant correlations among the top", length(sig_metabs_small), "metabolites\n")
-
-  if (length(species_keep) > 0) {
-    plot_corr_heatmap(
-      sig_metabs_small, file.path(out_dir, "microbe_metabolite_heatmap_top_species_compact_vertical.pdf"),
-      column_title = sprintf("Top %d metabolites, species with >=%d significant correlations", length(sig_metabs_small), min_species_hits),
-      col_width = 0.45, pdf_width_min = 3, column_fontsize = 10,
-      transpose = TRUE, row_height = 0.35,
-      species_subset = species_keep
-    )
-  }
-}
-
+dev.off()
 cat("Done. Outputs in", out_dir, "\n")
