@@ -1,4 +1,3 @@
-
 # Correlations: top-15 ML species and top-15 ML metabolites (1-year %FFMI loss group)
 # Barbara Verhaar, Anna Giannakogeorgou
 
@@ -284,4 +283,61 @@ draw(
 )
 
 dev.off()
+
+#### Compact ComplexHeatmap: species and metabolites with >=1 significant correlation ####
+sig_pairs <- cor_results |> filter(p_fdr < 0.05)
+
+species_keep <- top15_species[top15_species %in% sig_pairs$species]
+metabs_keep <- top15_metabolites[top15_metabolites %in% sig_pairs$metabolite]
+
+if (length(species_keep) > 0 && length(metabs_keep) > 0) {
+  rho_compact <- rho_mat[metabolite_label(metabs_keep), species_labels[species_keep], drop = FALSE]
+  fdr_compact <- fdr_mat[metabolite_label(metabs_keep), species_labels[species_keep], drop = FALSE]
+
+  pathway_compact <- as.character(tax[metabs_keep, "SUPER_PATHWAY"])
+  pathway_compact[is.na(pathway_compact)] <- "Unknown"
+
+  side_anno_compact <- rowAnnotation(
+    `Super pathway` = pathway_compact,
+    col = list(`Super pathway` = pathway_colors),
+    show_annotation_name = TRUE,
+    annotation_name_gp = gpar(fontsize = 8),
+    annotation_name_side = "bottom",
+    annotation_name_rot = 45
+  )
+
+  ht_compact <- Heatmap(
+    rho_compact,
+    name = "Spearman rho",
+    col = col_fun,
+    left_annotation = side_anno_compact,
+    rect_gp = gpar(col = "white", lwd = 0.7),
+    cell_fun = function(j, i, x, y, width, height, fill) {
+      p <- fdr_compact[i, j]
+      stars <- if (p < 0.001) "***" else if (p < 0.01) "**" else if (p < 0.05) "*" else ""
+      if (stars != "") grid.text(stars, x, y, gp = gpar(fontsize = 10, col = "black"))
+    },
+    column_names_gp = gpar(fontsize = 9, fontface = "italic", col = species_label_colors[colnames(rho_compact)]),
+    column_names_rot = 45,
+    row_names_gp = gpar(fontsize = 9, col = metabolite_label_colors[rownames(rho_compact)]),
+    row_names_side = "left",
+    row_names_max_width = unit(14, "cm"),
+    cluster_rows = nrow(rho_compact) > 1,
+    cluster_columns = ncol(rho_compact) > 1,
+    show_column_dend = FALSE,
+    show_row_dend = FALSE,
+    column_title = "ML-selected species and metabolites with >=1 significant correlation"
+  )
+
+  pdf(file.path(out_dir, "ml_species_metabolite_heatmap_compact.pdf"), width = 14, height = 10)
+  draw(
+    ht_compact,
+    heatmap_legend_side = "right",
+    annotation_legend_side = "right",
+    annotation_legend_list = list(lgd_sig, lgd_direction),
+    padding = unit(c(20, 10, 4, 4), "mm")
+  )
+  dev.off()
+}
+
 cat("Done. Outputs in", out_dir, "\n")
