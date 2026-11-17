@@ -1,15 +1,16 @@
-## Shared helpers reused across pipelines: 
-# XGBeast output-folder discovery, shared ggplot themes,
-# the top-species loader, and species/metabolite-name helpers used by 3c_ml_process.R, 4a–4c and 5a/5b.
 
-# Anything used by only one script lives in that script instead
+## Shared helpers reused across pipelines:
+# XGBeast output-folder discovery, shared ggplot themes,
+# top species/metabolite loaders, and species/metabolite-name helpers
+# used by 3c_ml_process.R, 4a–4c and 5a/5b.
+# Anything used by only one script lives in that script instead.
 
 # Barbara Verhaar, Anna Giannakogeorgou
 
 #### Packages ####
 library(dplyr)
 
-#### Themes #### 
+#### Themes ####
 theme_Publication <- function(base_size = 12, base_family = "sans") {
   library(grid); library(ggthemes)
   theme_foundation(base_size = base_size, base_family = base_family) +
@@ -91,35 +92,32 @@ theme_minimal_composition <- function(base_size = 14, base_family = "sans") {
 }
 
 #### XGBeast ####
-# Find the (non-PERMUTED) XGBeast output folder for a given subgroup path +
-# model name, e.g. find_output_folder("results/ml_crossectional/phenoage/all", "phenoage_all", "reg").
-# If the model has been rerun, multiple timestamped folders can exist for the
-# same name; since the timestamp suffix (YYYY_MM_DD__HH-MM-SS) sorts
-# lexicographically in chronological order, take the last one so a rerun
-# always wins over a stale one.
+# Find the latest non-permuted XGBeast output folder
 find_output_folder <- function(base_path, name, mode = c("reg", "class")) {
   mode <- match.arg(mode)
   if (!dir.exists(base_path)) return(NA_character_)
+
   prefix <- paste0("output_XGB_", mode, "_", name)
   li <- list.files(base_path)
   hit <- sort(li[startsWith(li, prefix) & !grepl("PERMUTED", li)])
+
   if (length(hit) == 0) return(NA_character_)
   file.path(base_path, hit[length(hit)])
 }
 
-# Read XGBeast's per-feature relative importance ("FeatName", "RelFeatImp",
-# 0-100, includes random_variable1/2) for one subgroup; NULL if the model
-# hasn't been run yet.
+# Read feature importance from XGBeast output
 get_feature_importance <- function(base_path, name, mode = c("reg", "class")) {
   mode <- match.arg(mode)
   folder <- find_output_folder(base_path, name, mode)
   if (is.na(folder)) return(NULL)
+
   f <- file.path(folder, "feature_importance.txt")
   if (!file.exists(f)) return(NULL)
+
   read.delim(f)
 }
 
-# Top n real (non-random-variable) features by relative importance
+# Top n real features by relative importance
 top_features <- function(feature_importance, n = 15) {
   feature_importance |>
     filter(!FeatName %in% c("random_variable1", "random_variable2")) |>
@@ -127,34 +125,48 @@ top_features <- function(feature_importance, n = 15) {
     head(n)
 }
 
-# Top-15 species of the dichotomous ML model (high vs. modest/low %FFMI loss at 1y)
-# & direction from the logistic forest: OR > 1 = higher in high loss
+#### ML-selected features ####
+
+# Top-15 species from dichotomous ML model (high vs. modest/low %FFMI loss at 1y)
+# Direction from logistic forest: OR > 1 = higher in high loss
 get_top_species <- function(path = "results/mlmodels/perc_change_ffmi_v4_group/all") {
-  
+
   fi <- get_feature_importance(path, "perc_change_ffmi_v4_group_all", "class")
   forest <- read.csv(file.path(path, "forest_results_top15.csv"))
-  
+
   tibble(species = top_features(fi, n = 15)$FeatName) |>
     mutate(species_label = species_label(species)) |>
     left_join(
-      forest |> 
-        select(species, estimate, p_fdr), 
+      forest |>
+        select(species, estimate, p_fdr),
       by = "species"
     ) |>
     mutate(estimate_direction = if_else(estimate > 1, "Higher in high loss", "Higher in modest/low loss"))
 }
 
-# Short, readable species label from a "Genus_species_SGB####[_group]" name, e.g. "Faecalibacterium prausnitzii". 
-# The SGB id is meaningless to most readers so it's dropped; 
-# make.unique() disambiguates the rare case where several SGBs share the same genus_species name, 
-# instead of silently collapsing distinct features onto the same plot row/facet.
+# Top metabolites from dichotomous ML model (high vs. modest/low %FFMI loss at 1y)
+# No effect direction yet: metabolite ML-processing has not been run
+get_top_metabolites <- function(path = "results/mlmodels_metab/perc_change_ffmi_v4_group/all", n = 15) {
+
+  fi <- get_feature_importance(path, "perc_change_ffmi_v4_group_all", "class")
+
+  tibble(metabolite = top_features(fi, n = n)$FeatName) |>
+    left_join(
+      fi |>
+        select(FeatName, RelFeatImp),
+      by = c("metabolite" = "FeatName")
+    )
+}
+
+#### Feature labels ####
+# Short, readable species label from a "Genus_species_SGB####[_group]" name.
+# make.unique() disambiguates species with identical genus/species labels.
 species_label <- function(x) {
   base <- str_remove(x, "_SGB\\d+(_group)?$") |> str_replace_all("_", " ")
   make.unique(base, sep = " ")
 }
 
-# Shorten long sphingolipid names that list several isomers, e.g.
-# "... (d18:1/16:0, d18:2/16:1)" -> "... (d18:1/16:0, ...)"
+# Shorten long sphingolipid names listing multiple isomers
 metabolite_label <- function(x) {
   str_replace(
     x,
