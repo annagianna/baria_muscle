@@ -372,6 +372,8 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-doparallel-1.0.17-r45hc72bb7e_4.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-dtplyr-1.3.3-r45hc72bb7e_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-emdbook-1.3.14-r45hc72bb7e_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/r-emmeans-2.0.4-r45hc72bb7e_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/r-estimability-2.0.0-r45hc72bb7e_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-evaluate-1.0.5-r45hc72bb7e_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-fontawesome-0.5.3-r45hc72bb7e_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-forcats-1.0.1-r45hc72bb7e_0.conda
@@ -593,6 +595,8 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-doparallel-1.0.17-r45hc72bb7e_4.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-dtplyr-1.3.3-r45hc72bb7e_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-emdbook-1.3.14-r45hc72bb7e_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/r-emmeans-2.0.4-r45hc72bb7e_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/r-estimability-2.0.0-r45hc72bb7e_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-evaluate-1.0.5-r45hc72bb7e_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-fontawesome-0.5.3-r45hc72bb7e_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-forcats-1.0.1-r45hc72bb7e_0.conda
@@ -6987,6 +6991,30 @@ packages:
   run_exports: {}
   size: 225320
   timestamp: 1758276949599
+- conda: https://conda.anaconda.org/conda-forge/noarch/r-emmeans-2.0.4-r45hc72bb7e_0.conda
+  sha256: 44c424453d0cac2cfe8d3319423a448f283781845c0a8ac528b96fe839aa1cdc
+  md5: 6c29bfd059eb274156261b50534370d8
+  depends:
+  - r-base >=4.5,<4.6.0a0
+  - r-estimability >=1.4.1
+  - r-mvtnorm
+  - r-numderiv
+  - r-rlang
+  license: GPL-2.0-or-later
+  license_family: GPL3
+  run_exports: {}
+  size: 2365936
+  timestamp: 1784114972335
+- conda: https://conda.anaconda.org/conda-forge/noarch/r-estimability-2.0.0-r45hc72bb7e_0.conda
+  sha256: cfe327b2ce9db3e52aff8e5a800b1501ee9f60ebf0efb7405b2e5612c6952eb9
+  md5: 209df2bbb4818a6387047471d9c8a9b8
+  depends:
+  - r-base >=4.5,<4.6.0a0
+  license: GPL-3.0-or-later
+  license_family: GPL
+  run_exports: {}
+  size: 343868
+  timestamp: 1782466843154
 - conda: https://conda.anaconda.org/conda-forge/noarch/r-evaluate-1.0.5-r45hc72bb7e_1.conda
   sha256: d3accfeab1416151515c37e5edc94b18868998db4936183459f8040117d5c83c
   md5: 4e0c71ab78d7292372a89d4daecb49af
