@@ -174,3 +174,19 @@ metabolite_label <- function(x) {
     "\\1, ...\\2"
   )
 }
+
+#### Gene annotation ####
+# Human gene annotation from org.Hs.eg.db
+# Called with :: so AnnotationDbi::select() -> does not mask dplyr::select().
+get_gene_annotations <- function() {
+  orgdb <- org.Hs.eg.db::org.Hs.eg.db
+  AnnotationDbi::select(
+    orgdb,
+    keys = AnnotationDbi::keys(orgdb, keytype = "ENSEMBL"),
+    keytype = "ENSEMBL",
+    columns = c("SYMBOL", "GENENAME", "GENETYPE")
+  ) |>
+    dplyr::as_tibble() |>
+    dplyr::rename(ensgene = ENSEMBL, symbol = SYMBOL, description = GENENAME, biotype = GENETYPE) |>
+    dplyr::distinct()
+}
