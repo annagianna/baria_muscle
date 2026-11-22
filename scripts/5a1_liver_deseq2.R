@@ -7,7 +7,6 @@ library(phyloseq)
 library(ComplexHeatmap)
 library(circlize)
 library(MetBrewer)
-library(annotables)
 library(ggpubr)
 library(broom)
 library(DESeq2)
@@ -96,7 +95,7 @@ gene_ids <- tibble(
   mutate(ensgene = str_remove(ensembl_gene_id, "\\.\\d+$"))
 
 # Gene annotations
-gene_annotations <- grch38 |>
+gene_annotations <- get_gene_annotations() |>
   filter(ensgene %in% gene_ids$ensgene) |>
   dplyr::select(ensgene, symbol, biotype, description) |>
   distinct()
@@ -107,7 +106,6 @@ gene_label <- function(symbols, type = c("both", "symbol", "description"), max_c
   type <- match.arg(type)
 
   desc <- gene_annotations$description[match(symbols, gene_annotations$symbol)] |>
-    str_remove("\\s*\\[Source.*\\]$") |> # grch38 descriptions can carry a "[Source:...]" suffix
     str_trunc(max_char) |>
     coalesce(symbols) # fall back to symbol if no description
 
@@ -195,8 +193,8 @@ de_sig |>
 
 # MA plot
 ma_df <- bind_rows(
-  plotMA(res_grp, returnData = TRUE) |> mutate(type = "Before shrinkage (MLE)"),
-  plotMA(res_grp_shr, returnData = TRUE) |> mutate(type = "After shrinkage (apeglm)")
+  DESeq2::plotMA(res_grp, returnData = TRUE) |> mutate(type = "Before shrinkage (MLE)"),
+  DESeq2::plotMA(res_grp_shr, returnData = TRUE) |> mutate(type = "After shrinkage (apeglm)")
 ) |>
   mutate(type = factor(type, levels = c("Before shrinkage (MLE)", "After shrinkage (apeglm)")))
 
