@@ -5,10 +5,12 @@
 library(tidyverse)
 library(DESeq2)
 library(MetBrewer)
-library(annotables)
 library(readxl)
 library(limma)
 source("scripts/assets/functions.R")
+
+# Gene annotation (org.Hs.eg.db; see get_gene_annotations() in functions.R)
+hs_genes <- get_gene_annotations()
 
 # Bioconductor packages (DESeq2/S4Vectors/matrixStats) mask some dplyr verbs; always use dplyr's
 select <- dplyr::select
@@ -103,7 +105,7 @@ stopifnot(nrow(duplicated_ids) == 0)
 
 ## QC check vAdipose ##
 # Check expression of enterocyte markers per vAdipose sample (log2CPM)
-intestinal_markers <- grch38 |>
+intestinal_markers <- hs_genes |>
   filter(symbol %in% c("VIL1", "FABP2", "APOA4", "CDHR5", "LGALS4", "MGAM")) |>
   distinct(symbol, ensgene)
 
@@ -180,7 +182,7 @@ min_count <- 10 # >= 10 normalised reads per gene
 min_prop <- 0.5 # in >= 50% of samples
 
 # Remove unnamed genes
-named_genes <- grch38 |> 
+named_genes <- hs_genes |> 
   filter(!is.na(symbol), str_trim(symbol) != "") |> 
   pull(ensgene) |> 
   unique()
@@ -314,7 +316,7 @@ qc_all$Jejunum |>
   print(n = 8)
 
 # 2. Epithelial vs smooth-muscle (and liver/adipose) marker expression per sample (log2CPM)
-check_markers <- grch38 |>
+check_markers <- hs_genes |>
   filter(symbol %in% c(
     "VIL1", "EPCAM", "APOA1", # epithelial
     "DES", "MYH11", # (smooth) muscle
