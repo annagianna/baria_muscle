@@ -8,7 +8,7 @@ version = "0.1.0"
 [tasks]
 datacleaning-clinical = "Rscript scripts/0a_datacleaning_clinical.R"
 datacleaning-omics = "Rscript scripts/0b_datacleaning_omics.R"
-datacleaning-rnaseq = "Rscript scripts/0c_datacleaning_rnaseq.R"
+datacleaning-rnaseq = { cmd = "Rscript scripts/0c_datacleaning_rnaseq.R", depends-on = ["install-bioc"] }
 install-bioc = "Rscript scripts/assets/install_bioc_packages.R"
 table1 = "Rscript scripts/1a_tableone_ffmi_1y.R"
 alphadiv = "Rscript scripts/2a_mb_alphadiversity_ffmi_1y.R"
@@ -20,7 +20,13 @@ ml-process = "Rscript scripts/3c_ml_process.R"
 humann = "Rscript scripts/4a_humann_pathways.R"
 mb-metabolome = "Rscript scripts/4b_mb_metabolome_correlations.R"
 mb-diet = "Rscript scripts/4c_mb_diet_correlations.R"
-liver-rnaseq = "Rscript scripts/5a_liver_rnaseq.R"
+datacleaning-liver-subset = "Rscript scripts/0d_datacleaning_liver_subset.R"
+table-liverhistology = "Rscript scripts/1b_liverhistology_table.R"
+liver-de = { cmd = "Rscript scripts/5a1_liver_deseq2.R", depends-on = ["install-bioc"] }
+liver-gsea = { cmd = "Rscript scripts/5a2_liver_gsea.R", depends-on = ["install-bioc"] }
+vadipose-de = { cmd = "Rscript scripts/5b_vadipose_deseq2.R", depends-on = ["install-bioc"] }
+scadipose-de = { cmd = "Rscript scripts/5c_scadipose_deseq2.R", depends-on = ["install-bioc"] }
+jejunum-de = { cmd = "Rscript scripts/5d_jejunum_deseq2.R", depends-on = ["install-bioc"] }
 
 [tasks.datacleaning]
 depends-on = ["datacleaning-clinical", "datacleaning-omics", "datacleaning-rnaseq"]

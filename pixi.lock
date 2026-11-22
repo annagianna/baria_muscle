@@ -50,9 +50,11 @@ environments:
       - conda: https://conda.anaconda.org/bioconda/linux-64/perl-list-moreutils-xs-0.430-pl5321h7b50bb2_5.tar.bz2
       - conda: https://conda.anaconda.org/bioconda/linux-64/samtools-1.24-h9dcdb79_1.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/seqtk-1.5-h577a1d6_1.tar.bz2
+      - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-annotationdbi-1.72.0-r45hdfd78af_0.conda
       - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-biocgenerics-0.56.0-r45hdfd78af_2.conda
       - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-biomformat-1.38.0-r45hdfd78af_0.conda
       - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-complexheatmap-2.26.1-r45hdfd78af_0.conda
+      - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-keggrest-1.50.0-r45hdfd78af_0.conda
       - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-matrixgenerics-1.22.0-r45hdfd78af_1.conda
       - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-phyloseq-1.54.0-r45hdfd78af_0.conda
       - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-seqinfo-1.0.0-r45hdfd78af_0.conda
@@ -259,6 +261,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-rjson-0.2.23-r45h3697838_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-rlang-1.3.0-r45h3697838_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-rpart-4.1.27-r45h54b55ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/r-rsqlite-3.53.3-r45h0cf2dab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-s7-0.2.2-r45h54b55ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-sass-0.4.10-r45h3697838_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-sp-2.2_3-r45h54b55ab_0.conda
@@ -346,6 +349,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-bbmle-1.0.26-r45hacb3a79_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-bh-1.90.0_1-r45hc72bb7e_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-bigd-0.3.1-r45hc72bb7e_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/r-biocmanager-1.30.27-r45hc72bb7e_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-blob-1.3.0-r45hc72bb7e_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-boot-1.3_32-r45hc72bb7e_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-broom-1.0.13-r45hc72bb7e_0.conda
@@ -486,9 +490,11 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/tzdata-2026c-h151e31d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/xgboost-3.4.1-cpu_pyhb39878e_0.conda
       osx-arm64:
+      - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-annotationdbi-1.72.0-r45hdfd78af_0.conda
       - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-biocgenerics-0.56.0-r45hdfd78af_2.conda
       - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-biomformat-1.38.0-r45hdfd78af_0.conda
       - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-complexheatmap-2.26.1-r45hdfd78af_0.conda
+      - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-keggrest-1.50.0-r45hdfd78af_0.conda
       - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-matrixgenerics-1.22.0-r45hdfd78af_1.conda
       - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-phyloseq-1.54.0-r45hdfd78af_0.conda
       - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-seqinfo-1.0.0-r45hdfd78af_0.conda
@@ -569,6 +575,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-bbmle-1.0.26-r45hacb3a79_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-bh-1.90.0_1-r45hc72bb7e_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-bigd-0.3.1-r45hc72bb7e_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/r-biocmanager-1.30.27-r45hc72bb7e_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-blob-1.3.0-r45hc72bb7e_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-boot-1.3_32-r45hc72bb7e_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-broom-1.0.13-r45hc72bb7e_0.conda
@@ -916,6 +923,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/r-rjson-0.2.23-r45hc1cd577_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/r-rlang-1.3.0-r45h1380947_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/r-rpart-4.1.27-r45hbe92478_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/r-rsqlite-3.53.3-r45h44e2d15_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/r-s7-0.2.2-r45hbe92478_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/r-sass-0.4.10-r45hc1cd577_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/r-sp-2.2_3-r45h4b407c4_0.conda
@@ -1613,6 +1621,24 @@ packages:
     - seqtk >=1.5,<2.0a0
   size: 141778
   timestamp: 1752093609066
+- conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-annotationdbi-1.72.0-r45hdfd78af_0.conda
+  sha256: 73a1ea50dbf2c6a0724212577989912bb9a3fa180e33387a8a73da6174ea7e2f
+  md5: afb673e14ff4d43d31603e2ef8574ca0
+  depends:
+  - bioconductor-biobase >=2.70.0,<2.71.0
+  - bioconductor-biocgenerics >=0.56.0,<0.57.0
+  - bioconductor-iranges >=2.44.0,<2.45.0
+  - bioconductor-keggrest >=1.50.0,<1.51.0
+  - bioconductor-s4vectors >=0.48.0,<0.49.0
+  - r-base >=4.5,<4.6.0a0
+  - r-dbi
+  - r-rsqlite
+  license: Artistic-2.0
+  run_exports:
+    weak:
+    - bioconductor-annotationdbi >=1.72.0,<1.73.0a0
+  size: 4865841
+  timestamp: 1772302587458
 - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-biocgenerics-0.56.0-r45hdfd78af_2.conda
   sha256: 97221eda3007381c0a6498608baaebdcec6047f7f26b121c19149fd56aabf032
   md5: 27556377d159490ea87696727ae41808
@@ -1664,6 +1690,20 @@ packages:
     - bioconductor-complexheatmap >=2.26.1,<2.27.0a0
   size: 3054712
   timestamp: 1770627589799
+- conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-keggrest-1.50.0-r45hdfd78af_0.conda
+  sha256: 7f7aba428c1f3c8fcf0e3eb038ee3aba35f8a028e2819f30b009a1306afff886
+  md5: c96e2ad4f63389243760a93d1cc5ea8a
+  depends:
+  - bioconductor-biostrings >=2.78.0,<2.79.0
+  - r-base >=4.5,<4.6.0a0
+  - r-httr
+  - r-png
+  license: Artistic-2.0
+  run_exports:
+    weak:
+    - bioconductor-keggrest >=1.50.0,<1.51.0a0
+  size: 396894
+  timestamp: 1772152125150
 - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-matrixgenerics-1.22.0-r45hdfd78af_1.conda
   sha256: 169809ca754b2c07f7356f1fc4f365b7d5154fd66229543584f69008fa347c5a
   md5: cdf0406fc3caa814ff7b7876a42973a5
@@ -5396,6 +5436,27 @@ packages:
   run_exports: {}
   size: 704022
   timestamp: 1774600677333
+- conda: https://conda.anaconda.org/conda-forge/linux-64/r-rsqlite-3.53.3-r45h0cf2dab_0.conda
+  sha256: 39d5ea25637dadc9fa6299f5cbe37ea024c7ac1c9300a7a2a43463eb629a4ab7
+  md5: 082c1c2116662dad2d76de8c3bfcfca8
+  depends:
+  - __glibc >=2.17,<3.0.a0
+  - libcurl >=8.21.0,<9.0a0
+  - libgcc >=14
+  - libstdcxx >=14
+  - r-base >=4.5,<4.6.0a0
+  - r-bit64
+  - r-blob >=1.2.0
+  - r-cpp11 >=0.4.0
+  - r-dbi >=1.2.0
+  - r-memoise
+  - r-pkgconfig
+  - r-rlang
+  license: LGPL-2.1-or-later
+  license_family: LGPL
+  run_exports: {}
+  size: 1359185
+  timestamp: 1782899877611
 - conda: https://conda.anaconda.org/conda-forge/linux-64/r-s7-0.2.2-r45h54b55ab_0.conda
   sha256: fae29c4af16617a17fea40c5e484e4350a6fe5d9fad40266f95cf3cb13e7019b
   md5: 598ca5290f9be9b22804436295471201
@@ -6623,6 +6684,16 @@ packages:
   run_exports: {}
   size: 1174623
   timestamp: 1757570538369
+- conda: https://conda.anaconda.org/conda-forge/noarch/r-biocmanager-1.30.27-r45hc72bb7e_0.conda
+  sha256: 177f262fda25552b8ce3e7685220deefba1625314575a892cd4abca06ddf06a4
+  md5: f1b6b9a4e77b21df8a6949102db4f468
+  depends:
+  - r-base >=4.5,<4.6.0a0
+  license: Artistic-2.0
+  license_family: OTHER
+  run_exports: {}
+  size: 644936
+  timestamp: 1763112090227
 - conda: https://conda.anaconda.org/conda-forge/noarch/r-blob-1.3.0-r45hc72bb7e_0.conda
   sha256: c939f23050463f3f62d08eaa5bdcd567799ed8f78d5270e50884cfe5ea35048d
   md5: a5401d5f7b44aa4b805abc756ddb403a
@@ -11301,6 +11372,26 @@ packages:
   license_family: GPL3
   size: 699296
   timestamp: 1774601343653
+- conda: https://conda.anaconda.org/conda-forge/osx-arm64/r-rsqlite-3.53.3-r45h44e2d15_0.conda
+  sha256: eb079438ab18c099460e3ed6ce81f9edba9a50a5003394141960806f041822a9
+  md5: e673bc712d2a839114f5959228c502ac
+  depends:
+  - __osx >=11.0
+  - libcurl >=8.21.0,<9.0a0
+  - libcxx >=19
+  - r-base >=4.5,<4.6.0a0
+  - r-bit64
+  - r-blob >=1.2.0
+  - r-cpp11 >=0.4.0
+  - r-dbi >=1.2.0
+  - r-memoise
+  - r-pkgconfig
+  - r-rlang
+  license: LGPL-2.1-or-later
+  license_family: LGPL
+  run_exports: {}
+  size: 1265005
+  timestamp: 1782899906284
 - conda: https://conda.anaconda.org/conda-forge/osx-arm64/r-s7-0.2.2-r45hbe92478_0.conda
   sha256: 3b8add93f204284100c4aa14a30aa0d7d71d948105538e30133d8fbbdbb471cc
   md5: 5c7bd2852562989d6d986ff71dc7f6ff
