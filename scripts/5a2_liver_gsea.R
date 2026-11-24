@@ -6,7 +6,6 @@
 library(tidyverse)
 library(fgsea)
 library(msigdbr)
-library(annotables)
 library(phyloseq)
 library(MetBrewer)
 source("scripts/assets/functions.R")
@@ -98,7 +97,7 @@ mito_symbols <- setNames(
 )
 
 # Map gene symbols to Ensembl IDs
-symbol_map <- annotables::grch38 |>
+symbol_map <- get_gene_annotations() |>
   select(symbol, ensgene) |>
   filter(!is.na(symbol), symbol != "") |>
   distinct() |>
