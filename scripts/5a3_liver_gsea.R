@@ -1,67 +1,59 @@
-
-# Liver RNA-seq GSEA and ML-selected metabolite correlations
+# Liver RNA-seq GSEA - %FFMI loss groups at 1y
 # Anna Giannakogeorgou
 
 # Packages
 library(tidyverse)
 library(fgsea)
 library(msigdbr)
-library(phyloseq)
 library(MetBrewer)
+library(readxl)
 source("scripts/assets/functions.R")
-
-# Output
-table_dir <- "results/tables/RNAseq/gsea"
-graph_dir <- "results/graphs/RNAseq/gsea"
-dir.create(table_dir, recursive = TRUE, showWarnings = FALSE)
-dir.create(graph_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create("results/graphs/RNAseq/liver/gsea", recursive = TRUE, showWarnings = FALSE)
 
 # Theme
 renoir_15 <- met.brewer("Renoir", n = 15)
-gsea_cols <- c(
-  "Higher in high loss" = renoir_15[11],
-  "Higher in modest/low loss" = renoir_15[3]
-)
+renoir_cols_20 <- met.brewer("Renoir", n = 20)
+gsea_cols <- c( "Higher in high loss" = renoir_cols_20[18], "Higher in modest/low loss" = renoir_cols_20[5])
 
 # Data
-de_grp <- read_csv("results/tables/liver_de_grp_wald_stats.csv")
-liver_rnaseq_vst <- readRDS("data/processed_data/BARIA_Liver_RNAseq_vst_batchcorrected.RDS")
-metab <- readRDS("data/processed_data/BARIA_metabolon_clean.RDS")
-baria_muscle_wide <- readRDS("data/processed_data/BARIA_muscle_wide.RDS")
+de_grp <- read_csv("results/tables/liver_de_grp_all_genes.csv")
+de_grp_fmi <- read_csv("results/tables/liver_de_grp_fmi_all_genes.csv")
+wald_grp <- read_csv("results/tables/liver_de_grp_wald_stats.csv")
+wald_grp_fmi <- read_csv("results/tables/liver_de_grp_fmi_wald_stats.csv")
 mito_file <- "data/raw_data/MitoCarta/Human.MitoPathways3.0.gmx"
+mitocarta_file <- "data/raw_data/MitoCarta/Human.MitoCarta3.0.xls"
+
+# Same genes in both DE models
+stopifnot(setequal(wald_grp$ensembl_gene_id, wald_grp_fmi$ensembl_gene_id))
 
 #### Ranked gene statistics ####
-# Positive = higher expression in high FFMI loss
-# Negative = higher expression in modest/low FFMI loss
-
+# pos = higher expression in high %FFMI loss at 1y; neg = higher expression in modest/low loss
 make_ranks <- function(df) {
+
   df <- df |>
     mutate(ensgene = str_remove(ensembl_gene_id, "\\.\\d+$")) |>
-    filter(!is.na(stat), is.finite(stat)) |>
+    filter(is.finite(stat)) |>
     arrange(desc(abs(stat))) |>
     distinct(ensgene, .keep_all = TRUE)
 
   ranks <- df$stat
   names(ranks) <- df$ensgene
+
   sort(ranks, decreasing = TRUE)
 }
 
-ranks_grp <- make_ranks(de_grp)
+ranks_grp <- make_ranks(wald_grp)
+ranks_grp_fmi <- make_ranks(wald_grp_fmi)
+
 stopifnot(!anyDuplicated(names(ranks_grp)), !anyNA(ranks_grp))
+stopifnot(!anyDuplicated(names(ranks_grp_fmi)), !anyNA(ranks_grp_fmi))
 
 #### Hallmark and Reactome gene sets ####
-
-hallmark <- msigdbr(
-  db_species = "HS", species = "Homo sapiens",
-  collection = "H"
-)
-
-reactome <- msigdbr(
-  db_species = "HS", species = "Homo sapiens",
-  collection = "C2", subcollection = "CP:REACTOME"
-)
+hallmark <- msigdbr(db_species = "HS", species = "Homo sapiens", collection = "H")
+reactome <- msigdbr(db_species = "HS", species = "Homo sapiens", collection = "C2", subcollection = "CP:REACTOME" )
 
 make_gene_sets <- function(df) {
+
   df <- df |>
     filter(!is.na(ensembl_gene), ensembl_gene != "") |>
     distinct(gs_name, ensembl_gene)
@@ -72,22 +64,8 @@ make_gene_sets <- function(df) {
 hallmark_sets <- make_gene_sets(hallmark)
 reactome_sets <- make_gene_sets(reactome)
 
-#### MitoCarta 3.0 gene sets ####
-
-dir.create(dirname(mito_file), recursive = TRUE, showWarnings = FALSE)
-
-if (!file.exists(mito_file)) {
-  download.file(
-    "https://personal.broadinstitute.org/scalvo/MitoCarta_Download/Human.MitoPathways3.0.gmx",
-    mito_file, mode = "wb"
-  )
-}
-
-mito_gmx <- read.delim(
-  mito_file, header = FALSE, fill = TRUE,
-  check.names = FALSE, quote = ""
-)
-
+#### MitoPathways3.0 gene sets ####
+mito_gmx <- read.delim(mito_file, header = FALSE, fill = TRUE, check.names = FALSE, quote = "")
 mito_symbols <- setNames(
   lapply(seq_len(ncol(mito_gmx)), function(i) {
     genes <- as.character(mito_gmx[-c(1, 2), i])
@@ -107,24 +85,32 @@ symbol_map <- get_gene_annotations() |>
 
 mito_sets <- lapply(mito_symbols, function(genes) {
   ids <- symbol_map$ensgene[match(genes, symbol_map$symbol)]
-  unique(ids[!is.na(ids) & ids %in% names(ranks_grp)])
+  unique(ids[!is.na(ids)])
 })
 
+# Combine gene sets
 gene_sets <- list(
   Hallmark = hallmark_sets,
   Reactome = reactome_sets,
   MitoCarta = mito_sets
 )
 
-#### Preranked GSEA ####
-# Main model only; BH-FDR within each collection
+# All available pathways
+all_pathways <- imap_dfr(
+  gene_sets,
+  ~ tibble(collection = .y, pathway = names(.x))
+) |>
+  arrange(collection, pathway)
 
-run_gsea <- function(sets, collection) {
+#### Preranked GSEA ####
+# BH-FDR within each collection, SEPARATELY for each model
+run_gsea <- function(sets, collection, ranks) {
+
   set.seed(13)
 
   fgsea::fgseaMultilevel(
     pathways = sets,
-    stats = ranks_grp,
+    stats = ranks,
     minSize = 10,
     maxSize = 500,
     eps = 0,
@@ -133,293 +119,434 @@ run_gsea <- function(sets, collection) {
     as_tibble() |>
     mutate(
       collection = collection,
-      direction = if_else(NES > 0, "Up", "Down"),
+      direction = if_else(
+        NES > 0,
+        "Higher in high loss",
+        "Higher in modest/low loss"
+      ),
       .before = 1
     ) |>
     arrange(pval)
 }
 
-gsea_results <- imap_dfr(gene_sets, ~ run_gsea(.x, .y))
+#### Hallmark GSEA ####
+# Model 1: sex + age + batch + %TWL
+gsea_hallmark <- run_gsea(hallmark_sets, "Hallmark", ranks_grp)
 
-# Save complete GSEA results
-gsea_results |>
-  mutate(leadingEdge = map_chr(leadingEdge, ~ paste(.x, collapse = ";"))) |>
-  write_csv(file.path(table_dir, "liver_gsea_main_all_collections.csv"))
+# Model 2: adj. baseline FMI
+gsea_hallmark_fmi <- run_gsea(hallmark_sets, "Hallmark", ranks_grp_fmi)
 
-# Significant pathways
-selected_pathways <- gsea_results |>
-  filter(padj < 0.05) |>
-  select(collection, pathway, size, NES, padj) |>
-  arrange(collection, padj)
+#### Reactome GSEA ####
+gsea_reactome <- run_gsea(reactome_sets, "Reactome", ranks_grp)
+gsea_reactome_fmi <- run_gsea(reactome_sets, "Reactome", ranks_grp_fmi)
 
-stopifnot(nrow(selected_pathways) > 0)
+#### MitoPathways GSEA ####
+gsea_mito <- run_gsea(mito_sets, "MitoCarta", ranks_grp)
+gsea_mito_fmi <- run_gsea(mito_sets, "MitoCarta", ranks_grp_fmi)
 
-write_csv(
-  selected_pathways,
-  file.path(table_dir, "liver_gsea_main_significant_pathways.csv")
-)
+#### Combine GSEA results ####
+gsea_grp <- bind_rows(gsea_hallmark, gsea_reactome, gsea_mito)
+gsea_grp_fmi <- bind_rows(gsea_hallmark_fmi, gsea_reactome_fmi, gsea_mito_fmi)
 
-#### Plot: GSEA enrichment by collection ####
-# All significant Hallmark and MitoCarta pathways
-# Top 10 per enrichment direction for Reactome
+# Significant pathways per model
+gsea_grp_sig <- gsea_grp |>
+  filter(padj < 0.05)
+gsea_grp_fmi_sig <- gsea_grp_fmi |>
+  filter(padj < 0.05)
 
-gsea_plot_df <- selected_pathways |>
-  mutate(
-    direction = if_else(
-      NES > 0, "Higher in high loss", "Higher in modest/low loss"
-    ),
-    pathway_label = pathway |>
-      str_remove("^HALLMARK_|^REACTOME_") |>
-      str_replace_all("_", " ") |>
-      str_to_sentence()
-  ) |>
-  group_by(collection, direction) |>
-  arrange(padj, .by_group = TRUE) |>
-  filter(collection != "Reactome" | row_number() <= 10) |>
-  ungroup()
+#### Models 1 & 2 (FMI-adj.) comparison ####
+compare_gsea <- function(gsea_main, gsea_fmi) {
 
-for (coll in unique(gsea_plot_df$collection)) {
-
-  plot_df <- gsea_plot_df |>
-    filter(collection == coll) |>
-    mutate(pathway_label = fct_reorder(pathway_label, NES))
-
-  p <- ggplot(plot_df, aes(x = NES, y = pathway_label, fill = direction)) +
-    geom_col(width = 0.7) +
-    geom_vline(xintercept = 0, colour = "grey60", linewidth = 0.4) +
-    scale_fill_manual(values = gsea_cols, name = NULL) +
-    labs(
-      title = paste("Hepatic", coll, "pathway enrichment"),
-      x = "Normalized enrichment score (NES)",
-      y = NULL
-    ) +
-    theme_minimal_custom() +
-    theme(
-      plot.title = element_text(face = "bold"),
-      axis.text.y = element_text(size = 9, colour = "black"),
-      legend.position = "bottom",
-      panel.grid.major.y = element_blank()
-    )
-
-  ggsave(
-    file.path(graph_dir, paste0("liver_", tolower(coll), "_gsea_enrichment.pdf")),
-    p,
-    width = 11,
-    height = max(5, 0.32 * nrow(plot_df) + 2)
-  )
-}
-
-#### Participant-level hepatic pathway scores ####
-# Mean z-standardized expression across genes within each pathway
-
-expr_ids <- names(liver_rnaseq_vst) |>
-  str_remove("\\.\\d+$")
-
-pathway_scores <- pmap_dfr(
-  selected_pathways |> select(collection, pathway),
-  function(collection, pathway) {
-
-    genes <- names(liver_rnaseq_vst)[
-      expr_ids %in% gene_sets[[collection]][[pathway]]
-    ]
-
-    expr <- as.matrix(liver_rnaseq_vst[, genes, drop = FALSE])
-    expr <- expr[, apply(expr, 2, sd, na.rm = TRUE) > 0, drop = FALSE]
-
-    if (ncol(expr) == 0) stop("No expressed genes for pathway: ", pathway)
-
-    tibble(
-      id = as.numeric(as.character(liver_rnaseq_vst$id)),
-      collection = collection,
-      pathway = pathway,
-      n_genes = ncol(expr),
-      score = rowMeans(scale(expr), na.rm = TRUE)
-    )
-  }
-)
-
-#### Baseline top-15 ML metabolites ####
-
-top15_metabolites <- get_top_metabolites()$metabolite
-
-metab_mat <- as(otu_table(metab), "matrix")
-if (taxa_are_rows(metab)) metab_mat <- t(metab_mat)
-
-stopifnot(all(top15_metabolites %in% colnames(metab_mat)))
-
-metab_df <- as.data.frame(metab_mat[, top15_metabolites, drop = FALSE]) |>
-  rownames_to_column("sample") |>
-  mutate(id = sample |> str_remove("^BARIA_") |> str_remove("_v0$") |> as.numeric()) |>
-  select(-sample)
-
-stopifnot(!anyDuplicated(metab_df$id))
-
-#### Match liver RNA-seq and metabolomics ####
-
-pathway_metab <- pathway_scores |>
-  inner_join(metab_df, by = "id") |>
-  semi_join(
-    baria_muscle_wide |>
-      filter(!is.na(perc_change_ffmi_v4_group)) |>
-      mutate(id = as.numeric(as.character(id))) |>
-      distinct(id),
-    by = "id"
-  )
-
-#### Pathway x ML metabolite correlations ####
-# BH-FDR across all Hallmark, Reactome and MitoCarta pairs
-
-cor_pathway_metab <- pathway_metab |>
-  group_by(collection, pathway) |>
-  group_modify(~ map_dfr(top15_metabolites, function(m) {
-
-    valid <- complete.cases(.x$score, .x[[m]])
-
-    if (sum(valid) < 3 || n_distinct(.x$score[valid]) < 2 ||
-        n_distinct(.x[[m]][valid]) < 2) {
-      return(tibble(
-        metabolite = m, n = sum(valid),
-        rho = NA_real_, p.value = NA_real_
-      ))
-    }
-
-    test <- cor.test(
-      .x$score[valid], .x[[m]][valid],
-      method = "spearman", exact = FALSE
-    )
-
-    tibble(
-      metabolite = m,
-      n = sum(valid),
-      rho = unname(test$estimate),
-      p.value = test$p.value
-    )
-  })) |>
-  ungroup() |>
-  mutate(p_fdr = p.adjust(p.value, method = "BH")) |>
-  arrange(p_fdr)
-
-sig_pathway_metab <- cor_pathway_metab |> filter(p_fdr < 0.05)
-
-write_csv(
-  cor_pathway_metab,
-  file.path(table_dir, "liver_gsea_ml_metabolite_correlations.csv")
-)
-
-#### Plot: significant pathway x ML metabolite correlations ####
-# Cleveland dot plots; colours identify metabolites
-
-metab_plot_colors <- setNames(
-  renoir_15[seq_along(top15_metabolites)],
-  metabolite_label(top15_metabolites)
-)
-
-for (coll in c("Hallmark", "MitoCarta", "Reactome")) {
-
-  plot_df <- sig_pathway_metab |>
-    filter(collection == coll) |>
+  gsea_main |>
+    select(collection, pathway, size, NES, pval, padj, leadingEdge) |>
+    full_join(
+      gsea_fmi |>
+        select(
+          collection, pathway,
+          size_fmi = size,
+          NES_fmi = NES,
+          pval_fmi = pval,
+          padj_fmi = padj,
+          leadingEdge_fmi = leadingEdge
+        ),
+      by = c("collection", "pathway")
+    ) |>
     mutate(
-      pathway_label = pathway |>
-        str_remove("^HALLMARK_|^REACTOME_") |>
-        str_replace_all("_", " ") |>
-        str_to_sentence(),
-      metabolite_name = metabolite_label(metabolite)
-    )
-
-  if (nrow(plot_df) == 0) next
-
-  if (coll == "Reactome") {
-
-    # Divide pathways into two similarly sized panels
-    pathway_panels <- plot_df |>
-      group_by(pathway_label) |>
-      summarise(mean_rho = mean(rho), .groups = "drop") |>
-      arrange(mean_rho) |>
-      mutate(
-        panel = if_else(row_number() <= ceiling(n() / 2),
-                        "Panel 1", "Panel 2"),
-        plot_label = paste0(pathway_label, "___", panel)
+      same_direction = sign(NES) == sign(NES_fmi),
+      sig_main = padj < 0.05,
+      sig_fmi = padj_fmi < 0.05,
+      significance = case_when(
+        is.na(sig_main) | is.na(sig_fmi) ~ "Missing test result",
+        sig_main & sig_fmi ~ "Both models",
+        sig_main ~ "Main model only",
+        sig_fmi ~ "FMI-adjusted only",
+        TRUE ~ "Neither model"
       )
-
-    plot_df <- plot_df |>
-      left_join(
-        pathway_panels |> select(pathway_label, panel, plot_label),
-        by = "pathway_label"
-      ) |>
-      mutate(plot_label = factor(
-        plot_label, levels = pathway_panels$plot_label
-      ))
-
-  } else {
-    plot_df <- plot_df |>
-      mutate(plot_label = fct_reorder(pathway_label, rho))
-  }
-
-  p <- ggplot(plot_df, aes(x = rho, y = plot_label)) +
-    geom_vline(xintercept = 0, colour = "grey60", linewidth = 0.4) +
-    geom_point(aes(colour = metabolite_name), size = 3) +
-    scale_colour_manual(values = metab_plot_colors, name = "Metabolite") +
-    labs(
-      title = paste("Hepatic", coll, "pathways x ML metabolites"),
-      x = "Spearman correlation coefficient (rho)",
-      y = NULL
-    ) +
-    theme_minimal_custom() +
-    theme(
-      plot.title = element_text(face = "bold"),
-      axis.text.y = element_text(size = 9, colour = "black"),
-      legend.position = "bottom",
-      panel.grid.major.y = element_blank()
-    )
-
-  if (coll == "Reactome") {
-    p <- p +
-      facet_wrap(~panel, ncol = 2, scales = "free_y") +
-      scale_y_discrete(
-        labels = function(x) str_wrap(
-          str_remove(x, "___Panel [12]$"), width = 30
-        )
-      ) +
-      theme(strip.text = element_blank())
-  }
-
-  ggsave(
-    file.path(graph_dir, paste0("liver_", tolower(coll), "_ml_metabolite_dotplot.pdf")),
-    p,
-    width = if (coll == "Reactome") 15 else if (coll == "MitoCarta") 7 else 6.5,
-    height = if (coll == "Reactome") 7.5 else max(4, 0.4 * n_distinct(plot_df$pathway) + 2)
-  )
+    ) |>
+    arrange(collection, padj)
 }
 
-#### Results checks ####
+gsea_compare <- compare_gsea(gsea_grp, gsea_grp_fmi)
 
-# GSEA pathways
-gsea_results |>
+# Significant in both models with concordant direction
+gsea_robust <- gsea_compare |>
+  filter(sig_main, sig_fmi, same_direction)
+
+# Comparison per collection
+hallmark_compare <- gsea_compare |> filter(collection == "Hallmark")
+reactome_compare <- gsea_compare |> filter(collection == "Reactome")
+mito_compare <- gsea_compare |> filter(collection == "MitoCarta")
+
+# Significant and directionally concordant per collection
+hallmark_robust <- gsea_robust |> filter(collection == "Hallmark")
+reactome_robust <- gsea_robust |> filter(collection == "Reactome")
+mito_robust <- gsea_robust |> filter(collection == "MitoCarta")
+
+#### MitoCarta3.0 functional annotations ####
+mitocarta <- read_excel(mitocarta_file, sheet = "A Human MitoCarta3.0", col_types = "text", na = c("", "NA"))
+
+# MitoCarta gene inventory
+mito_genes <- mitocarta |>
+  pull(Symbol) |>
+  na.omit() |>
+  unique()
+stopifnot(length(mito_genes) == 1136)
+
+# Gene-level functional annotations
+mito_annotations <- mitocarta |>
+  transmute(
+    symbol = Symbol,
+    mito_localization = MitoCarta3.0_SubMitoLocalization,
+    mito_function = MitoCarta3.0_MitoPathways
+  ) |>
+  filter(!is.na(symbol), symbol != "") |>
+  distinct()
+stopifnot(!anyDuplicated(mito_annotations$symbol))
+
+#### MitoPathways3.0 hierarchy ####
+mito_hierarchy <- read_excel(mitocarta_file, sheet = "C MitoPathways", col_types = "text", na = c("", "NA")) |>
+  select(
+    pathway = MitoPathway,
+    hierarchy = `MitoPathways Hierarchy`,
+    genes = Genes
+  ) |>
+  filter(!is.na(pathway), !is.na(hierarchy)) |>
+  separate_wider_delim(
+    hierarchy,
+    delim = " > ",
+    names = c("level1", "level2", "level3"),
+    too_few = "align_start",
+    cols_remove = FALSE
+  ) |>
+  mutate(
+    pathway_gmx = pathway |>
+      str_remove_all(",") |>
+      str_squish() |>
+      str_replace_all(" ", "_")
+  )
+
+# All available mitochondrial pathways
+all_mito_pathways <- all_pathways |> filter(collection == "MitoCarta")
+
+# Check correspondence between official hierarchy and GMX
+stopifnot(all(all_mito_pathways$pathway %in% mito_hierarchy$pathway_gmx))
+stopifnot(!anyDuplicated(mito_hierarchy$pathway_gmx))
+
+#### Leading-edge (LE) genes ####
+# Original gene-level DESeq2 results
+gene_de <- de_grp |>
+  select(
+    ensembl_gene_id, symbol, description, baseMean, log2FC_mle, 
+    log2FC_shr, pvalue, padj_gene = padj
+  ) |>
+  left_join(
+    de_grp_fmi |>
+      select(ensembl_gene_id, log2FC_mle_fmi, pvalue_fmi, padj_gene_fmi = padj_fmi),
+    by = "ensembl_gene_id"
+  ) |>
+  mutate(
+    ensgene = str_remove(ensembl_gene_id, "\\.\\d+$"),
+    perc_diff = (2^log2FC_mle - 1) * 100,
+    perc_diff_fmi = (2^log2FC_mle_fmi - 1) * 100,
+    mitocarta_gene = symbol %in% mito_genes
+  ) |>
+  left_join(mito_annotations, by = "symbol")
+
+# Match gene-level results to original ranked statistics
+make_LE_annotation <- function(wald) {
+
+  wald |>
+    mutate(ensgene = str_remove(ensembl_gene_id, "\\.\\d+$")) |>
+    filter(is.finite(stat)) |>
+    arrange(desc(abs(stat))) |>
+    distinct(ensgene, .keep_all = TRUE) |>
+    select(ensembl_gene_id, stat) |>
+    left_join(gene_de, by = "ensembl_gene_id")
+}
+
+gene_de_grp <- make_LE_annotation(wald_grp)
+gene_de_fmi <- make_LE_annotation(wald_grp_fmi)
+
+# Extract LE genes from significant pathways
+extract_LE <- function(gsea, annotation) {
+
+  gsea |>
+    filter(padj < 0.05) |>
+    select(collection, pathway, size, NES, padj_pathway = padj, leadingEdge) |>
+    unnest_longer(leadingEdge, values_to = "ensgene") |>
+    left_join(annotation, by = "ensgene") |>
+    arrange(collection, pathway, desc(abs(stat)))
+}
+
+LE_grp <- extract_LE(gsea_grp, gene_de_grp)
+LE_grp_fmi <- extract_LE(gsea_grp_fmi, gene_de_fmi)
+
+#### LE overlap: main vs. FMI-adjusted model ####
+# Jaccard similarity
+jaccard <- function(a, b) {
+
+  if (length(union(a, b)) == 0) return(NA_real_)
+  
+  length(intersect(a, b)) / length(union(a, b))
+}
+
+LE_overlap <- gsea_robust |>
+  mutate(
+    n_LE = lengths(leadingEdge),
+    n_LE_fmi = lengths(leadingEdge_fmi),
+    shared_genes = map2(leadingEdge, leadingEdge_fmi, intersect),
+    n_shared = lengths(shared_genes),
+    jaccard = map2_dbl(leadingEdge, leadingEdge_fmi, jaccard)
+  ) |>
+  select(
+    collection, pathway,
+    NES, NES_fmi, padj, padj_fmi,
+    n_LE, n_LE_fmi, n_shared,
+    jaccard, shared_genes
+  )
+
+# Shared LE genes between models
+LE_shared <- LE_overlap |>
+  unnest_longer(shared_genes, values_to = "ensgene") |>
+  left_join(gene_de_grp, by = "ensgene") |>
+  arrange(collection, pathway, desc(abs(stat)))
+
+#### OXPHOS and lipid metabolism/FAO focus (following GSEA) ####
+# based on the official MitoPathways3.0 hierarchy following
+mito_candidates <- mito_hierarchy |>
+  filter(level1 == "OXPHOS" | level2 == "Lipid metabolism") |>
+  transmute(
+    collection = "MitoCarta",
+    pathway = pathway_gmx,
+    level1, level2, level3,
+    process = case_when(
+      level1 == "OXPHOS" ~ "OXPHOS",
+      level2 == "Lipid metabolism" ~ "Lipid metabolism"
+    )
+  ) |>
+  distinct()
+
+# Number of ranked genes represented in each pathway
+mito_pathway_sizes <- tibble(
+  pathway = names(mito_sets),
+  n_genes_main = map_int(
+    mito_sets,
+    ~ length(intersect(.x, names(ranks_grp)))
+  ),
+  n_genes_fmi = map_int(
+    mito_sets,
+    ~ length(intersect(.x, names(ranks_grp_fmi)))
+  )
+)
+
+# Eligibility and significance of candidate pathways
+mito_candidates_check <- mito_candidates |>
+  left_join(
+    mito_compare |>
+      select(collection, pathway, size, size_fmi, sig_main, sig_fmi, same_direction),
+    by = c("collection", "pathway")
+  ) |>
+  left_join(mito_pathway_sizes, by = "pathway") |>
+  mutate(
+    tested_main = !is.na(size),
+    tested_fmi = !is.na(size_fmi)
+  )
+
+# Select pathways significant in both models with concordant direction
+mito_focus <- mito_candidates |>
+  semi_join(gsea_robust, by = c("collection", "pathway"))
+
+#### GSEA and LE results: mitochondrial focus ####
+gsea_mito_focus <- gsea_robust |>
+  inner_join(mito_focus, by = c("collection", "pathway"))
+
+# Main model LE genes
+LE_mito_focus <- LE_grp |>
+  inner_join(mito_focus, by = c("collection", "pathway"))
+
+# FMI-adjusted LE genes
+LE_mito_focus_fmi <- LE_grp_fmi |>
+  inner_join(mito_focus, by = c("collection", "pathway"))
+
+# Shared LE genes between models
+LE_mito_focus_shared <- LE_shared |>
+  inner_join(mito_focus, by = c("collection", "pathway"))
+
+# LE overlap between models
+LE_mito_focus_overlap <- LE_overlap |>
+  inner_join(mito_focus, by = c("collection", "pathway"))
+
+#### CHECKS ####
+
+# MSigDB version
+unique(hallmark$db_version)
+unique(reactome$db_version)
+
+# Number of ranked genes
+length(ranks_grp)
+length(ranks_grp_fmi)
+length(intersect(names(ranks_grp), names(ranks_grp_fmi)))
+
+# Available gene sets
+all_pathways |>
+  count(collection)
+
+# Number of significant pathways per collection and model
+gsea_compare |>
+  count(collection, significance) |>
+  pivot_wider(
+    names_from = significance,
+    values_from = n,
+    values_fill = 0
+  ) |>
+  print(width = Inf)
+
+# NES concordance between models
+gsea_compare |>
   group_by(collection) |>
   summarise(
-    n_tested = n(),
-    n_significant = sum(padj < 0.05, na.rm = TRUE),
+    rho = cor(
+      NES, NES_fmi,
+      method = "spearman",
+      use = "complete.obs"
+    ),
     .groups = "drop"
-  ) |>
-  print()
+  )
 
-# Participant overlap
-pathway_metab |>
-  summarise(
-    n_participants = n_distinct(id),
-    n_pathways = n_distinct(pathway),
-    n_metabolites = length(top15_metabolites)
-  ) |>
-  print()
+#### GSEA results checks ####
 
-# Significant pathway-metabolite correlations
-cor_pathway_metab |>
-  group_by(collection) |>
+# Inspect pathway names, direction and significance
+show_gsea <- function(df) {
+
+  df |>
+    filter(sig_main | sig_fmi) |>
+    transmute(
+      pathway,
+      direction_main = case_when(
+        NES > 0 ~ "+",
+        NES < 0 ~ "-",
+        TRUE ~ NA_character_
+      ),
+      significant_main = sig_main,
+      direction_fmi = case_when(
+        NES_fmi > 0 ~ "+",
+        NES_fmi < 0 ~ "-",
+        TRUE ~ NA_character_
+      ),
+      significant_fmi = sig_fmi
+    ) |>
+    print(n = Inf, width = Inf)
+}
+
+show_gsea(hallmark_compare)
+show_gsea(reactome_compare)
+show_gsea(mito_compare)
+
+#### MitoPathways hierarchy checks ####
+
+# Unmatched GMX pathway names
+all_mito_pathways |>
+  anti_join(
+    mito_hierarchy,
+    by = c("pathway" = "pathway_gmx")
+  )
+
+# Duplicate pathway names
+mito_hierarchy |>
+  count(pathway_gmx) |>
+  filter(n > 1)
+
+# All top-level mitochondrial processes
+mito_hierarchy |>
+  distinct(level1)
+
+# OXPHOS and lipid metabolism candidates
+mito_candidates |>
+  count(process)
+
+# Candidate pathway eligibility and significance
+mito_candidates_check |>
+  select(
+    pathway, process,
+    tested_main, sig_main,
+    tested_fmi, sig_fmi
+  ) |>
+  print(n = Inf, width = Inf)
+
+# Pathways absent from one or both GSEA result tables
+mito_candidates_check |>
+  filter(!tested_main | !tested_fmi) |>
+  select(
+    pathway,
+    n_genes_main, n_genes_fmi,
+    tested_main, tested_fmi
+  ) |>
+  print(n = Inf, width = Inf)
+
+# Selected mitochondrial pathways
+mito_focus |>
+  print(n = Inf, width = Inf)
+
+# Number of selected pathways
+mito_focus |>
+  count(process)
+
+#### LE results checks ####
+
+# Annotation completeness
+sum(is.na(LE_grp$symbol))
+sum(is.na(LE_grp_fmi$symbol))
+
+sum(is.na(LE_mito_focus$symbol))
+sum(is.na(LE_mito_focus_fmi$symbol))
+
+# MitoCarta functional annotation
+LE_mito_focus |>
+  distinct(ensgene, symbol, mitocarta_gene, mito_function) |>
   summarise(
-    n_tests = n(),
-    n_significant = sum(p_fdr < 0.05, na.rm = TRUE),
-    n_pathways = n_distinct(pathway[p_fdr < 0.05 & !is.na(p_fdr)]),
-    n_metabolites = n_distinct(metabolite[p_fdr < 0.05 & !is.na(p_fdr)]),
+    n_genes = n(),
+    n_mitocarta = sum(mitocarta_gene, na.rm = TRUE),
+    n_annotated = sum(!is.na(mito_function))
+  )
+
+# Jaccard: same pathway across models
+LE_mito_focus_overlap |>
+  select(
+    pathway, process,
+    n_LE, n_LE_fmi, n_shared, jaccard
+  ) |>
+  arrange(process, desc(jaccard)) |>
+  print(n = Inf, width = Inf)
+
+# Jaccard summary per biological process
+LE_mito_focus_overlap |>
+  group_by(process) |>
+  summarise(
+    n_pathways = n(),
+    median_jaccard = median(jaccard),
+    min_jaccard = min(jaccard),
+    max_jaccard = max(jaccard),
     .groups = "drop"
-  ) |>
-  print()
+  )
+
+warnings()
