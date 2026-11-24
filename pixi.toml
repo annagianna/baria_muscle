@@ -47,7 +47,7 @@ depends-on = ["humann", "mb-metabolome", "mb-diet"]
 description = "Top-15 species correlations against HUMAnN pathways, metabolome, and diet macronutrients."
 
 [tasks.rnaseq]
-depends-on = ["liver-de", "liver-gsea", "vadipose-de", "scadipose-de", "jejunum-de"]
+depends-on = ["liver-de", "liver-mito-de", "liver-gsea", "vadipose-de", "scadipose-de", "jejunum-de"]
 description = "RNA-seq DE high vs modest/low %FFMI loss at 1y (liver, visceral and subcutaneous adipose, jejunum) and liver GSEA."
 
 [tasks.all]
