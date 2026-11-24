@@ -9,6 +9,7 @@ version = "0.1.0"
 datacleaning-clinical = "Rscript scripts/0a_datacleaning_clinical.R"
 datacleaning-omics = "Rscript scripts/0b_datacleaning_omics.R"
 datacleaning-rnaseq = { cmd = "Rscript scripts/0c_datacleaning_rnaseq.R", depends-on = ["install-bioc"] }
+download-mitocarta = "Rscript scripts/assets/download_mitocarta.R"
 install-bioc = "Rscript scripts/assets/install_bioc_packages.R"
 table1 = "Rscript scripts/1a_tableone_ffmi_1y.R"
 alphadiv = "Rscript scripts/2a_mb_alphadiversity_ffmi_1y.R"
@@ -23,7 +24,8 @@ mb-diet = "Rscript scripts/4c_mb_diet_correlations.R"
 datacleaning-liver-subset = "Rscript scripts/0d_datacleaning_liver_subset.R"
 table-liverhistology = "Rscript scripts/1b_liverhistology_table.R"
 liver-de = { cmd = "Rscript scripts/5a1_liver_deseq2.R", depends-on = ["install-bioc"] }
-liver-gsea = { cmd = "Rscript scripts/5a2_liver_gsea.R", depends-on = ["install-bioc"] }
+liver-mito-de = { cmd = "Rscript scripts/5a2_liver_mito_deseq2.R", depends-on = ["download-mitocarta"] }
+liver-gsea = { cmd = "Rscript scripts/5a3_liver_gsea.R", depends-on = ["install-bioc", "download-mitocarta"] }
 vadipose-de = { cmd = "Rscript scripts/5b_vadipose_deseq2.R", depends-on = ["install-bioc"] }
 scadipose-de = { cmd = "Rscript scripts/5c_scadipose_deseq2.R", depends-on = ["install-bioc"] }
 jejunum-de = { cmd = "Rscript scripts/5d_jejunum_deseq2.R", depends-on = ["install-bioc"] }
