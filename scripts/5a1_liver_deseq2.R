@@ -157,6 +157,7 @@ dds_grp <- dds_grp[rowMeans(counts(dds_grp, normalized = TRUE) >= 10) >= 0.5, ]
 nrow(dds_grp) # n of genes tested
 dds_grp <- DESeq(dds_grp)
 resultsNames(dds_grp)
+saveRDS(dds_grp, "data/processed_data/liver_dds_grp.rds") # Export fitted DESeq2 object for downstream GSVA analysis
 
 res_grp <- results(dds_grp, name = "ffmi_group_high_vs_modest_low", alpha = 0.05)
 res_grp_shr <- lfcShrink(dds_grp, coef = "ffmi_group_high_vs_modest_low", type = "apeglm", res = res_grp) # apeglm shrunken results; padj unchanged
