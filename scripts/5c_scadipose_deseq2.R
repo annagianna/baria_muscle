@@ -13,7 +13,7 @@ library(DESeq2)
 library(apeglm)
 library(ggrepel)
 source("scripts/assets/functions.R")
-dir.create("results/graphs/RNAseq", recursive = TRUE, showWarnings = FALSE)
+dir.create("results/graphs/RNAseq/scAdipose/", recursive = TRUE, showWarnings = FALSE)
 
 # Bioconductor packages (DESeq2/S4Vectors/matrixStats) mask some dplyr verbs; always use dplyr's
 select <- dplyr::select
@@ -186,8 +186,8 @@ de_grp <- as.data.frame(res_grp) |>
 de_sig <- de_grp |> 
   filter(padj < 0.05)
 
-dir.create("results/tables", recursive = TRUE, showWarnings = FALSE)
-write_csv(de_grp, paste0("results/tables/", prefix, "_de_grp_all_genes.csv"))
+dir.create("results/tables/RNAseq/scAdipose", recursive = TRUE, showWarnings = FALSE)
+write_csv(de_grp, paste0("results/tables/RNAseq/scAdipose/", prefix, "_de_grp_all_genes.csv"))
 
 de_sig |> 
   select(symbol, description, log2FC_mle, log2FC_shr, padj)
@@ -211,7 +211,7 @@ ma_plot_grp <- ggplot(ma_df, aes(mean, lfc, colour = isDE)) +
   facet_wrap(~ type) +
   labs(x = "Mean of normalised counts", y = "log2FC high vs modest/low loss") +
   theme_minimal_custom()
-ggsave(paste0("results/graphs/RNAseq/", prefix, "_de_grp_MA_before_after_shrinkage.pdf"), ma_plot_grp, width = 10, height = 5)
+ggsave(paste0("results/graphs/RNAseq/scAdipose/", prefix, "_de_grp_MA_before_after_shrinkage.pdf"), ma_plot_grp, width = 10, height = 5)
 
 ## Forest plot (group DE)
 if (nrow(de_sig) > 0) {
@@ -237,7 +237,7 @@ if (nrow(de_sig) > 0) {
       y = NULL
     ) +
     theme_minimal_custom()
-  ggsave(paste0("results/graphs/RNAseq/", prefix, "_forest_de_grp_plot.pdf"), forest_de_grp_plot, width = 9, height = 1.5 + 0.4 * nrow(forest_de_grp_df))
+  ggsave(paste0("results/graphs/RNAseq/scAdipose/", prefix, "_forest_de_grp_plot.pdf"), forest_de_grp_plot, width = 9, height = 1.5 + 0.4 * nrow(forest_de_grp_df))
 } else {
   message("No significant genes in the main DE: forest plot skipped")
 }
@@ -274,7 +274,7 @@ volcano_plot <- volcano_df |>
     y = "-log10(p)"
   ) +
   theme_minimal_custom()
-ggsave(paste0("results/graphs/RNAseq/", prefix, "_de_grp_volcano.pdf"), volcano_plot, width = 7, height = 6)
+ggsave(paste0("results/graphs/RNAseq/scAdipose/", prefix, "_de_grp_volcano.pdf"), volcano_plot, width = 7, height = 6)
 
 # Sensitivity model: main model additionally adj. for baseline FMI
 dds_grp_fmi <- DESeqDataSetFromMatrix(
@@ -380,7 +380,7 @@ c(targeted_listed = n_distinct(target_genes$ensembl_gene_id), tested = nrow(de_g
 de_sig_targeted <- de_grp_targeted |> 
   filter(padj_targeted < 0.05)
 nrow(de_sig_targeted)
-write_csv(de_grp_targeted, paste0("results/tables/", prefix, "_de_grp_targeted_genes.csv"))
+write_csv(de_grp_targeted, paste0("results/tables/RNAseq/scAdipose", prefix, "_de_grp_targeted_genes.csv"))
 
 # Sensitivity: targeted DE in the FMI-adjusted model (same gene set, BH within the set)
 de_grp_fmi_targeted <- de_grp_fmi |>
@@ -394,7 +394,7 @@ de_grp_fmi_targeted <- de_grp_fmi |>
   mutate(padj_targeted_fmi = p.adjust(pvalue_fmi, method = "BH")) |>
   arrange(pvalue_fmi)
 de_grp_fmi_targeted |> filter(padj_targeted_fmi < 0.05)
-write_csv(de_grp_fmi_targeted, paste0("results/tables/", prefix, "_de_grp_fmi_targeted_genes.csv"))
+write_csv(de_grp_fmi_targeted, paste0("results/tables/RNAseq/scAdipose", prefix, "_de_grp_fmi_targeted_genes.csv"))
 
 ## Forest plot (targeted DE)
 if (nrow(de_sig_targeted) > 0) {
@@ -420,7 +420,7 @@ if (nrow(de_sig_targeted) > 0) {
       y = NULL
     ) +
     theme_minimal_custom()
-  ggsave(paste0("results/graphs/RNAseq/", prefix, "_forest_de_grp_targeted_plot.pdf"), forest_de_grp_targeted_plot, width = 9, height = 1.5 + 0.4 * nrow(forest_de_grp_targeted_df))
+  ggsave(paste0("results/graphs/RNAseq/scAdipose/", prefix, "_forest_de_grp_targeted_plot.pdf"), forest_de_grp_targeted_plot, width = 9, height = 1.5 + 0.4 * nrow(forest_de_grp_targeted_df))
 } else {
   message("No significant genes in the targeted DE: forest plot skipped")
 }
@@ -518,7 +518,7 @@ if (nrow(sig_de_species) > 0) {
     }
   )
 
-  pdf(paste0("results/graphs/RNAseq/", prefix, "_de_genes_species_heatmap.pdf"),
+  pdf(paste0("results/graphs/RNAseq/scAdipose/", prefix, "_de_genes_species_heatmap.pdf"),
       width = 5 + 0.35 * ncol(rho_de_species),
       height = 2.5 + 0.2 * nrow(rho_de_species))
   draw(ht_de_species)
@@ -559,7 +559,7 @@ if (nrow(sig_de_species) > 0) {
   n_rows_cor_plots <- ceiling(length(cor_plots) / n_cols_cor_plots) # grid grows with the number of significant pairs
   cor_plots_arranged <- ggarrange(plotlist = cor_plots, ncol = n_cols_cor_plots, nrow = n_rows_cor_plots)
   ggsave(
-    paste0("results/graphs/RNAseq/", prefix, "_de_genes_species_significant_correlations.pdf"),
+    paste0("results/graphs/RNAseq/scAdipose/", prefix, "_de_genes_species_significant_correlations.pdf"),
      cor_plots_arranged,
      width = 12,
      height = 2.5 * n_rows_cor_plots, # keeps each individual cor plot the same size
@@ -628,7 +628,7 @@ plot_species_gene_cor <- function(cor_df, gene_tbl, file_stem, what) {
     }
   )
 
-  pdf(paste0("results/graphs/RNAseq/", file_stem, "_heatmap.pdf"),
+  pdf(paste0("results/graphs/RNAseq/scAdipose/", file_stem, "_heatmap.pdf"),
       width = 5 + 0.35 * ncol(rho_mat),
       height = 2.5 + 0.2 * nrow(rho_mat))
   draw(ht)
@@ -666,7 +666,7 @@ plot_species_gene_cor <- function(cor_df, gene_tbl, file_stem, what) {
   n_cols_cor_plots <- 5
   n_rows_cor_plots <- ceiling(length(cor_plots) / n_cols_cor_plots)
   ggsave(
-    paste0("results/graphs/RNAseq/", file_stem, "_significant_correlations.pdf"),
+    paste0("results/graphs/RNAseq/scAdipose/", file_stem, "_significant_correlations.pdf"),
     ggarrange(plotlist = cor_plots, ncol = n_cols_cor_plots, nrow = n_rows_cor_plots),
     width = 12,
     height = 2.5 * n_rows_cor_plots,
@@ -697,7 +697,7 @@ cor_targeted_species <- function(gene_ids) {
 ## IIa. Targeted DE-significant genes x top 15 species
 if (nrow(de_sig_targeted) > 0) {
   cor_targeted_sig_species <- cor_targeted_species(de_sig_targeted$ensembl_gene_id)
-  write_csv(cor_targeted_sig_species, paste0("results/tables/", prefix, "_targeted_de_genes_species_cor.csv"))
+  write_csv(cor_targeted_sig_species, paste0("results/tables/scAdipose/", prefix, "_targeted_de_genes_species_cor.csv"))
   sig_targeted_sig_species <- plot_species_gene_cor(
     cor_targeted_sig_species, targeted_gene_tbl,
     file_stem = paste0(prefix, "_targeted_de_genes_species"), what = "targeted DE gene"
@@ -791,7 +791,7 @@ top_metabs <- cor_genes_metab |>
     cell_fun = function(j, i, x, y, width, height, fill) grid.text(stars(fdr_metab[i, j]), x, y, gp = gpar(fontsize = 8))
   )
 
-  pdf(paste0("results/graphs/RNAseq/", prefix, "_genes_metabolites_heatmap.pdf"), width = 9, height = 12)
+  pdf(paste0("results/graphs/RNAseq/scAdipose/", prefix, "_genes_metabolites_heatmap.pdf"), width = 9, height = 12)
   draw(ht_metab)
   dev.off()
 
@@ -837,7 +837,7 @@ top_metabs <- cor_genes_metab |>
     cell_fun = function(j, i, x, y, width, height, fill) grid.text(stars(fdr_metab_compact[i, j]), x, y, gp = gpar(fontsize = 8))
   )
 
-  pdf(paste0("results/graphs/RNAseq/", prefix, "_genes_metabolites_heatmap_compact.pdf"),
+  pdf(paste0("results/graphs/RNAseq/scAdipose/", prefix, "_genes_metabolites_heatmap_compact.pdf"),
       width = 5 + 0.3 * ncol(rho_metab_compact), height = 2.5 + 0.3 * nrow(rho_metab_compact))
   draw(ht_metab_compact)
   dev.off()
