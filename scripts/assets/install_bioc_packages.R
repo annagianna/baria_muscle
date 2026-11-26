@@ -4,7 +4,7 @@
 # Bioconductor annotation/data packages exist on bioconda only as stubs whose
 # post-link download pixi does not run. Run via `pixi run install-bioc`.
 
-bioc_packages <- c("org.Hs.eg.db")
+bioc_packages <- c("org.Hs.eg.db", "GSVA")
 
 # Stop if this is not the pixi R library (e.g. when run from a system R)
 if (!any(grepl(".pixi", .libPaths(), fixed = TRUE))) {
